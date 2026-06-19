@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 300" role="img" aria-labelledby="title desc">
+  <title id="title">Suzuki Access 125 style scooter illustration</title>
+  <desc id="desc">Dark navy scooter side profile with two wheels and subtle floor shadow.</desc>
+  <defs>
+    <linearGradient id="bodyNavy" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2e4f7d"/>
+      <stop offset="100%" stop-color="#17263d"/>
+    </linearGradient>
+  </defs>
+  <rect width="480" height="300" fill="#ffffff"/>
+  <ellipse cx="242" cy="244" rx="148" ry="18" fill="#000000" opacity="0.12"/>
+
+  <circle cx="152" cy="216" r="41" fill="#1b1b1b"/>
+  <circle cx="152" cy="216" r="19" fill="#7a7a7a"/>
+  <circle cx="338" cy="216" r="41" fill="#1b1b1b"/>
+  <circle cx="338" cy="216" r="19" fill="#7a7a7a"/>
+
+  <path d="M120 193h232c22 0 40-18 40-40v-4c0-23-19-42-42-42h-92c-14 0-26 5-35 15l-27 29h-44c-18 0-32 14-32 32z" fill="url(#bodyNavy)"/>
+  <path d="M238 102h72c20 0 36 16 36 36v9h-86z" fill="#202020"/>
+  <path d="M193 122h72l-29 29h-43z" fill="#101010"/>
+  <path d="M244 162h76l49 31h-96z" fill="#27466f"/>
+  <rect x="250" y="92" width="106" height="16" rx="8" fill="#2b2b2b"/>
+  <path d="M365 90l24-22h11l-13 26z" fill="#2b2b2b"/>
+  <rect x="390" y="50" width="8" height="41" rx="4" fill="#1d1d1d"/>
+  <circle cx="394" cy="48" r="8" fill="#333333"/>
+  <path d="M112 180h27l-8 29h-30z" fill="#2b2b2b"/>
+  <rect x="135" y="140" width="15" height="9" rx="4.5" fill="#ffc857"/>
+
+  <text x="240" y="284" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" fill="#1f2f48">ACCESS 125</text>
+</svg>

@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 300" role="img" aria-labelledby="title desc">
+  <title id="title">TVS Jupiter 125 style scooter illustration</title>
+  <desc id="desc">Graphite 125 cc scooter side profile with two black wheels and a pale studio background.</desc>
+  <defs>
+    <linearGradient id="jupiterGraphite" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#64748b"/>
+      <stop offset="100%" stop-color="#1f2937"/>
+    </linearGradient>
+  </defs>
+  <rect width="480" height="300" fill="#f8fafc"/>
+  <ellipse cx="240" cy="245" rx="150" ry="18" fill="#111827" opacity="0.12"/>
+  <circle cx="148" cy="216" r="42" fill="#171717"/>
+  <circle cx="148" cy="216" r="20" fill="#8b8b8b"/>
+  <circle cx="338" cy="216" r="42" fill="#171717"/>
+  <circle cx="338" cy="216" r="20" fill="#8b8b8b"/>
+  <path d="M118 194h236c24 0 43-19 43-43v-5c0-24-19-43-43-43h-91c-15 0-29 6-39 17l-30 34h-45c-18 0-31 14-31 32z" fill="url(#jupiterGraphite)"/>
+  <path d="M236 99h76c23 0 42 19 42 42v8h-92z" fill="#202020"/>
+  <path d="M191 121h73l-31 33h-42z" fill="#101010"/>
+  <path d="M248 163h78l50 31h-99z" fill="#334155"/>
+  <rect x="252" y="90" width="110" height="16" rx="8" fill="#2b2b2b"/>
+  <path d="M370 88l24-22h11l-13 26z" fill="#2b2b2b"/>
+  <rect x="396" y="48" width="8" height="42" rx="4" fill="#1d1d1d"/>
+  <circle cx="400" cy="46" r="8" fill="#333"/>
+  <path d="M111 180h31l-9 31h-33z" fill="#2b2b2b"/>
+  <rect x="134" y="139" width="16" height="10" rx="5" fill="#ffc857"/>
+  <text x="240" y="284" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" fill="#1f2937">JUPITER 125</text>
+</svg>

@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 300" role="img" aria-labelledby="title desc">
+  <title id="title">Honda Activa 6G style scooter illustration</title>
+  <desc id="desc">Blue scooter side profile with two black wheels and subtle shadow.</desc>
+  <defs>
+    <linearGradient id="bodyBlue" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4f8dd5"/>
+      <stop offset="100%" stop-color="#1f4e8a"/>
+    </linearGradient>
+  </defs>
+  <rect width="480" height="300" fill="#ffffff"/>
+  <ellipse cx="240" cy="244" rx="150" ry="18" fill="#000000" opacity="0.12"/>
+
+  <circle cx="140" cy="216" r="42" fill="#1d1d1d"/>
+  <circle cx="140" cy="216" r="20" fill="#757575"/>
+  <circle cx="334" cy="216" r="42" fill="#1d1d1d"/>
+  <circle cx="334" cy="216" r="20" fill="#757575"/>
+
+  <path d="M112 193h245c17 0 30-14 30-30v-12c0-18-14-32-32-32h-88c-11 0-20 4-28 11l-35 31h-43c-19 0-35 15-35 32z" fill="url(#bodyBlue)"/>
+  <path d="M226 110h56c17 0 31 13 31 30v6h-73z" fill="#2a2a2a"/>
+  <path d="M188 131h68l-35 33h-33z" fill="#0f0f0f"/>
+  <path d="M250 164h70l42 30h-84z" fill="#2f6fb8"/>
+  <rect x="252" y="98" width="96" height="17" rx="8.5" fill="#2b2b2b"/>
+  <path d="M356 94l24-22h12l-14 26z" fill="#2b2b2b"/>
+  <rect x="382" y="52" width="8" height="44" rx="4" fill="#1d1d1d"/>
+  <circle cx="386" cy="50" r="8" fill="#333333"/>
+  <path d="M97 181h31l-10 30h-31z" fill="#2b2b2b"/>
+  <rect x="121" y="142" width="17" height="10" rx="5" fill="#ffc857"/>
+
+  <text x="240" y="284" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" fill="#1f4e8a">ACTIVA 6G</text>
+</svg>

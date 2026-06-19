@@ -1,0 +1,7 @@
+(node:38164) ExperimentalWarning: CommonJS module C:\Users\jagad\OneDrive\Desktop\project\backend\dist\server.js is loading ES Module C:\Users\jagad\OneDrive\Desktop\project\node_modules\better-auth\dist\integrations\node.mjs using require().
+Support for loading ES Module in require() is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38164) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+RBA backend listening on http://localhost:4000
+2026-04-26T13:06:37.055Z WARN [Better Auth]: [better-auth] Warning: your BETTER_AUTH_SECRET should be at least 32 characters long for adequate security. Generate one with `npx auth secret` or `openssl rand -base64 32`.
+2026-04-26T13:06:37.056Z WARN [Better Auth]: [better-auth] Warning: your BETTER_AUTH_SECRET appears low-entropy. Use a randomly generated secret for production.

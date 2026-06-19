@@ -1,0 +1,36 @@
+(node:21864) ExperimentalWarning: CommonJS module C:\Users\jagad\AppData\Roaming\npm\node_modules\npm\node_modules\debug\src\node.js is loading ES Module C:\Users\jagad\AppData\Roaming\npm\node_modules\npm\node_modules\supports-color\index.js using require().
+Support for loading ES Module in require() is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> rbabikerentals-web@0.1.0 dev
+> concurrently "npm run dev:backend" "npm run dev:frontend"
+
+[0] (node:34400) ExperimentalWarning: CommonJS module C:\Users\jagad\AppData\Roaming\npm\node_modules\npm\node_modules\debug\src\node.js is loading ES Module C:\Users\jagad\AppData\Roaming\npm\node_modules\npm\node_modules\supports-color\index.js using require().
+[0] Support for loading ES Module in require() is an experimental feature and might change at any time
+[0] (Use `node --trace-warnings ...` to show where the warning was created)
+[1] (node:22900) ExperimentalWarning: CommonJS module C:\Users\jagad\AppData\Roaming\npm\node_modules\npm\node_modules\debug\src\node.js is loading ES Module C:\Users\jagad\AppData\Roaming\npm\node_modules\npm\node_modules\supports-color\index.js using require().
+[1] Support for loading ES Module in require() is an experimental feature and might change at any time
+[1] (Use `node --trace-warnings ...` to show where the warning was created)
+[0] 
+[0] > rbabikerentals-web@0.1.0 dev:backend
+[0] > tsx --tsconfig backend/tsconfig.json backend/src/server.ts
+[0] 
+[1] 
+[1] > rbabikerentals-web@0.1.0 dev:frontend
+[1] > vite --config frontend/vite.config.ts
+[1] 
+[1] (node:44556) ExperimentalWarning: CommonJS module C:\Users\jagad\OneDrive\Desktop\project\node_modules\@vitejs\plugin-react\dist\index.cjs is loading ES Module C:\Users\jagad\OneDrive\Desktop\project\node_modules\vite\dist\node\index.js using require().
+[1] Support for loading ES Module in require() is an experimental feature and might change at any time
+[1] (Use `node --trace-warnings ...` to show where the warning was created)
+[1] 
+[1]   [32m[1mVITE[22m v7.3.2[39m  [2mready in [0m[1m1410[22m[2m[0m ms[22m
+[1] 
+[1]   [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m3000[22m/[39m
+[1] [2m  [32m➜[39m  [1mNetwork[22m[2m: use [22m[1m--host[22m[2m to expose[22m
+[0] (node:40220) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+[0] (Use `node --trace-deprecation ...` to show where the warning was created)
+[0] RBA backend listening on http://localhost:4000
+[0] 2026-04-26T13:05:12.988Z WARN [Better Auth]: [better-auth] Warning: your BETTER_AUTH_SECRET should be at least 32 characters long for adequate security. Generate one with `npx auth secret` or `openssl rand -base64 32`.
+[0] 2026-04-26T13:05:12.999Z WARN [Better Auth]: [better-auth] Warning: your BETTER_AUTH_SECRET appears low-entropy. Use a randomly generated secret for production.
+[0] npm run dev:backend exited with code 3221225786
+[1] npm run dev:frontend exited with code 3221225786

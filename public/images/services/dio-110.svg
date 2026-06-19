@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 300" role="img" aria-labelledby="title desc">
+  <title id="title">Honda Dio 110 style scooter illustration</title>
+  <desc id="desc">Red 110 cc scooter side profile with two black wheels and a pale studio background.</desc>
+  <defs>
+    <linearGradient id="dioRed" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#e15645"/>
+      <stop offset="100%" stop-color="#8f1f26"/>
+    </linearGradient>
+  </defs>
+  <rect width="480" height="300" fill="#fffaf0"/>
+  <ellipse cx="240" cy="245" rx="150" ry="18" fill="#111827" opacity="0.12"/>
+  <circle cx="143" cy="216" r="42" fill="#171717"/>
+  <circle cx="143" cy="216" r="20" fill="#8b8b8b"/>
+  <circle cx="336" cy="216" r="42" fill="#171717"/>
+  <circle cx="336" cy="216" r="20" fill="#8b8b8b"/>
+  <path d="M113 194h244c20 0 37-16 37-36v-7c0-23-18-41-41-41h-88c-14 0-27 6-36 16l-30 34h-47c-22 0-39 16-39 34z" fill="url(#dioRed)"/>
+  <path d="M226 104h67c21 0 39 17 39 38v7h-84z" fill="#1f1f1f"/>
+  <path d="M184 126h72l-35 34h-38z" fill="#101010"/>
+  <path d="M252 164h72l44 30h-91z" fill="#a92b32"/>
+  <rect x="250" y="94" width="106" height="16" rx="8" fill="#242424"/>
+  <path d="M363 91l23-22h12l-13 26z" fill="#242424"/>
+  <rect x="388" y="51" width="8" height="42" rx="4" fill="#1d1d1d"/>
+  <circle cx="392" cy="49" r="8" fill="#333"/>
+  <path d="M96 181h34l-10 31H87z" fill="#2b2b2b"/>
+  <rect x="124" y="141" width="17" height="10" rx="5" fill="#ffc857"/>
+  <text x="240" y="284" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" fill="#8f1f26">DIO 110</text>
+</svg>
