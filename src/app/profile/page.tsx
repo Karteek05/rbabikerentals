@@ -178,7 +178,8 @@ export default function ProfilePage() {
     try {
       const response = await fetch("/api/account/me", { method: "DELETE" });
       if (!response.ok) {
-        throw new Error("Unable to delete this account right now.");
+        const errText = await response.text();
+        throw new Error(`Failed: ${response.status} ${errText}`);
       }
       await authClient.signOut({
         fetchOptions: {
