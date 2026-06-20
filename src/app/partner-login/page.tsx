@@ -28,6 +28,12 @@ function PartnerLoginForm() {
     setLoading(true);
     setError("");
 
+    if (!email.trim().toLowerCase().endsWith("@rbabikerentals.com")) {
+      setError("Unauthorized. Partner access requires an @rbabikerentals.com email address.");
+      setLoading(false);
+      return;
+    }
+
     const { error } = await authClient.signIn.email({
       email,
       password,
