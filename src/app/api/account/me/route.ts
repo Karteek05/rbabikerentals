@@ -90,7 +90,7 @@ export async function GET(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
-    const actor = await requireActor(request, ["customer"]);
+    const actor = await requireActor(request);
     const user = await anonymizeUserAccount(actor.userId);
     return ok({ user });
   } catch (error) {
