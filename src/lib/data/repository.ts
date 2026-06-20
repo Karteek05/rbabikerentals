@@ -157,6 +157,17 @@ export async function anonymizeUserAccount(userId: string): Promise<User> {
     .select("*")
     .single();
   if (error) throw new ApiException(500, "db_error", error.message);
+
+  // Delete the Better Auth user so they can no longer sign in
+  const { error: authError } = await supabase
+    .from("user")
+    .delete()
+    .eq("id", userId);
+  
+  if (authError) {
+    console.error("Failed to delete Better Auth user:", authError);
+  }
+
   return data as User;
 }
 
