@@ -18,17 +18,6 @@ type AuthSession = {
   };
 };
 
-async function getDevCustomerFallback() {
-  if (process.env.APP_ENV === "production") {
-    return null;
-  }
-
-  try {
-    return await getUserOrThrow("cust_001");
-  } catch {
-    return null;
-  }
-}
 
 export async function GET(request: Request) {
   try {
@@ -40,25 +29,13 @@ export async function GET(request: Request) {
         headers: request.headers
       })) as AuthSession | null;
     } catch {
-      const fallbackUser = await getDevCustomerFallback();
-      return ok({
-        authenticated: Boolean(fallbackUser),
-        user: fallbackUser
-      });
+      session = null;
     }
 
     const sessionUser = session?.user;
     const userId = sessionUser?.id;
     if (!userId) {
-      if (cookieHeader.includes(`${DASHBOARD_ACCESS_COOKIE}=`)) {
-        return ok({ authenticated: false, user: null });
-      }
-
-      const fallbackUser = await getDevCustomerFallback();
-      return ok({
-        authenticated: Boolean(fallbackUser),
-        user: fallbackUser
-      });
+      return ok({ authenticated: false, user: null });
     }
 
     try {

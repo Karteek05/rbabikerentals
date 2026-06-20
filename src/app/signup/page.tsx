@@ -72,7 +72,8 @@ export default function SignUpPage() {
       setError(error.message || "Invalid or expired OTP. Please try again.");
       setLoading(false);
     } else {
-      // Successfully verified and automatically logged in by Better Auth!
+      // Successfully verified, now log them in
+      await authClient.signIn.email({ email, password });
       router.push("/profile");
     }
   };
