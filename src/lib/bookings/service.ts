@@ -476,6 +476,17 @@ export async function approveBooking(
       email: authUser?.email,
     }
   });
+  await insertPaymentOrder({
+    id: newId("pay_order"),
+    booking_id: booking.id,
+    provider: "razorpay",
+    provider_order_id: paymentLinkData.id,
+    amount: booking.quote.total_payable * 100,
+    currency: "INR",
+    status: "created",
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  });
 
   const updated = await updateBooking(booking.id, {
     status: "payment_pending",

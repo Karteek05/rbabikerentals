@@ -164,6 +164,13 @@ export async function processRazorpayWebhook(params: {
           status?: string;
         };
       };
+      payment_link?: {
+        entity?: {
+          id?: string;
+          reference_id?: string;
+          status?: string;
+        };
+      };
     };
   };
 
@@ -184,6 +191,49 @@ export async function processRazorpayWebhook(params: {
     const orderId = payload.payload?.payment?.entity?.order_id;
     if (orderId) {
       const updatedOrder = await updatePaymentOrderByProviderId(orderId, {
+        provider_payment_id: payload.payload?.payment?.entity?.id,
+        status: "paid",
+        updated_at: new Date().toISOString()
+      });
+
+      if (updatedOrder) {
+        const booking = await getBookingOrThrow(updatedOrder.booking_id);
+        const updatedBooking = await updateBooking(updatedOrder.booking_id, {
+          status: "confirmed",
+          updated_at: new Date().toISOString()
+        });
+        const user = await getUserOrThrow(updatedBooking.user_id);
+        await Promise.all([
+          notifyUser({
+            userId: updatedBooking.user_id,
+            email: user.email,
+            templateKey: "payment_confirmed",
+            payload: {
+              booking_id: updatedBooking.id,
+              vehicle_id: updatedBooking.vehicle_id,
+              total_payable: updatedBooking.quote.total_payable,
+              provider_order_id: updatedOrder.provider_order_id
+            }
+          }),
+          notifyAdmin({
+            templateKey: "admin_payment_confirmed",
+            payload: {
+              booking_id: updatedBooking.id,
+              user_id: updatedBooking.user_id,
+              vehicle_id: updatedBooking.vehicle_id,
+              total_payable: booking.quote.total_payable,
+              provider_order_id: updatedOrder.provider_order_id
+            }
+          })
+        ]);
+      }
+    }
+  }
+
+  if (payload.event === "payment_link.paid") {
+    const paymentLinkId = payload.payload?.payment_link?.entity?.id;
+    if (paymentLinkId) {
+      const updatedOrder = await updatePaymentOrderByProviderId(paymentLinkId, {
         provider_payment_id: payload.payload?.payment?.entity?.id,
         status: "paid",
         updated_at: new Date().toISOString()
