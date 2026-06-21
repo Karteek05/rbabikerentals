@@ -4,7 +4,8 @@ import { requireActor } from "@/lib/auth/context";
 import {
   anonymizeUserAccount,
   getUserOrThrow,
-  upsertUser
+  upsertUser,
+  getSupabaseServiceClient
 } from "@/lib/data/repository";
 import { ApiException } from "@/lib/utils/errors";
 import { ok, fromError } from "@/lib/utils/http";
@@ -41,6 +42,17 @@ export async function GET(request: Request) {
     try {
       const existingUser = await getUserOrThrow(userId);
       if (existingUser.deleted_at) {
+        // For accounts deleted before the auth wipe fix, clean them up now
+        try {
+          const supabase = getSupabaseServiceClient();
+          await supabase.from("user").delete().eq("id", userId);
+          const s = session as any;
+          if (s?.session?.token) {
+            await auth.api.revokeSession({ token: s.session.token, headers: request.headers });
+          }
+        } catch (e) {
+          console.error("Cleanup failed", e);
+        }
         return ok({ authenticated: false, user: null, accountDeleted: true });
       }
     } catch (error) {

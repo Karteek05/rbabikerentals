@@ -51,6 +51,17 @@ export async function requireActor(
     try {
       const user = await getUserOrThrow(userId);
       if (user.deleted_at) {
+        // Auto-wipe the legacy auth record so they can't stay signed in
+        try {
+          const { getSupabaseServiceClient } = await import("@/lib/data/repository");
+          const supabase = getSupabaseServiceClient();
+          await supabase.from("user").delete().eq("id", userId);
+          const s = session as any;
+          if (s?.session?.token) {
+            await auth.api.revokeSession({ token: s.session.token, headers: request.headers });
+          }
+        } catch (e) {}
+
         throw new ApiException(
           401,
           "account_deleted",
