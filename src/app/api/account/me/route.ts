@@ -4,9 +4,9 @@ import { requireActor } from "@/lib/auth/context";
 import {
   anonymizeUserAccount,
   getUserOrThrow,
-  upsertUser,
-  getSupabaseServiceClient
+  upsertUser
 } from "@/lib/data/repository";
+import { getSupabaseServiceClient } from "@/lib/db/supabase-client";
 import { ApiException } from "@/lib/utils/errors";
 import { ok, fromError } from "@/lib/utils/http";
 
