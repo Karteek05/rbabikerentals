@@ -48,7 +48,7 @@ export async function GET(request: Request) {
           await supabase.from("user").delete().eq("id", userId);
           const s = session as any;
           if (s?.session?.token) {
-            await auth.api.revokeSession({ token: s.session.token, headers: request.headers });
+            await auth.api.revokeSession({ body: { token: s.session.token }, headers: request.headers });
           }
         } catch (e) {
           console.error("Cleanup failed", e);
