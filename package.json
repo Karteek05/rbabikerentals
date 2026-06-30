@@ -10,10 +10,10 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "migrate": "tsx --env-file=.env.local scripts/migrate.ts",
-    "seed": "tsx --env-file=.env.local scripts/seed.ts",
-    "job:documents": "tsx --env-file=.env.local scripts/jobs/document-expiry.ts",
-    "job:incidents": "tsx --env-file=.env.local scripts/jobs/incident-escalation.ts"
+    "migrate": "tsx --env-file=.env scripts/migrate.ts",
+    "seed": "tsx --env-file=.env scripts/seed.ts",
+    "job:documents": "tsx --env-file=.env scripts/jobs/document-expiry.ts",
+    "job:incidents": "tsx --env-file=.env scripts/jobs/incident-escalation.ts"
   },
   "dependencies": {
     "@opentelemetry/api": "^1.9.0",
