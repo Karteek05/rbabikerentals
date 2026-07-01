@@ -26,7 +26,7 @@ export const auth = betterAuth({
   database: dbUrl
     ? new Pool({
         connectionString: dbUrl,
-        ssl: dbUrl.includes("supabase.co") ? { rejectUnauthorized: false } : undefined
+        ssl: dbUrl.includes("supabase") ? { rejectUnauthorized: false } : undefined
       })
     : undefined,
   emailAndPassword: {
