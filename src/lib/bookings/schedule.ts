@@ -11,7 +11,7 @@ type BookingSchedule = {
   usedFallback: boolean;
 };
 
-const DEFAULT_PICKUP_ZONE = "Indiranagar";
+const DEFAULT_PICKUP_ZONE = "Sarjapur Road";
 
 const PACKAGE_TO_DURATION_PARAM: Record<PackageRateKey, "weekly" | "fortnight" | "monthly"> = {
   rate_per_week: "weekly",

@@ -404,11 +404,7 @@ export default function BookPage() {
                   value={pickupZone}
                   onChange={(event) => setPickupZone(event.target.value)}
                 >
-                  <option value="Indiranagar">Indiranagar</option>
-                  <option value="Koramangala">Koramangala</option>
-                  <option value="Whitefield">Whitefield</option>
-                  <option value="Jayanagar">Jayanagar</option>
-                  <option value="Hebbal">Hebbal</option>
+                  <option value="Sarjapur Road">Sarjapur Road</option>
                 </select>
                 <input
                   type="text"
@@ -442,16 +438,7 @@ export default function BookPage() {
                 )}
               </div>
 
-              <div className="mb-4 border-t border-black/5 pt-4">
-                <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-uber-body-gray">Coupon Code</label>
-                <input
-                  type="text"
-                  placeholder="e.g. WELCOME5"
-                  value={coupon}
-                  onChange={(e) => setCoupon(e.target.value.toUpperCase())}
-                  className="w-full rounded-lg border border-black px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-black"
-                />
-              </div>
+
 
               <div className="mb-4 border-t border-black/5 pt-4">
                 <div className="mb-3 text-xs font-semibold uppercase tracking-wider text-uber-body-gray">
@@ -493,14 +480,7 @@ export default function BookPage() {
                   Rental Policies
                 </h3>
                 <ul className="space-y-2 text-[13px] text-uber-body-gray">
-                  <li className="flex items-center justify-between">
-                    <span>Cancellation</span>
-                    <span className="text-right font-semibold text-black">Free up to 24h</span>
-                  </li>
-                  <li className="flex items-center justify-between">
-                    <span>Late Return</span>
-                    <span className="text-right font-semibold text-black">Rs. 50/hr after grace</span>
-                  </li>
+
                   <li className="flex items-center justify-between">
                     <span>Availability</span>
                     <span className="text-right font-semibold text-black">Confirmed by team</span>

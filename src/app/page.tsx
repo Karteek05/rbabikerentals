@@ -65,18 +65,7 @@ const TRUST_FACTS: Array<{ icon: IconName; title: string; detail: string }> = [
 ];
 
 const LOCATIONS = [
-  "Indiranagar",
-  "Koramangala",
-  "Whitefield",
-  "Electronic City",
-  "Marathahalli",
-  "HSR Layout",
-  "Jayanagar",
-  "BTM Layout",
-  "Hebbal",
-  "Yelahanka",
-  "Bellandur",
-  "JP Nagar"
+  "Sarjapur Road"
 ];
 
 const FAQS = [
