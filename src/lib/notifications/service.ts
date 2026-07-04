@@ -1,7 +1,7 @@
 import nodemailer from "nodemailer";
 import { getVehicleDisplayName, formatBookingReference } from "@/lib/fleet/display";
 import { insertNotificationJob } from "@/lib/data/repository";
-import { sendSmtpMail } from "@/lib/integrations/smtp";
+import { getSupabaseServiceClient } from "@/lib/db/supabase-client";
 import type { NotificationJob } from "@/lib/types/domain";
 import { newId } from "@/lib/utils/ids";
 
@@ -78,6 +78,24 @@ export async function sendEmail({
     if (process.env.NODE_ENV !== "development") {
       throw error;
     }
+  }
+}
+
+export async function resolveUserNotificationEmail(
+  userId: string,
+  fallbackEmail?: string | null
+) {
+  try {
+    const supabase = getSupabaseServiceClient();
+    const { data: authUser } = await supabase
+      .from("user")
+      .select("email")
+      .eq("id", userId)
+      .maybeSingle();
+    return authUser?.email ?? fallbackEmail ?? null;
+  } catch (error) {
+    console.error("Failed to resolve notification email:", error);
+    return fallbackEmail ?? null;
   }
 }
 
@@ -464,7 +482,7 @@ export async function notifyUser(params: {
       );
     } else if (smtpReady()) {
       jobs.push(
-        sendSmtpMail({
+        sendEmail({
           to: params.email,
           subject: email.subject,
           text: email.text,

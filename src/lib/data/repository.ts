@@ -735,6 +735,36 @@ export async function updateBooking(
   return data as Booking;
 }
 
+export async function updateBookingIfStatus(
+  bookingId: string,
+  expectedStatus: BookingStatus,
+  patch: Partial<Booking>
+): Promise<Booking | null> {
+  if (getDataMode() === "memory") {
+    const index = store.bookings.findIndex((item) => item.id === bookingId);
+    if (index < 0) {
+      throw new ApiException(404, "booking_not_found", "Booking does not exist.");
+    }
+    if (store.bookings[index].status !== expectedStatus) {
+      return null;
+    }
+    const updated = { ...store.bookings[index], ...patch };
+    store.bookings[index] = updated;
+    return updated;
+  }
+
+  const supabase = getSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("bookings")
+    .update(patch)
+    .eq("id", bookingId)
+    .eq("status", expectedStatus)
+    .select("*")
+    .maybeSingle();
+  if (error) throwStructuredDbError(error);
+  return (data as Booking | null) ?? null;
+}
+
 export async function listBookings(filter?: {
   status?: string;
   userId?: string;

@@ -149,6 +149,35 @@ export default function MyBookingsPage() {
     }
   }, []);
 
+  async function confirmCheckoutPayment(
+    bookingId: string,
+    response: {
+      razorpay_order_id: string;
+      razorpay_payment_id: string;
+      razorpay_signature: string;
+    }
+  ) {
+    const confirmRes = await fetch("/api/payments/confirm", {
+      method: "POST",
+      ...fetchOptions,
+      body: JSON.stringify({
+        booking_id: bookingId,
+        razorpay_order_id: response.razorpay_order_id,
+        razorpay_payment_id: response.razorpay_payment_id,
+        razorpay_signature: response.razorpay_signature
+      })
+    });
+    const confirmJson = await confirmRes.json();
+    if (!confirmRes.ok || !confirmJson.ok) {
+      const message =
+        confirmJson?.error?.message ?? "Payment was received but could not be confirmed.";
+      const error = new Error(message) as Error & { code?: string };
+      error.code = confirmJson?.error?.code;
+      throw error;
+    }
+    await fetchBookings();
+  }
+
   async function handlePay(booking: Booking) {
     setActionLoading(`pay-${booking.id}`);
     setError(null);
@@ -160,6 +189,21 @@ export default function MyBookingsPage() {
       });
       const json = await res.json();
       if (!res.ok || !json.ok) {
+        if (json?.error?.code === "payment_already_completed") {
+          await fetchBookings();
+          showSuccess("Payment was already completed for this booking.");
+          setQrBookingId(null);
+          return;
+        }
+        if (json?.error?.code === "payment_finalize_pending") {
+          await fetchBookings();
+          setQrBookingId(null);
+          setError(
+            json.error.message ??
+              "Payment received. Confirmation is processing — please refresh in a moment."
+          );
+          return;
+        }
         setQrBookingId(booking.id);
         setError(json?.error?.message ?? "Could not start Razorpay checkout. Use the UPI QR below.");
         return;
@@ -182,9 +226,20 @@ export default function MyBookingsPage() {
           name: customerName,
           email: session?.user?.email ?? undefined
         },
-        onSuccess: () => {
-          showSuccess("Payment submitted. Your booking will update after Razorpay confirms payment.");
-          setQrBookingId(null);
+        onSuccess: async (response) => {
+          try {
+            await confirmCheckoutPayment(booking.id, response);
+            showSuccess("Payment confirmed. Your booking is now confirmed.");
+            setQrBookingId(null);
+          } catch (confirmError) {
+            await fetchBookings();
+            setQrBookingId(null);
+            setError(
+              confirmError instanceof Error
+                ? confirmError.message
+                : "Payment was received but could not be confirmed yet. Please refresh in a moment."
+            );
+          }
         },
         onDismiss: () => {
           setError("Payment window closed before completion.");
@@ -261,8 +316,18 @@ export default function MyBookingsPage() {
             name: customerName,
             email: session?.user?.email ?? undefined
           },
-          onSuccess: () => {
-            showSuccess("Extension payment submitted. Your booking updates after Razorpay confirms payment.");
+          onSuccess: async (response) => {
+            try {
+              await confirmCheckoutPayment(booking.id, response);
+              showSuccess("Extension payment confirmed.");
+            } catch (confirmError) {
+              await fetchBookings();
+              setError(
+                confirmError instanceof Error
+                  ? confirmError.message
+                  : "Extension payment could not be confirmed yet. Please refresh in a moment."
+              );
+            }
           },
           onDismiss: () => {
             setError("Extension payment window closed before completion.");

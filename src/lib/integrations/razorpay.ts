@@ -162,6 +162,59 @@ export function verifyRazorpaySignature(params: {
   return verifyRazorpayCheckoutSignature(params);
 }
 
+function getRazorpayAuthHeader() {
+  const keyId = process.env.RAZORPAY_KEY_ID;
+  const keySecret = process.env.RAZORPAY_KEY_SECRET;
+  if (!keyId || !keySecret) {
+    throw new ApiException(
+      500,
+      "razorpay_env_missing",
+      "Razorpay keys are not configured."
+    );
+  }
+  return Buffer.from(`${keyId}:${keySecret}`).toString("base64");
+}
+
+export async function fetchRazorpayOrder(orderId: string) {
+  const authHeader = getRazorpayAuthHeader();
+  const response = await fetch(`https://api.razorpay.com/v1/orders/${orderId}`, {
+    headers: {
+      Authorization: `Basic ${authHeader}`
+    }
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new ApiException(502, "razorpay_order_fetch_failed", text);
+  }
+
+  return (await response.json()) as {
+    id: string;
+    status: string;
+    amount: number;
+  };
+}
+
+export async function fetchCapturedPaymentForOrder(orderId: string) {
+  const authHeader = getRazorpayAuthHeader();
+  const response = await fetch(`https://api.razorpay.com/v1/orders/${orderId}/payments`, {
+    headers: {
+      Authorization: `Basic ${authHeader}`
+    }
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new ApiException(502, "razorpay_order_payments_fetch_failed", text);
+  }
+
+  const data = (await response.json()) as {
+    items: Array<{ id: string; status: string; amount: number }>;
+  };
+
+  return data.items.find((payment) => payment.status === "captured") ?? null;
+}
+
 export async function createRazorpayPaymentLink(params: {
   amountInPaise: number;
   currency?: "INR";

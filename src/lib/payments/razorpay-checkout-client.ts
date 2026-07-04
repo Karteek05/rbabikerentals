@@ -1,3 +1,9 @@
+export type RazorpayCheckoutSuccess = {
+  razorpay_order_id: string;
+  razorpay_payment_id: string;
+  razorpay_signature: string;
+};
+
 export type RazorpayCheckoutOptions = {
   keyId: string;
   amount: number;
@@ -10,7 +16,7 @@ export type RazorpayCheckoutOptions = {
     email?: string;
     contact?: string;
   };
-  onSuccess?: () => void;
+  onSuccess?: (response: RazorpayCheckoutSuccess) => void;
   onDismiss?: () => void;
   onFailure?: (message: string) => void;
 };
@@ -61,8 +67,8 @@ export async function openRazorpayCheckout(options: RazorpayCheckoutOptions) {
     name: options.name ?? "RBA Bike Rentals",
     description: options.description,
     prefill: options.prefill,
-    handler: () => {
-      options.onSuccess?.();
+    handler: (response: RazorpayCheckoutSuccess) => {
+      options.onSuccess?.(response);
     },
     modal: {
       ondismiss: () => {

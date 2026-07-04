@@ -8,13 +8,15 @@ import {
   getUserOrThrow,
   claimPaymentEvent,
   insertPaymentOrder,
-  updateBooking,
+  updateBookingIfStatus,
   updatePaymentOrderById,
   updatePaymentOrderByProviderId
 } from "@/lib/data/repository";
 import {
   createRazorpayOrder,
   createRazorpayRefund,
+  fetchCapturedPaymentForOrder,
+  fetchRazorpayOrder,
   isRazorpayConfigured,
   verifyRazorpaySignature
 } from "@/lib/integrations/razorpay";
@@ -62,6 +64,17 @@ function toUpiFallbackOrder(params: {
   };
 }
 
+async function waitForFinalizedBooking(bookingId: string) {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    const currentBooking = await getBookingOrThrow(bookingId);
+    if (currentBooking.status === "confirmed" || currentBooking.status === "extended") {
+      return currentBooking;
+    }
+  }
+  return getBookingOrThrow(bookingId);
+}
+
 async function finalizeCapturedPayment(params: {
   updatedOrder: NonNullable<Awaited<ReturnType<typeof updatePaymentOrderByProviderId>>>;
   paidAmount?: number;
@@ -79,7 +92,7 @@ async function finalizeCapturedPayment(params: {
     );
   }
 
-  if (booking.status === "extended") {
+  if (booking.status === "extended" || booking.status === "confirmed") {
     return booking;
   }
 
@@ -106,7 +119,7 @@ async function finalizeCapturedPayment(params: {
     }
 
     assertCanTransition("extension_requested", "extended", "booking.extend.confirm");
-    const updatedBooking = await updateBooking(booking.id, {
+    const updatedBooking = await updateBookingIfStatus(booking.id, "extension_requested", {
       status: "extended",
       drop_at: requestedDropAt,
       quote: {
@@ -122,6 +135,9 @@ async function finalizeCapturedPayment(params: {
       },
       updated_at: new Date().toISOString()
     });
+    if (!updatedBooking) {
+      return waitForFinalizedBooking(booking.id);
+    }
     const user = await getUserOrThrow(updatedBooking.user_id);
     await notifyUser({
       userId: updatedBooking.user_id,
@@ -137,10 +153,6 @@ async function finalizeCapturedPayment(params: {
     return updatedBooking;
   }
 
-  if (booking.status === "confirmed") {
-    return booking;
-  }
-
   if (booking.status !== "payment_pending") {
     throw new ApiException(
       409,
@@ -150,10 +162,13 @@ async function finalizeCapturedPayment(params: {
   }
 
   assertCanTransition(booking.status, "confirmed", "payment.webhook.capture");
-  const updatedBooking = await updateBooking(params.updatedOrder.booking_id, {
+  const updatedBooking = await updateBookingIfStatus(booking.id, "payment_pending", {
     status: "confirmed",
     updated_at: new Date().toISOString()
   });
+  if (!updatedBooking) {
+    return waitForFinalizedBooking(booking.id);
+  }
   const user = await getUserOrThrow(updatedBooking.user_id);
   await Promise.all([
     notifyUser({
@@ -186,6 +201,110 @@ function isCheckoutOrderId(providerOrderId: string) {
   return providerOrderId.startsWith("order_");
 }
 
+async function syncOpenPaymentOrderForBooking(bookingId: string) {
+  try {
+    const openOrder = await getOpenPaymentOrderForBooking(bookingId);
+    if (!openOrder || !isCheckoutOrderId(openOrder.provider_order_id)) {
+      return null;
+    }
+
+    const remoteOrder = await fetchRazorpayOrder(openOrder.provider_order_id);
+    const capturedPayment = await fetchCapturedPaymentForOrder(openOrder.provider_order_id);
+    if (remoteOrder.status !== "paid" && !capturedPayment) {
+      return null;
+    }
+
+    if (!capturedPayment) {
+      return null;
+    }
+
+    const updatedOrder = await updatePaymentOrderByProviderId(openOrder.provider_order_id, {
+      provider_payment_id: capturedPayment.id,
+      status: "paid",
+      updated_at: new Date().toISOString()
+    });
+
+    if (!updatedOrder) {
+      return null;
+    }
+
+    return finalizeCapturedPayment({
+      updatedOrder,
+      paidAmount: capturedPayment.amount
+    });
+  } catch (error) {
+    console.error("Failed to sync open payment order from Razorpay:", error);
+    return null;
+  }
+}
+
+export async function confirmRazorpayCheckoutPayment(params: {
+  bookingId: string;
+  orderId: string;
+  paymentId: string;
+  signature: string;
+  actor: { userId: string; role: Role };
+}) {
+  const booking = await getBookingOrThrow(params.bookingId);
+  const ownerAllowed = params.actor.role === "customer" && booking.user_id === params.actor.userId;
+  if (!ownerAllowed && params.actor.role !== "admin") {
+    throw new ApiException(403, "forbidden", "Not allowed to confirm payment for this booking.");
+  }
+
+  if (booking.status === "confirmed" || booking.status === "extended") {
+    return { booking, already_confirmed: true as const };
+  }
+
+  if (
+    !verifyRazorpaySignature({
+      orderId: params.orderId,
+      paymentId: params.paymentId,
+      signature: params.signature
+    })
+  ) {
+    throw new ApiException(401, "invalid_signature", "Invalid Razorpay payment signature.");
+  }
+
+  const paymentOrder = await getLatestPaymentOrderForBooking(params.bookingId);
+  if (!paymentOrder || paymentOrder.provider_order_id !== params.orderId) {
+    throw new ApiException(409, "payment_order_mismatch", "Payment order does not match this booking.");
+  }
+
+  let updatedOrder = paymentOrder;
+  if (paymentOrder.status === "created") {
+    const markedPaid = await updatePaymentOrderByProviderId(params.orderId, {
+      provider_payment_id: params.paymentId,
+      status: "paid",
+      updated_at: new Date().toISOString()
+    });
+    if (!markedPaid) {
+      throw new ApiException(404, "payment_order_not_found", "Payment order was not found.");
+    }
+    updatedOrder = markedPaid;
+  } else if (paymentOrder.status !== "paid") {
+    throw new ApiException(
+      409,
+      "payment_order_unusable",
+      "Payment order is not available for confirmation."
+    );
+  }
+
+  const confirmedBooking = await finalizeCapturedPayment({
+    updatedOrder,
+    paidAmount: updatedOrder.amount
+  });
+
+  if (confirmedBooking.status !== "confirmed" && confirmedBooking.status !== "extended") {
+    throw new ApiException(
+      409,
+      "payment_finalize_pending",
+      "Payment was received but booking confirmation is still pending. Please wait a moment and refresh."
+    );
+  }
+
+  return { booking: confirmedBooking, already_confirmed: false as const };
+}
+
 export async function createOrderForBooking(
   bookingId: string,
   actor: { userId: string; role: Role }
@@ -201,6 +320,43 @@ export async function createOrderForBooking(
       "invalid_booking_status",
       "Payment order can be created only for payment_pending booking."
     );
+  }
+
+  if (isRazorpayConfigured()) {
+    await syncOpenPaymentOrderForBooking(bookingId);
+
+    const paidOrder = await getLatestPaymentOrderForBooking(bookingId);
+    if (paidOrder?.status === "paid" && isCheckoutOrderId(paidOrder.provider_order_id)) {
+      try {
+        await finalizeCapturedPayment({
+          updatedOrder: paidOrder,
+          paidAmount: paidOrder.amount
+        });
+      } catch (error) {
+        console.error("Failed to finalize already-paid payment order:", error);
+      }
+    }
+
+    const bookingAfterSync = await getBookingOrThrow(bookingId);
+    if (bookingAfterSync.status !== "payment_pending") {
+      throw new ApiException(
+        409,
+        "payment_already_completed",
+        "Payment is already completed for this booking."
+      );
+    }
+
+    const latestAfterSync = await getLatestPaymentOrderForBooking(bookingId);
+    if (
+      latestAfterSync?.status === "paid" &&
+      isCheckoutOrderId(latestAfterSync.provider_order_id)
+    ) {
+      throw new ApiException(
+        409,
+        "payment_finalize_pending",
+        "Payment was received but booking confirmation is still pending. Please wait a moment and refresh, or use the UPI QR below."
+      );
+    }
   }
 
   const existingOrder = await getOpenPaymentOrderForBooking(bookingId);

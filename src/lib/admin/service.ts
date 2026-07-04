@@ -12,9 +12,8 @@ import {
   listUsersByIds,
   updateBooking
 } from "@/lib/data/repository";
-import { getSupabaseServiceClient } from "@/lib/db/supabase-client";
 import { createRazorpayOrder, isRazorpayConfigured } from "@/lib/integrations/razorpay";
-import { sendBookingApprovedEmail, notifyAdmin, notifyUser } from "@/lib/notifications/service";
+import { notifyAdmin, notifyUser, resolveUserNotificationEmail } from "@/lib/notifications/service";
 import type { Role } from "@/lib/types/domain";
 import type { ApproveBookingRequest, RejectBookingRequest } from "@/lib/types/contracts";
 import { ApiException } from "@/lib/utils/errors";
@@ -62,19 +61,13 @@ export async function approveBooking(
     updated_at: new Date().toISOString()
   });
   const user = await getUserOrThrow(updated.user_id);
+  const customerEmail = await resolveUserNotificationEmail(user.id, user.email);
 
   let paymentUrl = getPaymentUrl(updated.id);
   const existingOrder = await getOpenPaymentOrderForBooking(booking.id);
 
   if (!existingOrder && isRazorpayConfigured()) {
     try {
-      const supabase = getSupabaseServiceClient();
-      const { data: authUser } = await supabase
-        .from("user")
-        .select("email")
-        .eq("id", user.id)
-        .single();
-
       const createdOrder = await createRazorpayOrder({
         amountInPaise: booking.quote.total_payable * 100,
         receipt: booking.id
@@ -91,14 +84,6 @@ export async function approveBooking(
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       });
-
-      try {
-        if (authUser?.email) {
-          await sendBookingApprovedEmail(authUser.email, booking, paymentUrl);
-        }
-      } catch (error) {
-        console.error("Failed to send booking approval email:", error);
-      }
     } catch (error) {
       console.error("Failed to create Razorpay order:", error);
     }
@@ -118,7 +103,7 @@ export async function approveBooking(
   await Promise.all([
     notifyUser({
       userId: updated.user_id,
-      email: user.email,
+      email: customerEmail,
       templateKey: "booking_approved_pay_now",
       payload: {
         booking_id: updated.id,
