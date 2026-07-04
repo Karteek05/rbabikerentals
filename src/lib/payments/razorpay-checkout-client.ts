@@ -56,11 +56,8 @@ export async function openRazorpayCheckout(options: RazorpayCheckoutOptions) {
     throw new Error("Razorpay checkout could not load in this browser.");
   }
 
-  const checkout = new window.Razorpay({
+  const checkoutOptions: Record<string, unknown> = {
     key: options.keyId,
-    amount: options.amount,
-    currency: options.currency,
-    order_id: options.orderId,
     name: options.name ?? "RBA Bike Rentals",
     description: options.description,
     prefill: options.prefill,
@@ -74,27 +71,20 @@ export async function openRazorpayCheckout(options: RazorpayCheckoutOptions) {
       escape: true,
       backdropclose: false
     },
-    method: {
-      upi: true,
-      card: true,
-      netbanking: true,
-      wallet: true
-    },
-    config: {
-      display: {
-        preferences: {
-          show_default_blocks: true
-        }
-      }
-    },
     theme: {
       color: "#c78310"
-    },
-    retry: {
-      enabled: true,
-      max_count: 3
     }
-  });
+  };
+
+  if (options.orderId) {
+    // Amount and currency come from the server-created order.
+    checkoutOptions.order_id = options.orderId;
+  } else {
+    checkoutOptions.amount = options.amount;
+    checkoutOptions.currency = options.currency;
+  }
+
+  const checkout = new window.Razorpay(checkoutOptions);
 
   checkout.on("payment.failed", (response: unknown) => {
     const message =
