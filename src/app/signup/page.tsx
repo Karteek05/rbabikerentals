@@ -259,9 +259,29 @@ export default function SignUpPage() {
           </p>
         )}
 
-        <p className="mt-8 text-center text-[10px] text-[#afafaf]">
-          By signing up, you agree to our Terms of Service and Privacy Policy.
-        </p>
+        {!showOtp ? (
+          <p className="mt-8 text-center text-[10px] text-[#afafaf]">
+            By signing up, you agree to our{" "}
+            <Link
+              href="/terms"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline underline-offset-2 hover:text-[#526074]"
+            >
+              Terms &amp; Conditions
+            </Link>{" "}
+            and{" "}
+            <Link
+              href="/privacy"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline underline-offset-2 hover:text-[#526074]"
+            >
+              Privacy Policy
+            </Link>
+            .
+          </p>
+        ) : null}
       </motion.div>
     </div>
   );

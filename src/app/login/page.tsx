@@ -167,7 +167,25 @@ function LoginForm() {
         </div>
         
         <p className="text-center text-[10px] text-[#afafaf] mt-8">
-          By signing in, you agree to our Terms of Service and Privacy Policy.
+          By signing in, you agree to our{" "}
+          <Link
+            href="/terms"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline underline-offset-2 hover:text-[#526074]"
+          >
+            Terms &amp; Conditions
+          </Link>{" "}
+          and{" "}
+          <Link
+            href="/privacy"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline underline-offset-2 hover:text-[#526074]"
+          >
+            Privacy Policy
+          </Link>
+          .
         </p>
       </motion.div>
     </div>

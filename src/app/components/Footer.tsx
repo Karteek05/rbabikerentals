@@ -9,11 +9,10 @@ const FOOTER_LINKS = {
     { label: "My Bookings", href: "/my-bookings" }
   ],
   Support: [
-    { label: "Help Centre", href: "#" },
-    { label: "Safety", href: "#" },
-    { label: "Privacy Policy", href: "#" },
-    { label: "Terms & Conditions", href: "#" },
-    { label: "FAQ", href: "#" }
+    { label: "FAQ & Contact", href: "/faq" },
+    { label: "Safety", href: "/safety" },
+    { label: "Privacy Policy", href: "/privacy" },
+    { label: "Terms & Conditions", href: "/terms" }
   ],
   Partner: [
     { label: "Staff Access", href: "/staff-login" }
@@ -31,10 +30,10 @@ export default function Footer() {
               Bengaluru scooter rentals with GST-inclusive weekly, 15-day, and monthly packages.
             </p>
             <div className="flex flex-col gap-2 text-xs">
-              <a href="#" className="nav-focus text-white/65 hover:text-white transition-colors inline-flex items-center gap-2">
+              <Link href="/faq" className="nav-focus text-white/65 hover:text-white transition-colors inline-flex items-center gap-2">
                 <Icon name="support" className="w-3.5 h-3.5" />
-                Help Centre
-              </a>
+                FAQ &amp; Contact
+              </Link>
               <a href="/login" className="nav-focus text-white/65 hover:text-white transition-colors inline-flex items-center gap-2">
                 <Icon name="mail" className="w-3.5 h-3.5" />
                 Account Login
@@ -65,9 +64,13 @@ export default function Footer() {
         <div className="pt-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <p className="text-white/45 text-xs">(c) RBA Bike Rentals 2026 · Bengaluru, India</p>
           <div className="flex gap-5">
-            {["Privacy", "Terms", "Cookies"].map((l) => (
-              <Link key={l} href="#" className="nav-focus text-white/45 hover:text-white text-xs transition-colors">
-                {l}
+            {[
+              { label: "Privacy", href: "/privacy" },
+              { label: "Terms", href: "/terms" },
+              { label: "Cookies", href: "/cookies" }
+            ].map((item) => (
+              <Link key={item.label} href={item.href} className="nav-focus text-white/45 hover:text-white text-xs transition-colors">
+                {item.label}
               </Link>
             ))}
           </div>
