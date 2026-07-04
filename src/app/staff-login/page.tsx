@@ -55,9 +55,11 @@ function StaffLoginForm() {
     setLoading(true);
     setError("");
 
+    const normalizedEmail = email.trim().toLowerCase();
+
     if (mode === "login") {
       const { error } = await authClient.signIn.email({
-        email,
+        email: normalizedEmail,
         password,
       });
 
@@ -67,14 +69,14 @@ function StaffLoginForm() {
       }
     } else {
       // Security feature: Whitelist admin/partner registration to company domain
-      if (!email.toLowerCase().endsWith("@rbabikerentals.com")) {
+      if (!normalizedEmail.endsWith("@rbabikerentals.com")) {
         setError("Unauthorized: Staff registration is restricted to @rbabikerentals.com email addresses.");
         setLoading(false);
         return;
       }
 
       const { error } = await authClient.signUp.email({
-        email,
+        email: normalizedEmail,
         password,
         name
       });
@@ -83,7 +85,10 @@ function StaffLoginForm() {
         setError(error.message || "Failed to register. Please try again.");
         setLoading(false);
       } else {
-        const { error: otpError } = await authClient.emailOtp.sendVerificationOtp({ email, type: "email-verification" });
+        const { error: otpError } = await authClient.emailOtp.sendVerificationOtp({
+          email: normalizedEmail,
+          type: "email-verification"
+        });
         if (otpError) {
           setError(otpError.message || "Failed to send verification email. Please try logging in.");
           setLoading(false);

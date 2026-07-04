@@ -2,15 +2,15 @@ import { betterAuth } from "better-auth";
 import { emailOTP } from "better-auth/plugins";
 import { Pool } from "pg";
 import { sendResetPasswordEmail, sendOtpEmail } from "@/lib/notifications/service";
-import { getServerAppBaseUrl } from "@/lib/utils/app-url";
+import { getServerAppBaseUrl, isProductionRuntime } from "@/lib/utils/app-url";
 
 export function resolveAuthDatabaseUrl(
   env: Record<string, string | undefined> = process.env
 ) {
-  const isProduction = env.APP_ENV === "production";
+  const isProduction = isProductionRuntime(env);
   const dbUrl = env.SUPABASE_DB_URL ?? env.DATABASE_URL;
   if (isProduction && !dbUrl) {
-    throw new Error("SUPABASE_DB_URL or DATABASE_URL is required when APP_ENV=production.");
+    throw new Error("SUPABASE_DB_URL or DATABASE_URL is required in production.");
   }
   if (!isProduction) {
     return undefined;
@@ -19,7 +19,7 @@ export function resolveAuthDatabaseUrl(
 }
 
 const dbUrl = resolveAuthDatabaseUrl();
-const isProduction = process.env.APP_ENV === "production";
+const isProduction = isProductionRuntime();
 const authSecret =
   process.env.BETTER_AUTH_SECRET ??
   (isProduction ? undefined : "rbabikerentals-dev-secret-change-in-prod");
@@ -27,7 +27,7 @@ const googleClientId = process.env.GOOGLE_CLIENT_ID?.trim();
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim();
 
 if (!authSecret) {
-  throw new Error("BETTER_AUTH_SECRET is required when APP_ENV=production.");
+  throw new Error("BETTER_AUTH_SECRET is required in production.");
 }
 
 export const auth = betterAuth({

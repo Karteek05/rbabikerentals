@@ -1,5 +1,9 @@
 type AppUrlEnv = Record<string, string | undefined>;
 
+export function isProductionRuntime(env: AppUrlEnv = process.env) {
+  return env.APP_ENV === "production" || env.NODE_ENV === "production";
+}
+
 function normalizeBaseUrl(value: string | undefined) {
   const trimmed = value?.trim().replace(/\/+$/, "");
   if (!trimmed) return undefined;
@@ -35,7 +39,7 @@ export function getServerAppBaseUrl(env: AppUrlEnv = process.env) {
 
   if (vercelUrl) return vercelUrl;
 
-  return env.APP_ENV === "production" ? undefined : "http://localhost:3000";
+  return isProductionRuntime(env) ? undefined : "http://localhost:3000";
 }
 
 export function getPublicAuthClientBaseUrl(env: AppUrlEnv = process.env) {

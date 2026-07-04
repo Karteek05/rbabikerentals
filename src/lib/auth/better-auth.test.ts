@@ -7,7 +7,16 @@ describe("Better Auth configuration", () => {
       resolveAuthDatabaseUrl({
         APP_ENV: "production"
       })
-    ).toThrow("SUPABASE_DB_URL or DATABASE_URL is required when APP_ENV=production.");
+    ).toThrow("SUPABASE_DB_URL or DATABASE_URL is required in production.");
+  });
+
+  test("treats NODE_ENV=production as production for auth database resolution", () => {
+    expect(
+      resolveAuthDatabaseUrl({
+        NODE_ENV: "production",
+        DATABASE_URL: "postgres://supabase"
+      })
+    ).toBe("postgres://supabase");
   });
 
   test("allows memory auth only outside production", () => {
