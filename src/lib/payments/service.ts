@@ -20,7 +20,7 @@ import {
   isRazorpayConfigured,
   verifyRazorpaySignature
 } from "@/lib/integrations/razorpay";
-import { notifyAdmin, notifyUser } from "@/lib/notifications/service";
+import { notifyAdmin, notifyUser, resolveUserNotificationEmail } from "@/lib/notifications/service";
 import type { PricingQuote, Role } from "@/lib/types/domain";
 import { ApiException } from "@/lib/utils/errors";
 import { newId } from "@/lib/utils/ids";
@@ -139,9 +139,10 @@ async function finalizeCapturedPayment(params: {
       return waitForFinalizedBooking(booking.id);
     }
     const user = await getUserOrThrow(updatedBooking.user_id);
+    const email = await resolveUserNotificationEmail(updatedBooking.user_id, user.email);
     await notifyUser({
       userId: updatedBooking.user_id,
-      email: user.email,
+      email,
       templateKey: "payment_confirmed",
       payload: {
         booking_id: updatedBooking.id,
@@ -170,10 +171,11 @@ async function finalizeCapturedPayment(params: {
     return waitForFinalizedBooking(booking.id);
   }
   const user = await getUserOrThrow(updatedBooking.user_id);
+  const email = await resolveUserNotificationEmail(updatedBooking.user_id, user.email);
   await Promise.all([
     notifyUser({
       userId: updatedBooking.user_id,
-      email: user.email,
+      email,
       templateKey: "payment_confirmed",
       payload: {
         booking_id: updatedBooking.id,

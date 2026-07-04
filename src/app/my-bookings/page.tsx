@@ -100,18 +100,21 @@ export default function MyBookingsPage() {
     setTimeout(() => setSuccessMsg(null), 4000);
   };
 
-  const fetchBookings = useCallback(async () => {
+  const fetchBookings = useCallback(async (): Promise<Booking[]> => {
     setError(null);
     try {
       const res = await fetch("/api/customer/bookings", fetchOptions);
       const json = await res.json();
       if (!res.ok || !json.ok) {
         setError(json?.error?.message ?? "Failed to load bookings");
-      } else {
-        setBookings(json.data.bookings);
+        return [];
       }
+      const nextBookings = json.data.bookings as Booking[];
+      setBookings(nextBookings);
+      return nextBookings;
     } catch {
       setError("Network error. Please refresh.");
+      return [];
     } finally {
       setLoading(false);
     }
@@ -148,6 +151,18 @@ export default function MyBookingsPage() {
       setTab("payment_pending");
     }
   }, []);
+
+  async function recoverConfirmedPayment(bookingId: string) {
+    const refreshed = await fetchBookings();
+    const updated = refreshed.find((item) => item.id === bookingId);
+    if (updated?.status === "confirmed" || updated?.status === "extended") {
+      showSuccess("Payment confirmed. Your booking is now confirmed.");
+      setQrBookingId(null);
+      setError(null);
+      return true;
+    }
+    return false;
+  }
 
   async function confirmCheckoutPayment(
     bookingId: string,
@@ -232,7 +247,9 @@ export default function MyBookingsPage() {
             showSuccess("Payment confirmed. Your booking is now confirmed.");
             setQrBookingId(null);
           } catch (confirmError) {
-            await fetchBookings();
+            if (await recoverConfirmedPayment(booking.id)) {
+              return;
+            }
             setQrBookingId(null);
             setError(
               confirmError instanceof Error
@@ -321,7 +338,9 @@ export default function MyBookingsPage() {
               await confirmCheckoutPayment(booking.id, response);
               showSuccess("Extension payment confirmed.");
             } catch (confirmError) {
-              await fetchBookings();
+              if (await recoverConfirmedPayment(booking.id)) {
+                return;
+              }
               setError(
                 confirmError instanceof Error
                   ? confirmError.message
