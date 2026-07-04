@@ -115,6 +115,8 @@ export async function createBooking(
     status: "admin_review",
     pickup_at: input.pickup_at,
     drop_at: input.drop_at,
+    pickup_zone: input.pickup_zone,
+    pickup_address: input.pickup_address,
     quote,
     coupon_code: input.coupon_code,
     km_limit_bucket: input.km_limit_bucket,

@@ -2,14 +2,27 @@ import { Pool } from "pg";
 
 let pool: Pool | null = null;
 
+export function resolvePgConnectionString() {
+  return process.env.SUPABASE_DB_URL ?? process.env.DATABASE_URL;
+}
+
+function createPgPool(connectionString: string) {
+  return new Pool({
+    connectionString,
+    ssl: connectionString.includes("supabase.co")
+      ? { rejectUnauthorized: false }
+      : undefined
+  });
+}
+
 export function getPgPool(): Pool {
-  const connectionString = process.env.DATABASE_URL ?? process.env.SUPABASE_DB_URL;
+  const connectionString = resolvePgConnectionString();
   if (!connectionString) {
-    throw new Error("DATABASE_URL or SUPABASE_DB_URL is required for transactional database access.");
+    throw new Error("SUPABASE_DB_URL or DATABASE_URL is required for transactional database access.");
   }
 
   if (!pool) {
-    pool = new Pool({ connectionString });
+    pool = createPgPool(connectionString);
   }
 
   return pool;

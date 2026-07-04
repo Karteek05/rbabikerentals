@@ -9,6 +9,16 @@ import { ApiException } from "@/lib/utils/errors";
 
 const HOLDING_STATUSES = Array.from(INVENTORY_HOLDING_STATUSES);
 
+function getPgErrorMessage(error: unknown) {
+  if (typeof error === "object" && error !== null && "message" in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === "string" && message.trim()) {
+      return message;
+    }
+  }
+  return "Failed to reserve vehicle inventory.";
+}
+
 export async function insertBookingWithCapacityGuard(booking: Booking): Promise<Booking> {
   const capacity = getVehicleStockCapacity(booking.vehicle_id);
 
@@ -32,16 +42,18 @@ export async function insertBookingWithCapacityGuard(booking: Booking): Promise<
 
   const pool = getPgPool();
   const client = await pool.connect();
+  let inTransaction = false;
 
   try {
     await client.query("BEGIN");
+    inTransaction = true;
     await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [booking.vehicle_id]);
 
     const countResult = await client.query<{ count: number }>(
       `select count(*)::int as count
        from bookings
        where vehicle_id = $1
-         and status = any($2::text[])
+         and status::text = any($2::text[])
          and pickup_at < $4
          and drop_at > $3`,
       [booking.vehicle_id, HOLDING_STATUSES, booking.pickup_at, booking.drop_at]
@@ -88,13 +100,17 @@ export async function insertBookingWithCapacityGuard(booking: Booking): Promise<
     );
 
     await client.query("COMMIT");
+    inTransaction = false;
     return insertResult.rows[0];
   } catch (error) {
-    await client.query("ROLLBACK");
+    if (inTransaction) {
+      await client.query("ROLLBACK");
+    }
     if (error instanceof ApiException) {
       throw error;
     }
-    throw new ApiException(500, "db_error", "Failed to reserve vehicle inventory.");
+    console.error("insertBookingWithCapacityGuard failed:", error);
+    throw new ApiException(500, "db_error", getPgErrorMessage(error));
   } finally {
     client.release();
   }
