@@ -74,13 +74,12 @@ export async function requireActor(
         throw error;
       }
 
-      const sessionRole = isValidRole(session?.user?.role) ? session?.user?.role : "customer";
       const sessionName =
         session?.user?.name?.trim() || session?.user?.email?.trim() || userId;
 
       const user = await upsertUser({
         id: userId,
-        role: sessionRole,
+        role: "customer",
         name: sessionName,
         city: "bengaluru",
         kyc_status: "not_started",
@@ -109,6 +108,7 @@ export async function requireActor(
   if (!userId || !role) {
     const allowDevHeaders =
       process.env.APP_ENV !== "production" &&
+      process.env.NODE_ENV !== "production" &&
       process.env.ALLOW_DEV_HEADERS === "true";
     if (!allowDevHeaders) {
       throw new ApiException(401, "auth_required", "Authentication is required.");

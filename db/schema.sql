@@ -170,29 +170,10 @@ create index if not exists idx_bookings_status on bookings(status);
 create index if not exists idx_bookings_user on bookings(user_id);
 create index if not exists idx_bookings_status_created_at on bookings(status, created_at);
 
-do $$ begin
-  if not exists (
-    select 1
-    from pg_constraint
-    where conname = 'bookings_vehicle_active_window_excl'
-  )
-  and not exists (
-    select 1
-    from pg_class
-    where relname = 'bookings_vehicle_active_window_excl'
-  ) then
-    alter table bookings
-      add constraint bookings_vehicle_active_window_excl
-      exclude using gist (
-        vehicle_id with =,
-        tstzrange(pickup_at, drop_at, '[)') with &&
-      )
-      where (
-        status <> 'cancelled'::booking_status_type
-        and status <> 'completed'::booking_status_type
-      );
-  end if;
-end $$;
+-- Fleet capacity is enforced transactionally in application logic (stockApprox per model).
+-- A per-vehicle exclusion constraint only allows one unit per vehicle_id and
+-- conflicts with multi-unit inventory for the same scooter model.
+alter table if exists bookings drop constraint if exists bookings_vehicle_active_window_excl;
 
 create table if not exists kyc_records (
   user_id text primary key references app_users(id),

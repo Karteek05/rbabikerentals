@@ -134,17 +134,17 @@ export async function createRazorpayRefund(params: {
   };
 }
 
-export function verifyRazorpaySignature(params: {
+export function verifyRazorpayCheckoutSignature(params: {
   orderId: string;
   paymentId: string;
   signature: string;
 }) {
-  const secret = process.env.RAZORPAY_WEBHOOK_SECRET || process.env.RAZORPAY_KEY_SECRET;
+  const secret = process.env.RAZORPAY_KEY_SECRET;
   if (!secret) {
     throw new ApiException(
       500,
       "razorpay_env_missing",
-      "Razorpay webhook secret is not configured."
+      "Razorpay key secret is not configured."
     );
   }
   const digest = crypto
@@ -152,6 +152,14 @@ export function verifyRazorpaySignature(params: {
     .update(`${params.orderId}|${params.paymentId}`)
     .digest("hex");
   return digest === params.signature;
+}
+
+export function verifyRazorpaySignature(params: {
+  orderId: string;
+  paymentId: string;
+  signature: string;
+}) {
+  return verifyRazorpayCheckoutSignature(params);
 }
 
 export async function createRazorpayPaymentLink(params: {

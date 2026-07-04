@@ -4,7 +4,21 @@ import { Pool } from "pg";
 import { sendResetPasswordEmail, sendOtpEmail } from "@/lib/notifications/service";
 import { getServerAppBaseUrl } from "@/lib/utils/app-url";
 
-const dbUrl = process.env.SUPABASE_DB_URL ?? process.env.DATABASE_URL;
+export function resolveAuthDatabaseUrl(
+  env: Record<string, string | undefined> = process.env
+) {
+  const isProduction = env.APP_ENV === "production";
+  const dbUrl = env.SUPABASE_DB_URL ?? env.DATABASE_URL;
+  if (isProduction && !dbUrl) {
+    throw new Error("SUPABASE_DB_URL or DATABASE_URL is required when APP_ENV=production.");
+  }
+  if (!isProduction) {
+    return undefined;
+  }
+  return dbUrl;
+}
+
+const dbUrl = resolveAuthDatabaseUrl();
 const isProduction = process.env.APP_ENV === "production";
 const authSecret =
   process.env.BETTER_AUTH_SECRET ??

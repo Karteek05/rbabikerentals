@@ -10,12 +10,15 @@ import {
   LogOut,
   Mail,
   MapPin,
+  Pencil,
   Phone,
   ShieldCheck,
   Trash2,
   UserRound
 } from "lucide-react";
 import { authClient } from "@/lib/auth/auth-client";
+import { formatBookingReference, getVehicleDisplayName } from "@/lib/fleet/display";
+import { formatBookingStatus } from "@/lib/bookings/status-labels";
 import { isGoogleAuthEnabled, startGoogleSignIn } from "@/lib/auth/google-sign-in";
 import type { Booking, User } from "@/lib/types/domain";
 import {
@@ -42,10 +45,7 @@ function formatDateTime(value: string) {
 }
 
 function formatStatus(status: string) {
-  return status
-    .split("_")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
+  return formatBookingStatus(status);
 }
 
 function accountInitial(user: User | null) {
@@ -62,6 +62,16 @@ export default function ProfilePage() {
   const [error, setError] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState("");
   const [deleting, setDeleting] = useState(false);
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileForm, setProfileForm] = useState({ name: "", phone: "" });
+  const [profileSuccess, setProfileSuccess] = useState("");
+  const [bookingsError, setBookingsError] = useState("");
+
+  const fetchOptions = {
+    credentials: "include" as const,
+    cache: "no-store" as const
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -73,10 +83,11 @@ export default function ProfilePage() {
       setError("");
 
       try {
-        const response = await fetch("/api/account/me", { cache: "no-store" });
-        const payload = readAccountPayload(await response.json());
-        if (!response.ok) {
-          throw new Error("Unable to load profile.");
+        const response = await fetch("/api/account/me", fetchOptions);
+        const json = await response.json();
+        const payload = readAccountPayload(json);
+        if (!response.ok || json?.ok === false) {
+          throw new Error(json?.error?.message ?? "Unable to load profile.");
         }
         if (!cancelled) {
           setAccount(payload);
@@ -108,14 +119,24 @@ export default function ProfilePage() {
 
     async function loadBookings() {
       setBookingsLoading(true);
+      setBookingsError("");
       try {
-        const response = await fetch("/api/customer/bookings", { cache: "no-store" });
-        if (!response.ok) {
-          if (!cancelled) setBookings([]);
+        const response = await fetch("/api/customer/bookings", fetchOptions);
+        const json = await response.json();
+        if (!response.ok || !json.ok) {
+          if (!cancelled) {
+            setBookings([]);
+            setBookingsError(json?.error?.message ?? "Unable to load your bookings.");
+          }
           return;
         }
         if (!cancelled) {
-          setBookings(readBookingsPayload(await response.json()));
+          setBookings(readBookingsPayload(json));
+        }
+      } catch {
+        if (!cancelled) {
+          setBookings([]);
+          setBookingsError("Unable to load your bookings.");
         }
       } finally {
         if (!cancelled) {
@@ -131,6 +152,19 @@ export default function ProfilePage() {
   }, [account?.authenticated, account?.user]);
 
   const user = account?.user ?? null;
+
+  useEffect(() => {
+    if (!user) return;
+    setProfileForm({
+      name: user.name || "",
+      phone: user.phone || ""
+    });
+  }, [user]);
+
+  const pendingBookings = useMemo(
+    () => bookings.filter((booking) => pendingStatuses.has(booking.status)),
+    [bookings]
+  );
   const confirmedRides = useMemo(
     () => bookings.filter((booking) => rideStatuses.has(booking.status)),
     [bookings]
@@ -168,6 +202,47 @@ export default function ProfilePage() {
     if (!result.ok) {
       setError(result.error);
     }
+  }
+
+  async function handleSaveProfile() {
+    if (!user || savingProfile) return;
+    setSavingProfile(true);
+    setError("");
+    setProfileSuccess("");
+
+    try {
+      const response = await fetch("/api/account/me", {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: profileForm.name.trim(),
+          phone: profileForm.phone.trim() || null
+        })
+      });
+      const json = await response.json();
+      if (!response.ok || !json.ok || !json.data?.user) {
+        throw new Error(json?.error?.message ?? "Unable to save profile changes.");
+      }
+      setAccount({ authenticated: true, user: json.data.user as User });
+      setEditingProfile(false);
+      setProfileSuccess("Profile updated.");
+      setTimeout(() => setProfileSuccess(""), 3000);
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "Unable to save profile changes.");
+    } finally {
+      setSavingProfile(false);
+    }
+  }
+
+  function handleCancelProfileEdit() {
+    if (!user) return;
+    setProfileForm({
+      name: user.name || "",
+      phone: user.phone || ""
+    });
+    setEditingProfile(false);
+    setError("");
   }
 
   async function handleDeleteAccount() {
@@ -303,13 +378,93 @@ export default function ProfilePage() {
         </div>
 
         <aside className="card min-w-0 p-5 sm:p-6">
-          <h2 className="text-xl font-bold text-[color:var(--color-ink)]">Account details</h2>
-          <div className="mt-5 space-y-3">
-            <ProfileFact icon={<Mail className="h-4 w-4" />} label="Email" value={user.email || session?.user?.email || "Not added"} />
-            <ProfileFact icon={<Phone className="h-4 w-4" />} label="Phone" value={user.phone || "Not added"} />
-            <ProfileFact icon={<MapPin className="h-4 w-4" />} label="City" value="Bengaluru" />
-            <ProfileFact icon={<ShieldCheck className="h-4 w-4" />} label="Sign-in" value="Email or Google" />
+          <div className="flex items-start justify-between gap-3">
+            <h2 className="text-xl font-bold text-[color:var(--color-ink)]">Account details</h2>
+            {!editingProfile ? (
+              <button
+                type="button"
+                onClick={() => setEditingProfile(true)}
+                className="btn-secondary px-3 py-2 text-xs"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                Edit
+              </button>
+            ) : null}
           </div>
+
+          {profileSuccess ? (
+            <p className="mt-3 rounded-[var(--radius-md)] border border-green-200 bg-green-50 px-3 py-2 text-sm font-semibold text-green-800">
+              {profileSuccess}
+            </p>
+          ) : null}
+
+          {editingProfile ? (
+            <form
+              className="mt-5 space-y-4"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void handleSaveProfile();
+              }}
+            >
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-[color:var(--color-muted)]">
+                  Full name
+                </span>
+                <input
+                  className="field-control"
+                  value={profileForm.name}
+                  onChange={(event) =>
+                    setProfileForm((current) => ({ ...current, name: event.target.value }))
+                  }
+                  required
+                  autoComplete="name"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-[color:var(--color-muted)]">
+                  Phone
+                </span>
+                <input
+                  className="field-control"
+                  value={profileForm.phone}
+                  onChange={(event) =>
+                    setProfileForm((current) => ({ ...current, phone: event.target.value }))
+                  }
+                  placeholder="10-digit mobile number"
+                  autoComplete="tel"
+                />
+              </label>
+              <ProfileFact
+                icon={<Mail className="h-4 w-4" />}
+                label="Email"
+                value={user.email || session?.user?.email || "Not added"}
+              />
+              <p className="text-xs text-[color:var(--color-copy)]">
+                Email is tied to sign-in. Contact support if you need to change it.
+              </p>
+              <div className="flex flex-wrap gap-2 pt-1">
+                <button type="submit" disabled={savingProfile} className="btn-primary">
+                  {savingProfile ? "Saving..." : "Save changes"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCancelProfileEdit}
+                  disabled={savingProfile}
+                  className="btn-secondary"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          ) : (
+            <div className="mt-5 space-y-3">
+              <ProfileFact icon={<UserRound className="h-4 w-4" />} label="Name" value={user.name || "Not added"} />
+              <ProfileFact icon={<Mail className="h-4 w-4" />} label="Email" value={user.email || session?.user?.email || "Not added"} />
+              <ProfileFact icon={<Phone className="h-4 w-4" />} label="Phone" value={user.phone || "Not added"} />
+              <ProfileFact icon={<MapPin className="h-4 w-4" />} label="City" value="Bengaluru" />
+              <ProfileFact icon={<ShieldCheck className="h-4 w-4" />} label="Sign-in" value="Email or Google" />
+            </div>
+          )}
         </aside>
       </section>
 
@@ -317,6 +472,33 @@ export default function ProfilePage() {
         <div className="mt-5 rounded-[var(--radius-md)] border border-[color:var(--color-danger)]/35 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
           {error}
         </div>
+      ) : null}
+
+      {bookingsError ? (
+        <div className="mt-5 rounded-[var(--radius-md)] border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
+          {bookingsError}
+        </div>
+      ) : null}
+
+      {pendingBookings.length ? (
+        <section className="mt-5 card min-w-0 p-5 sm:p-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 className="text-2xl font-bold text-[color:var(--color-ink)]">Active requests</h2>
+              <p className="mt-1 text-sm text-[color:var(--color-copy)]">
+                Bookings waiting for review or payment.
+              </p>
+            </div>
+            <Link href="/my-bookings?pay=1" className="btn-primary">
+              Pay or manage
+            </Link>
+          </div>
+          <div className="mt-5 grid gap-3">
+            {pendingBookings.map((booking) => (
+              <RideCard key={booking.id} booking={booking} />
+            ))}
+          </div>
+        </section>
       ) : null}
 
       <section className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
@@ -363,7 +545,7 @@ export default function ProfilePage() {
                 <div key={booking.id} className="rounded-[var(--radius-md)] border border-[color:var(--color-line)] bg-[color:var(--color-paper)] p-3">
                   <div className="flex items-center justify-between gap-3">
                     <p className="min-w-0 truncate text-sm font-black text-[color:var(--color-ink)]">
-                      {booking.vehicle_id}
+                      {getVehicleDisplayName(booking.vehicle_id)}
                     </p>
                     <span className={`badge badge-${booking.status}`}>{formatStatus(booking.status)}</span>
                   </div>
@@ -447,12 +629,12 @@ function RideCard({ booking }: { booking: Booking }) {
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="max-w-full break-words text-lg font-bold text-[color:var(--color-ink)]">
-            {booking.vehicle_id}
+            {getVehicleDisplayName(booking.vehicle_id)}
           </h3>
           <span className={`badge badge-${booking.status}`}>{formatStatus(booking.status)}</span>
         </div>
         <p className="mt-2 break-words text-xs font-semibold text-[color:var(--color-muted)]">
-          {booking.id}
+          {formatBookingReference(booking.id)}
         </p>
         <div className="mt-4 grid gap-3 md:grid-cols-2">
           <div>

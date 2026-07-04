@@ -1,8 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import Icon from "../../components/Icon";
+import BookingScheduleFields from "../../components/BookingScheduleFields";
+import LoginPromptModal from "../../components/LoginPromptModal";
+import BookingFeedbackModal from "../../components/BookingFeedbackModal";
 import { authClient } from "@/lib/auth/auth-client";
 import {
   GST_INCLUSIVE_COPY,
@@ -13,8 +16,17 @@ import {
 } from "@/lib/fleet/catalog";
 import {
   durationParamToPackageKey,
+  getPackageHours,
   resolveBookingScheduleFromParams
 } from "@/lib/bookings/schedule";
+import {
+  buildInitialScheduleParts,
+  fromDateTimeParts,
+  isoToScheduleParts,
+  nearestTimeSlot,
+  toDateTimeIso,
+  toDateValue
+} from "@/lib/datetime/booking-schedule-ui";
 
 type Quote = {
   base_amount: number;
@@ -29,6 +41,11 @@ type Quote = {
 
 const API_HEADERS = {
   "Content-Type": "application/json"
+};
+
+const fetchOptions = {
+  credentials: "include" as const,
+  headers: API_HEADERS
 };
 
 const PACKAGE_TO_BUCKET: Record<PackageRateKey, "day" | "week" | "month"> = {
@@ -84,7 +101,7 @@ function getBookingErrorMessage(
   error?: { code?: string; message?: string }
 ) {
   if (error?.code === "vehicle_unavailable") {
-    return "This scooter is already booked for the selected window. Please change dates or choose another scooter.";
+    return "No units are left for this scooter in the selected dates. Please change dates or choose another scooter.";
   }
   if (error?.code === "vehicle_blocked") {
     return "This scooter is blocked for maintenance during the selected window. Please change dates or choose another scooter.";
@@ -119,8 +136,15 @@ export default function BookPage() {
     searchParams,
     initialPackageKey
   );
+  const initialPickup = isoToScheduleParts(initialSchedule.pickupAt);
+  const initialDrop = isoToScheduleParts(initialSchedule.dropAt);
 
   const [packageKey, setPackageKey] = useState<PackageRateKey>(initialPackageKey);
+  const [pickupDate, setPickupDate] = useState(initialPickup.dateValue);
+  const [pickupTime, setPickupTime] = useState(initialPickup.timeValue);
+  const [dropDate, setDropDate] = useState(initialDrop.dateValue);
+  const [dropTime, setDropTime] = useState(initialDrop.timeValue);
+  const [unitsAvailable, setUnitsAvailable] = useState<number | null>(null);
   const [extraHelmet, setExtraHelmet] = useState(false);
   const [coupon, setCoupon] = useState("");
   const [pickupZone, setPickupZone] = useState(initialSchedule.pickupZone);
@@ -132,26 +156,87 @@ export default function BookPage() {
   const [quoteLoading, setQuoteLoading] = useState(false);
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const [bookingLoading, setBookingLoading] = useState(false);
-  const [bookingId, setBookingId] = useState<string | null>(null);
   const [bookingError, setBookingError] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<{
+    type: "success" | "error";
+    title: string;
+    message: string;
+    bookingId?: string;
+  } | null>(null);
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
+  const dropManuallyEdited = useRef(false);
+
+  const isSignedIn = Boolean(session?.user?.id);
+  const returnPath = useMemo(() => {
+    const params = searchParams.toString();
+    return params ? `/book/${vehicleId}?${params}` : `/book/${vehicleId}`;
+  }, [searchParams, vehicleId]);
+
+  const estimatedQuote = useMemo<Quote | null>(() => {
+    if (!vehicle) return null;
+    const baseAmount = getPackageRate(vehicle, packageKey);
+    const addonAmount = extraHelmet ? 50 : 0;
+    const depositAmount = vehicle.deposit_amount;
+    const kmIncluded =
+      packageKey === "rate_per_month" ? 3600 : packageKey === "rate_per_day" ? 1800 : 900;
+    return {
+      base_amount: baseAmount,
+      addon_amount: addonAmount,
+      coupon_discount: 0,
+      deposit_amount: depositAmount,
+      tax_amount: 0,
+      total_payable: baseAmount + addonAmount + depositAmount,
+      km_included: kmIncluded,
+      excess_km_rate: 5
+    };
+  }, [vehicle, packageKey, extraHelmet]);
+
+  const displayQuote = quote ?? (isSignedIn ? null : estimatedQuote);
 
   const durationBucket = PACKAGE_TO_BUCKET[packageKey];
   const durationValue = PACKAGE_TO_VALUE[packageKey];
-  const bookingSchedule = useMemo(
-    () => resolveBookingScheduleFromParams(searchParams, packageKey),
-    [queryString, searchParams, packageKey]
-  );
+  const pickupAt = toDateTimeIso(pickupDate, pickupTime);
+  const dropAt = toDateTimeIso(dropDate, dropTime);
+  const scheduleValid = fromDateTimeParts(dropDate, dropTime).getTime() > fromDateTimeParts(pickupDate, pickupTime).getTime();
 
   useEffect(() => {
     const nextPackageKey = durationParamToPackageKey(searchParams.get("duration"));
-    const nextSchedule = resolveBookingScheduleFromParams(
-      searchParams,
-      nextPackageKey
-    );
+    const nextSchedule = resolveBookingScheduleFromParams(searchParams, nextPackageKey);
+    const nextPickup = isoToScheduleParts(nextSchedule.pickupAt);
+    const nextDrop = isoToScheduleParts(nextSchedule.dropAt);
     setPackageKey(nextPackageKey);
     setPickupZone(nextSchedule.pickupZone);
+    setPickupDate(nextPickup.dateValue);
+    setPickupTime(nextPickup.timeValue);
+    setDropDate(nextDrop.dateValue);
+    setDropTime(nextDrop.timeValue);
+    dropManuallyEdited.current = false;
     setBookingError(null);
   }, [queryString, searchParams]);
+
+  useEffect(() => {
+    if (dropManuallyEdited.current) return;
+    const pickupAtDate = fromDateTimeParts(pickupDate, pickupTime);
+    const nextDrop = new Date(pickupAtDate.getTime() + getPackageHours(packageKey) * 3_600_000);
+    setDropDate(toDateValue(nextDrop));
+    setDropTime(nearestTimeSlot(nextDrop));
+  }, [packageKey, pickupDate, pickupTime]);
+
+  useEffect(() => {
+    if (!vehicleId || !scheduleValid) return;
+    const params = new URLSearchParams({
+      duration: packageKey === "rate_per_month" ? "monthly" : packageKey === "rate_per_day" ? "fortnight" : "weekly",
+      pickup_at: pickupAt,
+      drop_at: dropAt
+    });
+    fetch(`/api/fleet/availability?${params.toString()}`, { credentials: "include" })
+      .then((res) => res.json())
+      .then((json) => {
+        const item = json?.data?.items?.find((entry: { vehicle_id: string }) => entry.vehicle_id === vehicleId);
+        setUnitsAvailable(item?.available_units ?? null);
+      })
+      .catch(() => setUnitsAvailable(null));
+  }, [vehicleId, pickupAt, dropAt, packageKey, scheduleValid]);
 
   const fetchQuote = useCallback(async () => {
     if (!vehicle || !session?.user?.id) return;
@@ -160,7 +245,7 @@ export default function BookPage() {
     try {
       const res = await fetch("/api/quotes", {
         method: "POST",
-        headers: API_HEADERS,
+        ...fetchOptions,
         body: JSON.stringify({
           user_id: session?.user?.id,
           vehicle_id: vehicleId,
@@ -193,7 +278,8 @@ export default function BookPage() {
 
   async function handleReserve() {
     if (!session?.user?.id) {
-      setBookingError("Please sign in before submitting a booking request.");
+      setBookingError(null);
+      setShowLoginPrompt(true);
       return;
     }
 
@@ -208,13 +294,13 @@ export default function BookPage() {
     try {
       const res = await fetch("/api/bookings", {
         method: "POST",
-        headers: API_HEADERS,
+        ...fetchOptions,
         body: JSON.stringify({
           user_id: session?.user?.id,
           vehicle_id: vehicleId,
           city: "bengaluru",
-          pickup_at: bookingSchedule.pickupAt,
-          drop_at: bookingSchedule.dropAt,
+          pickup_at: pickupAt,
+          drop_at: dropAt,
           pickup_zone: pickupZone,
           pickup_address: pickupAddress || pickupZone,
           duration_bucket: durationBucket,
@@ -232,12 +318,33 @@ export default function BookPage() {
       });
       const json = await res.json().catch(() => null);
       if (!res.ok || !json?.ok) {
-        setBookingError(getBookingErrorMessage(res.status, json?.error));
+        const message = getBookingErrorMessage(res.status, json?.error);
+        setBookingError(message);
+        setFeedback({
+          type: "error",
+          title: "Booking not submitted",
+          message
+        });
       } else {
-        setBookingId(json.data.booking.id);
+        const newBookingId = json.data.booking.id as string;
+        setBookingError(null);
+        setFeedback({
+          type: "success",
+          title: "Request submitted",
+          message:
+            "We received your booking request. The team will confirm availability and share payment details soon.",
+          bookingId: newBookingId
+        });
       }
     } catch {
-      setBookingError("Could not reach the booking service. Check that the site is running and try again.");
+      const message =
+        "Could not reach the booking service. Check that the site is running and try again.";
+      setBookingError(message);
+      setFeedback({
+        type: "error",
+        title: "Booking not submitted",
+        message
+      });
     } finally {
       setBookingLoading(false);
     }
@@ -254,33 +361,6 @@ export default function BookPage() {
         <a href="/browse" className="btn-primary">
           Back to Browse
         </a>
-      </div>
-    );
-  }
-
-  if (bookingId) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-white px-4">
-        <div className="max-w-md text-center">
-          <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-black text-white">
-            <Icon name="checkCircle" className="h-10 w-10" />
-          </div>
-          <h1 className="mb-3 text-4xl font-bold">Request Submitted</h1>
-          <p className="mb-2 text-sm text-uber-body-gray">
-            We received your booking request. The team will confirm availability and payment details.
-          </p>
-          <div className="my-6 break-all rounded-xl bg-uber-chip-gray px-6 py-4 font-mono text-lg font-bold tracking-widest">
-            {bookingId}
-          </div>
-          <div className="flex flex-col justify-center gap-3 sm:flex-row">
-            <a href="/my-bookings" className="btn-primary px-6 py-3">
-              View My Bookings
-            </a>
-            <a href="/browse" className="btn-secondary px-6 py-3">
-              Browse More
-            </a>
-          </div>
-        </div>
       </div>
     );
   }
@@ -366,6 +446,7 @@ export default function BookPage() {
                       key={plan.key}
                       type="button"
                       onClick={() => {
+                        dropManuallyEdited.current = false;
                         setPackageKey(plan.rateKey);
                         setBookingError(null);
                       }}
@@ -416,26 +497,49 @@ export default function BookPage() {
               </div>
 
               <div className="mb-4 rounded-2xl border border-black/5 bg-[#f7f7f7] p-5">
+                <h3 className="mb-3 text-sm font-bold text-black">Rental dates</h3>
+                <BookingScheduleFields
+                  pickupDate={pickupDate}
+                  pickupTime={pickupTime}
+                  dropDate={dropDate}
+                  dropTime={dropTime}
+                  minPickupDate={toDateValue(new Date())}
+                  onPickupDateChange={setPickupDate}
+                  onPickupTimeChange={setPickupTime}
+                  onDropDateChange={(value) => {
+                    dropManuallyEdited.current = true;
+                    setDropDate(value);
+                  }}
+                  onDropTimeChange={(value) => {
+                    dropManuallyEdited.current = true;
+                    setDropTime(value);
+                  }}
+                />
+                {unitsAvailable !== null && (
+                  <p className={`mt-3 text-xs ${unitsAvailable > 0 ? "text-green-700" : "text-red-600"}`}>
+                    {unitsAvailable > 0
+                      ? `${unitsAvailable} unit${unitsAvailable === 1 ? "" : "s"} available for these dates.`
+                      : "No units available for these dates. Try different dates or another scooter."}
+                  </p>
+                )}
+              </div>
+
+              <div className="mb-4 rounded-2xl border border-black/5 bg-[#f7f7f7] p-5">
                 <h3 className="mb-3 text-sm font-bold text-black">Selected rental window</h3>
                 <div className="space-y-2 text-[13px] text-uber-body-gray">
                   <div className="flex justify-between gap-4">
                     <span>Pickup</span>
                     <span className="text-right font-semibold text-black">
-                      {formatScheduleTime(bookingSchedule.pickupAt)}
+                      {formatScheduleTime(pickupAt)}
                     </span>
                   </div>
                   <div className="flex justify-between gap-4">
                     <span>Drop</span>
                     <span className="text-right font-semibold text-black">
-                      {formatScheduleTime(bookingSchedule.dropAt)}
+                      {formatScheduleTime(dropAt)}
                     </span>
                   </div>
                 </div>
-                {bookingSchedule.usedFallback && (
-                  <p className="mt-3 text-xs text-uber-muted-gray">
-                    No date selection was passed in, so this uses the selected package duration from the next available hour.
-                  </p>
-                )}
               </div>
 
 
@@ -459,18 +563,31 @@ export default function BookPage() {
                   </div>
                 ) : quoteError ? (
                   <p className="py-2 text-xs text-red-600">{quoteError}</p>
-                ) : quote ? (
+                ) : displayQuote ? (
                   <>
-                    <QuoteRow label="Package fare" value={rupees(quote.base_amount)} />
-                    {quote.addon_amount > 0 && <QuoteRow label="Extra helmet" value={rupees(quote.addon_amount)} />}
-                    {quote.coupon_discount > 0 && <QuoteRow label="Coupon discount" value={`-${rupees(quote.coupon_discount)}`} />}
+                    {!isSignedIn ? (
+                      <p className="mb-2 text-xs text-uber-muted-gray">
+                        Estimated total — sign in for your exact quote.
+                      </p>
+                    ) : null}
+                    <QuoteRow label="Package fare" value={rupees(displayQuote.base_amount)} />
+                    {displayQuote.addon_amount > 0 && (
+                      <QuoteRow label="Extra helmet" value={rupees(displayQuote.addon_amount)} />
+                    )}
+                    {displayQuote.coupon_discount > 0 && (
+                      <QuoteRow label="Coupon discount" value={`-${rupees(displayQuote.coupon_discount)}`} />
+                    )}
                     <QuoteRow label="GST" value="Included" />
-                    {quote.deposit_amount > 0 && <QuoteRow label="Security deposit" value={rupees(quote.deposit_amount)} />}
-                    <QuoteRow label="Total payable" value={rupees(quote.total_payable)} highlight />
+                    {displayQuote.deposit_amount > 0 && (
+                      <QuoteRow label="Security deposit" value={rupees(displayQuote.deposit_amount)} />
+                    )}
+                    <QuoteRow label="Total payable" value={rupees(displayQuote.total_payable)} highlight />
                     <p className="mt-2 text-xs text-uber-muted-gray">
-                      Includes {quote.km_included} km - Rs. {quote.excess_km_rate}/km extra
+                      Includes {displayQuote.km_included} km - Rs. {displayQuote.excess_km_rate}/km extra
                     </p>
                   </>
+                ) : isSignedIn ? (
+                  <p className="py-2 text-xs text-uber-muted-gray">Select dates to calculate your quote.</p>
                 ) : null}
               </div>
 
@@ -496,10 +613,19 @@ export default function BookPage() {
               <button
                 type="button"
                 onClick={handleReserve}
-                disabled={bookingLoading || quoteLoading || !quote}
+                disabled={
+                  bookingLoading ||
+                  (isSignedIn && (quoteLoading || !quote)) ||
+                  !scheduleValid ||
+                  unitsAvailable === 0
+                }
                 className="w-full rounded-full bg-black py-4 text-base font-bold text-white transition-colors hover:bg-[#e2e2e2] hover:text-black disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {bookingLoading ? "Submitting..." : "Submit Booking Request"}
+                {bookingLoading
+                  ? "Submitting..."
+                  : isSignedIn
+                    ? "Submit Booking Request"
+                    : "Sign in to submit request"}
               </button>
 
               <p className="mt-3 text-center text-xs text-uber-muted-gray">Availability and payment details are confirmed after review.</p>
@@ -507,6 +633,27 @@ export default function BookPage() {
           </div>
         </div>
       </div>
+
+      <LoginPromptModal
+        open={showLoginPrompt}
+        onClose={() => setShowLoginPrompt(false)}
+        returnPath={returnPath}
+        title="Sign in to book"
+        description="Sign in or create an account to submit this booking request. Your selected dates will be kept."
+        onSignedIn={() => {
+          setShowLoginPrompt(false);
+          setBookingError(null);
+        }}
+      />
+
+      <BookingFeedbackModal
+        open={Boolean(feedback)}
+        type={feedback?.type ?? "error"}
+        title={feedback?.title ?? ""}
+        message={feedback?.message ?? ""}
+        bookingId={feedback?.bookingId}
+        onClose={() => setFeedback(null)}
+      />
     </div>
   );
 }

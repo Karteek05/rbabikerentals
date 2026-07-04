@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useState } from "react";
 import Icon, { type IconName } from "../components/Icon";
 import { PUBLIC_FLEET_BY_ID } from "@/lib/fleet/catalog";
+import { formatBookingReference, getVehicleDisplayName } from "@/lib/fleet/display";
+import { formatBookingStatus } from "@/lib/bookings/status-labels";
+import { openRazorpayCheckout } from "@/lib/payments/razorpay-checkout-client";
 import { authClient } from "@/lib/auth/auth-client";
 
 type Booking = {
@@ -27,37 +30,13 @@ type NotificationItem = {
   created_at: string;
 };
 
-type RazorpayCheckout = new (options: {
-  key: string;
-  amount: number;
-  currency: string;
-  order_id: string;
-  name: string;
-  description: string;
-  handler: () => void;
-  prefill?: { name?: string; email?: string; contact?: string };
-}) => { open: () => void };
-
-declare global {
-  interface Window {
-    Razorpay?: RazorpayCheckout;
-  }
-}
-
 const API_HEADERS = {
   "Content-Type": "application/json"
 };
 
-const VEHICLE_NAMES: Record<string, string> = {
-  veh_001: "Honda Activa 110",
-  veh_002: "Honda Dio 110",
-  veh_003: "TVS Jupiter 125"
-};
-
-const VEHICLE_ICONS: Record<string, IconName> = {
-  veh_001: "scooter",
-  veh_002: "scooter",
-  veh_003: "scooter"
+const fetchOptions = {
+  credentials: "include" as const,
+  headers: API_HEADERS
 };
 
 
@@ -85,7 +64,7 @@ function fmt(iso: string) {
 
 function StatusBadge({ status }: { status: string }) {
   const cls = STATUS_STYLES[status] ?? "bg-uber-chip-gray text-black";
-  return <span className={`badge ${cls} capitalize text-xs`}>{status.replace(/_/g, " ")}</span>;
+  return <span className={`badge ${cls} text-xs`}>{formatBookingStatus(status)}</span>;
 }
 
 function getUpiLink(booking: Booking) {
@@ -124,7 +103,7 @@ export default function MyBookingsPage() {
   const fetchBookings = useCallback(async () => {
     setError(null);
     try {
-      const res = await fetch("/api/customer/bookings", { headers: API_HEADERS });
+      const res = await fetch("/api/customer/bookings", fetchOptions);
       const json = await res.json();
       if (!res.ok || !json.ok) {
         setError(json?.error?.message ?? "Failed to load bookings");
@@ -140,7 +119,7 @@ export default function MyBookingsPage() {
 
   const fetchNotifications = useCallback(async () => {
     try {
-      const res = await fetch("/api/notifications?limit=5", { headers: API_HEADERS });
+      const res = await fetch("/api/notifications?limit=5", fetchOptions);
       const json = await res.json();
       if (res.ok && json.ok) {
         setNotifications(json.data.items);
@@ -170,59 +149,57 @@ export default function MyBookingsPage() {
     }
   }, []);
 
-  function loadRazorpayScript() {
-    return new Promise<boolean>((resolve) => {
-      if (window.Razorpay) {
-        resolve(true);
-        return;
-      }
-      const script = document.createElement("script");
-      script.src = "https://checkout.razorpay.com/v1/checkout.js";
-      script.onload = () => resolve(true);
-      script.onerror = () => resolve(false);
-      document.body.appendChild(script);
-    });
-  }
-
   async function handlePay(booking: Booking) {
     setActionLoading(`pay-${booking.id}`);
     setError(null);
     try {
       const res = await fetch("/api/payments/order", {
         method: "POST",
-        headers: API_HEADERS,
+        ...fetchOptions,
         body: JSON.stringify({ booking_id: booking.id })
       });
       const json = await res.json();
       if (!res.ok || !json.ok) {
         setQrBookingId(booking.id);
-        showSuccess("Razorpay checkout is not ready. Scan the QR below to pay this booking amount.");
+        setError(json?.error?.message ?? "Could not start Razorpay checkout. Use the UPI QR below.");
         return;
       }
       const order = json.data.order;
       if (order?.provider === "upi_fallback" || !order?.key_id || !order?.order_id) {
         setQrBookingId(booking.id);
-        showSuccess("Razorpay checkout is not configured. Scan the QR below to pay this booking amount.");
+        setError("Razorpay checkout is not configured. Use the UPI QR below.");
         return;
       }
-      const loaded = await loadRazorpayScript();
-      if (!loaded || !window.Razorpay) {
-        setQrBookingId(booking.id);
-        showSuccess("Razorpay checkout could not load in this browser. Scan the QR below to pay.");
-        return;
-      }
-      new window.Razorpay({
-        key: order.key_id,
+
+      const vehicleName = getVehicleDisplayName(booking.vehicle_id);
+      await openRazorpayCheckout({
+        keyId: order.key_id,
         amount: order.amount,
         currency: order.currency,
-        order_id: order.order_id,
-        name: "RBA Bike Rentals",
-        description: booking.id,
-        handler: () => showSuccess("Payment submitted. Confirmation appears after Razorpay webhook capture.")
-      }).open();
-    } catch {
+        orderId: order.order_id,
+        description: `${vehicleName} booking`,
+        prefill: {
+          name: customerName,
+          email: session?.user?.email ?? undefined
+        },
+        onSuccess: () => {
+          showSuccess("Payment submitted. Your booking will update after Razorpay confirms payment.");
+          setQrBookingId(null);
+        },
+        onDismiss: () => {
+          setError("Payment window closed before completion.");
+        },
+        onFailure: (message) => {
+          setError(message);
+        }
+      });
+    } catch (payError) {
       setQrBookingId(booking.id);
-      showSuccess("Payment checkout is unavailable right now. Scan the QR below to pay.");
+      setError(
+        payError instanceof Error
+          ? payError.message
+          : "Payment checkout is unavailable right now. Use the UPI QR below."
+      );
     } finally {
       setActionLoading(null);
     }
@@ -234,7 +211,7 @@ export default function MyBookingsPage() {
     try {
       const res = await fetch(`/api/bookings/${id}/cancel`, {
         method: "POST",
-        headers: API_HEADERS,
+        ...fetchOptions,
         body: JSON.stringify({ reason: "Customer requested cancellation" })
       });
       const json = await res.json();
@@ -251,29 +228,59 @@ export default function MyBookingsPage() {
     }
   }
 
-  async function handleExtend(id: string) {
-    setActionLoading(`extend-${id}`);
+  async function handleExtend(booking: Booking) {
+    setActionLoading(`extend-${booking.id}`);
+    setError(null);
     const drop = new Date(Date.now() + 24 * 3_600_000).toISOString();
     try {
-      const res = await fetch(`/api/bookings/${id}/extend`, {
+      const res = await fetch(`/api/bookings/${booking.id}/extend`, {
         method: "POST",
-        headers: API_HEADERS,
+        ...fetchOptions,
         body: JSON.stringify({
-          new_drop_at: drop,
+          requested_drop_at: drop,
           duration_bucket: "day",
-          duration_value: 1,
-          extra_helmet_count: 0
+          duration_value: 1
         })
       });
       const json = await res.json();
       if (!res.ok || !json.ok) {
         setError(json?.error?.message ?? "Extend failed");
+        return;
+      }
+
+      const paymentOrder = json.data?.payment_order;
+      if (paymentOrder?.order_id && paymentOrder?.key_id) {
+        const vehicleName = getVehicleDisplayName(booking.vehicle_id);
+        await openRazorpayCheckout({
+          keyId: paymentOrder.key_id,
+          amount: paymentOrder.amount,
+          currency: paymentOrder.currency ?? "INR",
+          orderId: paymentOrder.order_id,
+          description: `${vehicleName} extension`,
+          prefill: {
+            name: customerName,
+            email: session?.user?.email ?? undefined
+          },
+          onSuccess: () => {
+            showSuccess("Extension payment submitted. Your booking updates after Razorpay confirms payment.");
+          },
+          onDismiss: () => {
+            setError("Extension payment window closed before completion.");
+          },
+          onFailure: (message) => {
+            setError(message);
+          }
+        });
       } else {
         showSuccess("Booking extended by 1 day.");
-        await fetchBookings();
       }
-    } catch {
-      setError("Network error.");
+      await fetchBookings();
+    } catch (payError) {
+      setError(
+        payError instanceof Error
+          ? payError.message
+          : "Extension checkout is unavailable right now."
+      );
     } finally {
       setActionLoading(null);
     }
@@ -281,7 +288,7 @@ export default function MyBookingsPage() {
 
   const TABS = [
     { key: "all", label: "All" },
-    { key: "pending_kyc", label: "Pending" },
+    { key: "pending_kyc", label: "Pending review" },
     { key: "admin_review", label: "Review" },
     { key: "payment_pending", label: "Pay" },
     { key: "confirmed", label: "Confirmed" },
@@ -387,8 +394,8 @@ export default function MyBookingsPage() {
               const actCancel = actionLoading === `cancel-${booking.id}`;
               const actExtend = actionLoading === `extend-${booking.id}`;
               const actPay = actionLoading === `pay-${booking.id}`;
-              const vIcon = VEHICLE_ICONS[booking.vehicle_id] ?? "scooter";
-              const vName = VEHICLE_NAMES[booking.vehicle_id] ?? booking.vehicle_id;
+              const vIcon: IconName = "scooter";
+              const vName = getVehicleDisplayName(booking.vehicle_id);
               const vehicle = PUBLIC_FLEET_BY_ID[booking.vehicle_id];
 
               return (
@@ -437,7 +444,9 @@ export default function MyBookingsPage() {
                           </div>
                         </div>
 
-                        <div className="text-xs text-uber-muted-gray font-mono">ID: {booking.id}</div>
+                        <div className="text-xs text-uber-muted-gray">
+                          Ref: {formatBookingReference(booking.id)}
+                        </div>
                         {booking.cancel_reason && <p className="text-xs text-red-600 mt-1">Reason: {booking.cancel_reason}</p>}
                       </div>
                     </div>
@@ -447,7 +456,7 @@ export default function MyBookingsPage() {
                       {(isActionable || booking.status === "payment_pending") && (
                         <button
                           onClick={() =>
-                            booking.status === "payment_pending" ? handlePay(booking) : handleExtend(booking.id)
+                            booking.status === "payment_pending" ? handlePay(booking) : handleExtend(booking)
                           }
                           disabled={booking.status === "payment_pending" ? actPay : actExtend}
                           className="btn-primary text-sm py-2 px-5 disabled:opacity-50"

@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer";
+import { getVehicleDisplayName, formatBookingReference } from "@/lib/fleet/display";
 import { insertNotificationJob } from "@/lib/data/repository";
 import { sendSmtpMail } from "@/lib/integrations/smtp";
 import type { NotificationJob } from "@/lib/types/domain";
@@ -105,42 +106,112 @@ export async function sendOtpEmail(email: string, otp: string) {
 }
 
 export async function sendBookingConfirmationEmail(email: string, bookingDetails: any) {
-  const pickupTime = new Date(bookingDetails.pickup_at).toLocaleString();
-  const dropTime = new Date(bookingDetails.drop_at).toLocaleString();
-  const status = bookingDetails.status;
-
-  const text = `Hi there,\n\nYour booking (ID: ${bookingDetails.id}) has been created!\n\nStatus: ${status}\nPickup Time: ${pickupTime}\nDrop-off Time: ${dropTime}\n\nWe will update you once your booking is fully confirmed.\n\nThanks,\nRBA Bike Rentals Team`;
-  const html = `<p>Hi there,</p><p>Your booking (ID: <strong>${bookingDetails.id}</strong>) has been created!</p><ul><li><strong>Status:</strong> ${status}</li><li><strong>Pickup Time:</strong> ${pickupTime}</li><li><strong>Drop-off Time:</strong> ${dropTime}</li></ul><p>We will update you once your booking is fully confirmed.</p><p>Thanks,<br>RBA Bike Rentals Team</p>`;
+  const pickupTime = new Date(bookingDetails.pickup_at).toLocaleString("en-IN");
+  const dropTime = new Date(bookingDetails.drop_at).toLocaleString("en-IN");
+  const status = String(bookingDetails.status ?? "pending").replace(/_/g, " ");
+  const vehicleName = getVehicleDisplayName(
+    String(bookingDetails.vehicle_id ?? ""),
+    bookingDetails.vehicle
+  );
+  const bookingRef = formatBookingReference(String(bookingDetails.id ?? ""));
 
   await sendEmail({
     to: email,
-    subject: `Booking Confirmation - ${bookingDetails.id}`,
-    text,
-    html
+    subject: `Booking request received - ${vehicleName}`,
+    text: paragraph([
+      "We received your RBA booking request.",
+      "",
+      `Vehicle: ${vehicleName}`,
+      `Booking reference: ${bookingRef}`,
+      `Status: ${status}`,
+      `Pickup: ${pickupTime}`,
+      `Drop: ${dropTime}`,
+      "",
+      "Our team will review availability and send payment details once approved.",
+      "",
+      "Regards,",
+      "RBA Bike Rentals"
+    ]),
+    html: renderEmailHtml({
+      title: "Booking request received",
+      intro: "We received your booking request and will review availability before opening payment.",
+      rows: [
+        ["Vehicle", vehicleName],
+        ["Booking reference", bookingRef],
+        ["Status", status],
+        ["Pickup", pickupTime],
+        ["Drop", dropTime]
+      ],
+      closing: "You will receive another email once the booking is approved for payment."
+    })
   });
 }
 
 export async function sendBookingApprovedEmail(email: string, bookingDetails: any, paymentLink: string) {
-  const text = `Hi there,\n\nGreat news! Your booking request (ID: ${bookingDetails.id}) has been approved.\n\nTo confirm your booking, please complete the payment using the following secure link powered by Razorpay:\n\n${paymentLink}\n\nThanks,\nRBA Bike Rentals Team`;
-  const html = `<p>Hi there,</p><p>Great news! Your booking request (ID: <strong>${bookingDetails.id}</strong>) has been <strong>approved</strong>.</p><p>To confirm your booking, please complete the payment using the following secure link powered by Razorpay:</p><p><a href="${paymentLink}" style="display:inline-block;padding:10px 20px;background-color:#0f172a;color:#ffffff;text-decoration:none;border-radius:5px;font-weight:bold;">Pay Now with Razorpay</a></p><p>Alternatively, copy this link: <br> <a href="${paymentLink}">${paymentLink}</a></p><p>Thanks,<br>RBA Bike Rentals Team</p>`;
+  const vehicleName = getVehicleDisplayName(
+    String(bookingDetails.vehicle_id ?? ""),
+    bookingDetails.vehicle
+  );
+  const bookingRef = formatBookingReference(String(bookingDetails.id ?? ""));
 
   await sendEmail({
     to: email,
-    subject: `Booking Approved - Action Required - ${bookingDetails.id}`,
-    text,
-    html
+    subject: `Booking approved - ${vehicleName}`,
+    text: paragraph([
+      "Great news! Your RBA booking has been approved.",
+      "",
+      `Vehicle: ${vehicleName}`,
+      `Booking reference: ${bookingRef}`,
+      `Complete payment: ${paymentLink}`,
+      "",
+      "You can also pay from My Bookings on the website.",
+      "",
+      "Regards,",
+      "RBA Bike Rentals"
+    ]),
+    html: renderEmailHtml({
+      title: "Booking approved",
+      intro: "Your booking has been approved. Complete payment to confirm your scooter.",
+      rows: [
+        ["Vehicle", vehicleName],
+        ["Booking reference", bookingRef]
+      ],
+      cta: { label: "Pay now", url: paymentLink },
+      closing: "You can also open My Bookings on the website to pay with UPI, card, or netbanking."
+    })
   });
 }
 
 export async function sendBookingRejectedEmail(email: string, bookingDetails: any) {
-  const text = `Hi there,\n\nWe regret to inform you that your booking request (ID: ${bookingDetails.id}) could not be approved at this time.\n\nUnfortunately, the KYC process or credentials did not check out. You are welcome to try again later or contact support if you believe this is a mistake.\n\nThanks,\nRBA Bike Rentals Team`;
-  const html = `<p>Hi there,</p><p>We regret to inform you that your booking request (ID: <strong>${bookingDetails.id}</strong>) could not be approved at this time.</p><p>Unfortunately, the KYC process or credentials did not check out. You are welcome to try again later or contact support if you believe this is a mistake.</p><p>Thanks,<br>RBA Bike Rentals Team</p>`;
+  const vehicleName = getVehicleDisplayName(
+    String(bookingDetails.vehicle_id ?? ""),
+    bookingDetails.vehicle
+  );
+  const bookingRef = formatBookingReference(String(bookingDetails.id ?? ""));
 
   await sendEmail({
     to: email,
-    subject: `Booking Update - ${bookingDetails.id}`,
-    text,
-    html
+    subject: `Booking update - ${vehicleName}`,
+    text: paragraph([
+      "We could not approve your booking request at this time.",
+      "",
+      `Vehicle: ${vehicleName}`,
+      `Booking reference: ${bookingRef}`,
+      "",
+      "You are welcome to try again later or contact support if you believe this is a mistake.",
+      "",
+      "Regards,",
+      "RBA Bike Rentals"
+    ]),
+    html: renderEmailHtml({
+      title: "Booking not approved",
+      intro: "We could not approve your booking request at this time.",
+      rows: [
+        ["Vehicle", vehicleName],
+        ["Booking reference", bookingRef]
+      ],
+      closing: "You can submit a new booking request from the website when you are ready."
+    })
   });
 }
 
@@ -236,13 +307,14 @@ export function buildUserEmail(params: {
     const amount = formatMoney(params.payload.total_payable);
     const bookingId = String(params.payload.booking_id ?? "");
     const vehicleId = String(params.payload.vehicle_id ?? "");
+    const vehicleName = getVehicleDisplayName(vehicleId);
     const text = paragraph([
       "Your RBA booking is approved.",
       "",
       "The admin team has reviewed your request and opened payment for the booking.",
       "",
       `Booking ID: ${bookingId}`,
-      `Vehicle: ${vehicleId}`,
+      `Vehicle: ${vehicleName}`,
       `Amount due: ${amount}`,
       paymentUrl ? `Complete payment: ${paymentUrl}` : "",
       "",
@@ -260,7 +332,7 @@ export function buildUserEmail(params: {
         intro: "The admin team has reviewed your request and opened payment for the booking.",
         rows: [
           ["Booking ID", bookingId],
-          ["Vehicle", vehicleId],
+          ["Vehicle", vehicleName],
           ["Amount due", amount]
         ],
         cta: paymentUrl ? { label: "Complete payment", url: paymentUrl } : undefined,
@@ -272,11 +344,12 @@ export function buildUserEmail(params: {
   if (params.templateKey === "booking_submitted") {
     const bookingId = String(params.payload.booking_id ?? "");
     const vehicleId = String(params.payload.vehicle_id ?? "");
+    const vehicleName = getVehicleDisplayName(vehicleId);
     const text = paragraph([
       "We received your RBA booking request.",
       "",
       `Booking ID: ${bookingId}`,
-      `Vehicle: ${vehicleId}`,
+      `Vehicle: ${vehicleName}`,
       "",
       "The team will review availability and send the next update once the booking is ready for payment.",
       "",
@@ -292,7 +365,7 @@ export function buildUserEmail(params: {
         intro: "We received your booking request and will review availability before opening payment.",
         rows: [
           ["Booking ID", bookingId],
-          ["Vehicle", vehicleId]
+          ["Vehicle", vehicleName]
         ],
         closing: "You will receive another email once the booking is ready for payment."
       })
@@ -302,12 +375,13 @@ export function buildUserEmail(params: {
   if (params.templateKey === "booking_rejected") {
     const bookingId = String(params.payload.booking_id ?? "");
     const vehicleId = String(params.payload.vehicle_id ?? "");
+    const vehicleName = getVehicleDisplayName(vehicleId);
     const reason = String(params.payload.reason ?? "The booking could not be approved.");
     const text = paragraph([
       "Your RBA booking could not be approved.",
       "",
       `Booking ID: ${bookingId}`,
-      `Vehicle: ${vehicleId}`,
+      `Vehicle: ${vehicleName}`,
       `Reason: ${reason}`,
       "",
       "You can place a new booking request with a different vehicle, date, or pickup window.",
@@ -324,7 +398,7 @@ export function buildUserEmail(params: {
         intro: "Your booking request could not be approved in its current form.",
         rows: [
           ["Booking ID", bookingId],
-          ["Vehicle", vehicleId],
+          ["Vehicle", vehicleName],
           ["Reason", reason]
         ],
         closing: "You can place a new booking request with a different vehicle, date, or pickup window."

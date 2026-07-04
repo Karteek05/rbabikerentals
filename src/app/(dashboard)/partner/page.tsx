@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Sidebar from "../../components/Sidebar";
 import Icon from "../../components/Icon";
+import { getVehicleDisplayName } from "@/lib/fleet/display";
 import VehicleTrackingMap, { type TrackingVehicleItem } from "../../components/VehicleTrackingMap";
 
 type RevenueData = {
@@ -45,13 +46,14 @@ export default function PartnerDashboardPage() {
   const [blockReason, setBlockReason] = useState("scheduled_maintenance");
   const [blockVehicle, setBlockVehicle] = useState("veh_001");
 
-  const headers = useMemo(
+  const fetchInit = useMemo(
     () => ({
-      "content-type": "application/json",
-      "x-user-id": partnerId,
-      "x-role": "partner_investor"
+      credentials: "include" as const,
+      headers: {
+        "content-type": "application/json"
+      }
     }),
-    [partnerId]
+    []
   );
 
   const showSuccess = (msg: string) => {
@@ -64,8 +66,8 @@ export default function PartnerDashboardPage() {
     setLoading("refresh");
     try {
       const [revenueRes, trackingRes] = await Promise.all([
-        fetch("/api/partner/revenue", { headers }),
-        fetch("/api/partner/tracking", { headers })
+        fetch("/api/partner/revenue", { ...fetchInit }),
+        fetch("/api/partner/tracking", { ...fetchInit })
       ]);
       const [revenueJson, trackingJson] = await Promise.all([
         revenueRes.json(),
@@ -84,7 +86,7 @@ export default function PartnerDashboardPage() {
     } finally {
       setLoading(null);
     }
-  }, [headers]);
+  }, [fetchInit]);
 
   useEffect(() => {
     refreshDashboard().catch((e) => setError(String(e)));
@@ -107,7 +109,7 @@ export default function PartnerDashboardPage() {
     try {
       const res = await fetch(`/api/vehicles/${blockVehicle}/block`, {
         method: "POST",
-        headers,
+        ...fetchInit,
         body: JSON.stringify({
           starts_at: new Date(blockStart).toISOString(),
           ends_at: new Date(blockEnd).toISOString(),
@@ -288,7 +290,7 @@ export default function PartnerDashboardPage() {
               <table>
                 <thead>
                   <tr>
-                    <th>Vehicle ID</th>
+                    <th>Vehicle</th>
                     <th>Bookings</th>
                     <th>Revenue</th>
                     <th>Utilization</th>
@@ -298,7 +300,10 @@ export default function PartnerDashboardPage() {
                 <tbody>
                   {vehicleRevenues.map((v) => (
                     <tr key={v.vehicle_id}>
-                      <td className="td-id">{v.vehicle_id}</td>
+                      <td className="td-id">
+                        <div style={{ fontWeight: 700 }}>{getVehicleDisplayName(v.vehicle_id)}</div>
+                        <div className="text-xs text-muted">{v.vehicle_id}</div>
+                      </td>
                       <td>{v.bookings ?? 0}</td>
                       <td style={{ fontWeight: 700, color: "var(--primary)" }}>₹{(v.revenue ?? 0).toLocaleString()}</td>
                       <td>

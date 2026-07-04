@@ -1,11 +1,12 @@
 import crypto from "crypto";
+import { assertCanTransition } from "@/lib/bookings/state-machine";
 import {
   getBookingOrThrow,
+  getLatestAuditEventForResource,
   getLatestPaymentOrderForBooking,
   getOpenPaymentOrderForBooking,
   getUserOrThrow,
-  hasProcessedPaymentEvent,
-  insertPaymentEvent,
+  claimPaymentEvent,
   insertPaymentOrder,
   updateBooking,
   updatePaymentOrderById,
@@ -18,7 +19,7 @@ import {
   verifyRazorpaySignature
 } from "@/lib/integrations/razorpay";
 import { notifyAdmin, notifyUser } from "@/lib/notifications/service";
-import type { Role } from "@/lib/types/domain";
+import type { PricingQuote, Role } from "@/lib/types/domain";
 import { ApiException } from "@/lib/utils/errors";
 import { newId } from "@/lib/utils/ids";
 
@@ -61,6 +62,130 @@ function toUpiFallbackOrder(params: {
   };
 }
 
+async function finalizeCapturedPayment(params: {
+  updatedOrder: NonNullable<Awaited<ReturnType<typeof updatePaymentOrderByProviderId>>>;
+  paidAmount?: number;
+}) {
+  const booking = await getBookingOrThrow(params.updatedOrder.booking_id);
+
+  if (
+    typeof params.paidAmount === "number" &&
+    params.paidAmount !== params.updatedOrder.amount
+  ) {
+    throw new ApiException(
+      409,
+      "payment_amount_mismatch",
+      "Captured payment amount does not match the booking order amount."
+    );
+  }
+
+  if (booking.status === "extended") {
+    return booking;
+  }
+
+  if (booking.status === "extension_requested") {
+    const pendingAudit = await getLatestAuditEventForResource(
+      "booking",
+      booking.id,
+      "booking.extension_pending"
+    );
+    const metadata = pendingAudit?.metadata as
+      | {
+          requested_drop_at?: string;
+          extension_quote?: PricingQuote;
+        }
+      | undefined;
+    const requestedDropAt = metadata?.requested_drop_at;
+    const extensionQuote = metadata?.extension_quote;
+    if (!requestedDropAt || !extensionQuote) {
+      throw new ApiException(
+        409,
+        "extension_metadata_missing",
+        "Extension payment received but pending extension details were not found."
+      );
+    }
+
+    assertCanTransition("extension_requested", "extended", "booking.extend.confirm");
+    const updatedBooking = await updateBooking(booking.id, {
+      status: "extended",
+      drop_at: requestedDropAt,
+      quote: {
+        ...booking.quote,
+        base_amount: booking.quote.base_amount + extensionQuote.base_amount,
+        duration_amount: booking.quote.duration_amount + extensionQuote.duration_amount,
+        addon_amount: booking.quote.addon_amount + extensionQuote.addon_amount,
+        coupon_discount: booking.quote.coupon_discount + extensionQuote.coupon_discount,
+        tax_amount: booking.quote.tax_amount + extensionQuote.tax_amount,
+        total_payable: booking.quote.total_payable + extensionQuote.total_payable,
+        km_included: booking.quote.km_included + extensionQuote.km_included,
+        excess_km_rate: booking.quote.excess_km_rate
+      },
+      updated_at: new Date().toISOString()
+    });
+    const user = await getUserOrThrow(updatedBooking.user_id);
+    await notifyUser({
+      userId: updatedBooking.user_id,
+      email: user.email,
+      templateKey: "payment_confirmed",
+      payload: {
+        booking_id: updatedBooking.id,
+        vehicle_id: updatedBooking.vehicle_id,
+        total_payable: updatedBooking.quote.total_payable,
+        provider_order_id: params.updatedOrder.provider_order_id
+      }
+    });
+    return updatedBooking;
+  }
+
+  if (booking.status === "confirmed") {
+    return booking;
+  }
+
+  if (booking.status !== "payment_pending") {
+    throw new ApiException(
+      409,
+      "invalid_booking_status",
+      `Cannot confirm payment for booking in status ${booking.status}.`
+    );
+  }
+
+  assertCanTransition(booking.status, "confirmed", "payment.webhook.capture");
+  const updatedBooking = await updateBooking(params.updatedOrder.booking_id, {
+    status: "confirmed",
+    updated_at: new Date().toISOString()
+  });
+  const user = await getUserOrThrow(updatedBooking.user_id);
+  await Promise.all([
+    notifyUser({
+      userId: updatedBooking.user_id,
+      email: user.email,
+      templateKey: "payment_confirmed",
+      payload: {
+        booking_id: updatedBooking.id,
+        vehicle_id: updatedBooking.vehicle_id,
+        total_payable: updatedBooking.quote.total_payable,
+        provider_order_id: params.updatedOrder.provider_order_id
+      }
+    }),
+    notifyAdmin({
+      templateKey: "admin_payment_confirmed",
+      payload: {
+        booking_id: updatedBooking.id,
+        user_id: updatedBooking.user_id,
+        vehicle_id: updatedBooking.vehicle_id,
+        total_payable: booking.quote.total_payable,
+        provider_order_id: params.updatedOrder.provider_order_id
+      }
+    })
+  ]);
+
+  return updatedBooking;
+}
+
+function isCheckoutOrderId(providerOrderId: string) {
+  return providerOrderId.startsWith("order_");
+}
+
 export async function createOrderForBooking(
   bookingId: string,
   actor: { userId: string; role: Role }
@@ -79,7 +204,7 @@ export async function createOrderForBooking(
   }
 
   const existingOrder = await getOpenPaymentOrderForBooking(bookingId);
-  if (existingOrder) {
+  if (existingOrder && isCheckoutOrderId(existingOrder.provider_order_id)) {
     return toClientOrder({
       bookingId,
       providerOrderId: existingOrder.provider_order_id,
@@ -162,6 +287,7 @@ export async function processRazorpayWebhook(params: {
           id?: string;
           order_id?: string;
           status?: string;
+          amount?: number;
         };
       };
       payment_link?: {
@@ -169,26 +295,29 @@ export async function processRazorpayWebhook(params: {
           id?: string;
           reference_id?: string;
           status?: string;
+          amount?: number;
         };
       };
     };
   };
 
-  const eventId = `${payload.event}:${payload.payload?.payment?.entity?.id ?? "unknown"}`;
-  if (await hasProcessedPaymentEvent(eventId)) {
-    return { processed: false, reason: "duplicate_event" };
-  }
+  const eventId = `${payload.event}:${payload.payload?.payment?.entity?.id ?? payload.payload?.payment_link?.entity?.id ?? "unknown"}`;
+  const payloadHash = crypto.createHash("sha256").update(params.rawBody).digest("hex");
 
-  await insertPaymentEvent({
+  const claimed = await claimPaymentEvent({
     id: newId("pay_evt"),
     provider: "razorpay",
     provider_event_id: eventId,
-    payload_hash: crypto.createHash("sha256").update(params.rawBody).digest("hex"),
+    payload_hash: payloadHash,
     created_at: new Date().toISOString()
   });
+  if (!claimed) {
+    return { processed: false, reason: "duplicate_event" };
+  }
 
   if (payload.event === "payment.captured") {
     const orderId = payload.payload?.payment?.entity?.order_id;
+    const paidAmount = payload.payload?.payment?.entity?.amount;
     if (orderId) {
       const updatedOrder = await updatePaymentOrderByProviderId(orderId, {
         provider_payment_id: payload.payload?.payment?.entity?.id,
@@ -197,41 +326,14 @@ export async function processRazorpayWebhook(params: {
       });
 
       if (updatedOrder) {
-        const booking = await getBookingOrThrow(updatedOrder.booking_id);
-        const updatedBooking = await updateBooking(updatedOrder.booking_id, {
-          status: "confirmed",
-          updated_at: new Date().toISOString()
-        });
-        const user = await getUserOrThrow(updatedBooking.user_id);
-        await Promise.all([
-          notifyUser({
-            userId: updatedBooking.user_id,
-            email: user.email,
-            templateKey: "payment_confirmed",
-            payload: {
-              booking_id: updatedBooking.id,
-              vehicle_id: updatedBooking.vehicle_id,
-              total_payable: updatedBooking.quote.total_payable,
-              provider_order_id: updatedOrder.provider_order_id
-            }
-          }),
-          notifyAdmin({
-            templateKey: "admin_payment_confirmed",
-            payload: {
-              booking_id: updatedBooking.id,
-              user_id: updatedBooking.user_id,
-              vehicle_id: updatedBooking.vehicle_id,
-              total_payable: booking.quote.total_payable,
-              provider_order_id: updatedOrder.provider_order_id
-            }
-          })
-        ]);
+        await finalizeCapturedPayment({ updatedOrder, paidAmount });
       }
     }
   }
 
   if (payload.event === "payment_link.paid") {
     const paymentLinkId = payload.payload?.payment_link?.entity?.id;
+    const paidAmount = payload.payload?.payment_link?.entity?.amount;
     if (paymentLinkId) {
       const updatedOrder = await updatePaymentOrderByProviderId(paymentLinkId, {
         provider_payment_id: payload.payload?.payment?.entity?.id,
@@ -240,35 +342,7 @@ export async function processRazorpayWebhook(params: {
       });
 
       if (updatedOrder) {
-        const booking = await getBookingOrThrow(updatedOrder.booking_id);
-        const updatedBooking = await updateBooking(updatedOrder.booking_id, {
-          status: "confirmed",
-          updated_at: new Date().toISOString()
-        });
-        const user = await getUserOrThrow(updatedBooking.user_id);
-        await Promise.all([
-          notifyUser({
-            userId: updatedBooking.user_id,
-            email: user.email,
-            templateKey: "payment_confirmed",
-            payload: {
-              booking_id: updatedBooking.id,
-              vehicle_id: updatedBooking.vehicle_id,
-              total_payable: updatedBooking.quote.total_payable,
-              provider_order_id: updatedOrder.provider_order_id
-            }
-          }),
-          notifyAdmin({
-            templateKey: "admin_payment_confirmed",
-            payload: {
-              booking_id: updatedBooking.id,
-              user_id: updatedBooking.user_id,
-              vehicle_id: updatedBooking.vehicle_id,
-              total_payable: booking.quote.total_payable,
-              provider_order_id: updatedOrder.provider_order_id
-            }
-          })
-        ]);
+        await finalizeCapturedPayment({ updatedOrder, paidAmount });
       }
     }
   }
@@ -286,16 +360,11 @@ export async function processRazorpayWebhook(params: {
   return { processed: true, event: payload.event };
 }
 
-export async function refundPaymentForBooking(params: {
+export async function issueBookingRefund(params: {
   bookingId: string;
-  amount?: number;
+  amountInPaise: number;
   reason?: string;
-  actor: { userId: string; role: Role };
 }) {
-  if (params.actor.role !== "admin") {
-    throw new ApiException(403, "forbidden", "Only admin can create refunds.");
-  }
-
   const booking = await getBookingOrThrow(params.bookingId);
   const paymentOrder = await getLatestPaymentOrderForBooking(params.bookingId);
   if (!paymentOrder || paymentOrder.status !== "paid") {
@@ -309,28 +378,29 @@ export async function refundPaymentForBooking(params: {
     );
   }
 
-  const maxRefundAmount = paymentOrder.amount;
-  const requestedAmount = params.amount ?? maxRefundAmount;
-  if (!Number.isInteger(requestedAmount) || requestedAmount <= 0) {
+  const alreadyRefunded = paymentOrder.refunded_amount ?? 0;
+  const maxRefundAmount = paymentOrder.amount - alreadyRefunded;
+  if (!Number.isInteger(params.amountInPaise) || params.amountInPaise <= 0) {
     throw new ApiException(400, "invalid_refund_amount", "Refund amount must be a positive integer.");
   }
-  if (requestedAmount > maxRefundAmount) {
-    throw new ApiException(400, "refund_exceeds_payment", "Refund amount exceeds paid amount.");
+  if (params.amountInPaise > maxRefundAmount) {
+    throw new ApiException(400, "refund_exceeds_payment", "Refund amount exceeds remaining refundable balance.");
   }
 
   const refund = await createRazorpayRefund({
     paymentId: paymentOrder.provider_payment_id,
-    amountInPaise: requestedAmount,
+    amountInPaise: params.amountInPaise,
     notes: {
       booking_id: booking.id,
-      reason: params.reason ?? "admin_refund"
+      reason: params.reason ?? "booking_refund"
     }
   });
 
+  const totalRefunded = alreadyRefunded + refund.amount;
   const updatedOrder = await updatePaymentOrderById(paymentOrder.id, {
     provider_refund_id: refund.refund_id,
-    refunded_amount: refund.amount,
-    status: "refunded",
+    refunded_amount: totalRefunded,
+    status: totalRefunded >= paymentOrder.amount ? "refunded" : "paid",
     updated_at: new Date().toISOString()
   });
 
@@ -339,6 +409,30 @@ export async function refundPaymentForBooking(params: {
     order: updatedOrder,
     refund
   };
+}
+
+export async function refundPaymentForBooking(params: {
+  bookingId: string;
+  amount?: number;
+  reason?: string;
+  actor: { userId: string; role: Role };
+}) {
+  if (params.actor.role !== "admin") {
+    throw new ApiException(403, "forbidden", "Only admin can create refunds.");
+  }
+
+  const paymentOrder = await getLatestPaymentOrderForBooking(params.bookingId);
+  if (!paymentOrder) {
+    throw new ApiException(409, "payment_not_refundable", "Booking does not have a paid payment order.");
+  }
+  const alreadyRefunded = paymentOrder.refunded_amount ?? 0;
+  const amountInPaise = params.amount ?? paymentOrder.amount - alreadyRefunded;
+
+  return issueBookingRefund({
+    bookingId: params.bookingId,
+    amountInPaise,
+    reason: params.reason
+  });
 }
 
 export function verifyClientPaymentSignature(input: {

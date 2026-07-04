@@ -38,18 +38,28 @@ const DURATIONS = [
 function VehicleCard({
   vehicle,
   durationKey,
-  bookingHref
+  bookingHref,
+  availability
 }: {
   vehicle: PublicFleetVehicle;
   durationKey: PackageRateKey;
   bookingHref: string;
+  availability?: {
+    available_units: number;
+    total_units: number;
+    is_available: boolean;
+  };
 }) {
   const rate = getPackageRate(vehicle, durationKey);
   const durUnit = PACKAGE_PLANS.find((d) => d.rateKey === durationKey)?.unit ?? "week";
   const icon = CATEGORY_ICONS[vehicle.category] ?? "scooter";
+  const availableUnits = availability?.available_units ?? vehicle.stockApprox;
+  const totalUnits = availability?.total_units ?? vehicle.stockApprox;
+  const isAvailable = availability?.is_available ?? vehicle.is_active;
+  const cardClassName = `group block ${isAvailable ? "" : "pointer-events-none opacity-80"}`;
 
   return (
-    <Link href={bookingHref} className="group block">
+    <Link href={isAvailable ? bookingHref : "#"} className={cardClassName} aria-disabled={!isAvailable}>
       <article className="card transition-colors duration-200 group-hover:border-[color:var(--color-ink)]">
         <div className="relative aspect-[16/10] overflow-hidden bg-[color:var(--color-paper-2)]">
           <img
@@ -65,8 +75,8 @@ function VehicleCard({
             <Icon name={icon} className="h-3.5 w-3.5" />
             {vehicle.category.replace("_", " ")}
           </span>
-          <span className={`absolute right-3 top-3 rounded-full px-3 py-1 text-[11px] font-bold ${vehicle.is_active ? "bg-[color:var(--color-green)] text-white" : "bg-[color:var(--color-muted)] text-white"}`}>
-            {vehicle.is_active ? "Available" : "Unavailable"}
+          <span className={`absolute right-3 top-3 rounded-full px-3 py-1 text-[11px] font-bold ${isAvailable ? "bg-[color:var(--color-green)] text-white" : "bg-red-600 text-white"}`}>
+            {isAvailable ? `${availableUnits} of ${totalUnits} available` : "No units available"}
           </span>
         </div>
 
@@ -78,7 +88,7 @@ function VehicleCard({
               </h3>
               <div className="mt-2 flex items-center gap-1 text-xs capitalize text-[color:var(--color-muted)]">
                 <Icon name="location" className="h-3.5 w-3.5" />
-                Bengaluru · ~{vehicle.stockApprox} units
+                Bengaluru · {availableUnits} of {totalUnits} units free
               </div>
             </div>
           </div>
@@ -94,7 +104,9 @@ function VehicleCard({
             </p>
           </div>
 
-          <span className="btn-primary w-full py-2.5 text-sm">Book Now</span>
+          <span className={`btn-primary w-full py-2.5 text-sm ${isAvailable ? "" : "bg-[color:var(--color-muted)]"}`}>
+            {isAvailable ? "Book Now" : "Unavailable for selected dates"}
+          </span>
         </div>
       </article>
     </Link>
@@ -109,9 +121,31 @@ function BrowsePageContent() {
   const [maxPrice, setMaxPrice] = useState(7000);
   const [query, setQuery] = useState("");
   const [sortBy, setSortBy] = useState<"price_asc" | "price_desc" | "model">("price_asc");
+  const [availabilityMap, setAvailabilityMap] = useState<
+    Record<string, { available_units: number; total_units: number; is_available: boolean }>
+  >({});
 
   useEffect(() => {
     setDuration(durationParamToPackageKey(searchParams.get("duration")));
+  }, [searchParams]);
+
+  useEffect(() => {
+    const query = searchParams.toString();
+    fetch(`/api/fleet/availability?${query}`, { credentials: "include" })
+      .then((res) => res.json())
+      .then((json) => {
+        if (!json?.ok || !Array.isArray(json.data?.items)) return;
+        const next: Record<string, { available_units: number; total_units: number; is_available: boolean }> = {};
+        for (const item of json.data.items) {
+          next[item.vehicle_id] = {
+            available_units: item.available_units,
+            total_units: item.total_units,
+            is_available: item.is_available
+          };
+        }
+        setAvailabilityMap(next);
+      })
+      .catch(() => setAvailabilityMap({}));
   }, [searchParams]);
 
   const currentDurUnit = PACKAGE_PLANS.find((d) => d.rateKey === duration)?.unit ?? "week";
@@ -251,6 +285,7 @@ function BrowsePageContent() {
                 vehicle={vehicle}
                 durationKey={duration}
                 bookingHref={buildBookHref(vehicle.id, searchParams, duration)}
+                availability={availabilityMap[vehicle.id]}
               />
             ))}
           </div>

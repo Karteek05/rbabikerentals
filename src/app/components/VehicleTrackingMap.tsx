@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Icon from "./Icon";
+import { getVehicleDisplayName } from "@/lib/fleet/display";
 
 export interface TrackingVehicleItem {
   vehicle_id: string;
@@ -92,11 +93,14 @@ export default function VehicleTrackingMap({
               value={selected.vehicle_id}
               onChange={(event) => setSelectedVehicleId(event.target.value)}
             >
-              {items.map((item) => (
-                <option key={item.vehicle_id} value={item.vehicle_id}>
-                  {item.label ? `${item.label} (${item.vehicle_id})` : item.vehicle_id}
-                </option>
-              ))}
+              {items.map((item) => {
+                const name = item.label ?? getVehicleDisplayName(item.vehicle_id);
+                return (
+                  <option key={item.vehicle_id} value={item.vehicle_id}>
+                    {name}
+                  </option>
+                );
+              })}
             </select>
           </div>
 
@@ -110,7 +114,7 @@ export default function VehicleTrackingMap({
           >
             {embedUrl && (
               <iframe
-                title={`Map for ${selected.vehicle_id}`}
+                title={`Map for ${selected.label ?? getVehicleDisplayName(selected.vehicle_id)}`}
                 src={embedUrl}
                 width="100%"
                 height="320"
@@ -129,9 +133,9 @@ export default function VehicleTrackingMap({
             }}
           >
             <div className="stat-card" style={{ padding: 12 }}>
-              <div className="stat-label">Vehicle ID</div>
+              <div className="stat-label">Vehicle</div>
               <div className="stat-value" style={{ fontSize: "1.05rem", marginTop: 6 }}>
-                {selected.vehicle_id}
+                {selected.label ?? getVehicleDisplayName(selected.vehicle_id)}
               </div>
             </div>
             <div className="stat-card" style={{ padding: 12 }}>

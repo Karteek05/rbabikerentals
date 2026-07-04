@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Sidebar from "../../components/Sidebar";
 import Icon, { type IconName } from "../../components/Icon";
+import { formatBookingStatus } from "@/lib/bookings/status-labels";
 
 type Booking = {
   id: string;
@@ -52,12 +53,11 @@ const VEHICLES: VehicleOption[] = [
 const navItems = [
   { href: "/customer", icon: "home", label: "Dashboard" },
   { href: "/customer#book", icon: "scooter", label: "Book a Bike" },
-  { href: "/customer#bookings", icon: "list", label: "My Bookings" },
-  { href: "/customer#kyc", icon: "idCard", label: "KYC Status" }
+  { href: "/customer#bookings", icon: "list", label: "My Bookings" }
 ] as const;
 
 function StatusBadge({ status }: { status: string }) {
-  return <span className={`badge badge-${status.replace(/_/g, "_")}`}>{status.replace(/_/g, " ")}</span>;
+  return <span className={`badge badge-${status.replace(/_/g, "_")}`}>{formatBookingStatus(status)}</span>;
 }
 
 function formatDate(iso: string) {
@@ -82,13 +82,14 @@ export default function CustomerDashboardPage() {
   const [extraHelmet, setExtraHelmet] = useState(0);
   const [coupon, setCoupon] = useState("WELCOME5");
 
-  const headers = useMemo(
+  const fetchInit = useMemo(
     () => ({
-      "content-type": "application/json",
-      "x-user-id": userId,
-      "x-role": "customer"
+      credentials: "include" as const,
+      headers: {
+        "content-type": "application/json"
+      }
     }),
-    [userId]
+    []
   );
 
   const showSuccess = (msg: string) => {
@@ -98,14 +99,14 @@ export default function CustomerDashboardPage() {
 
   const loadBookings = useCallback(async () => {
     setError(null);
-    const res = await fetch("/api/customer/bookings", { headers });
+    const res = await fetch("/api/customer/bookings", { ...fetchInit });
     const json = await res.json();
     if (!res.ok || !json.ok) {
       setError(json?.error?.message ?? "Failed to fetch bookings");
       return;
     }
     setBookings(json.data.bookings);
-  }, [headers]);
+  }, [fetchInit]);
 
   useEffect(() => {
     loadBookings().catch((e) => setError(String(e)));
@@ -117,7 +118,7 @@ export default function CustomerDashboardPage() {
     try {
       const res = await fetch("/api/quotes", {
         method: "POST",
-        headers,
+        ...fetchInit,
         body: JSON.stringify({
           user_id: userId,
           vehicle_id: selectedVehicle.id,
@@ -149,7 +150,7 @@ export default function CustomerDashboardPage() {
     try {
       const res = await fetch("/api/bookings", {
         method: "POST",
-        headers,
+        ...fetchInit,
         body: JSON.stringify({
           user_id: userId,
           vehicle_id: selectedVehicle.id,
@@ -183,7 +184,7 @@ export default function CustomerDashboardPage() {
     try {
       const res = await fetch(`/api/bookings/${bookingId}/damage`, {
         method: "POST",
-        headers,
+        ...fetchInit,
         body: JSON.stringify({
           description: "Minor scratch near front panel",
           photo_urls: ["https://example.com/damage/sample.jpg"]
@@ -207,7 +208,7 @@ export default function CustomerDashboardPage() {
     try {
       const res = await fetch(`/api/bookings/${bookingId}/cancel`, {
         method: "POST",
-        headers,
+        ...fetchInit,
         body: JSON.stringify({ reason: "Customer requested cancellation" })
       });
       const json = await res.json();
@@ -254,7 +255,7 @@ export default function CustomerDashboardPage() {
             <label className="form-label">Switch User (Dev)</label>
             <select className="form-input form-select" value={userId} onChange={(e) => setUserId(e.target.value)}>
               <option value="cust_001">cust_001 - Rahul (verified)</option>
-              <option value="cust_002">cust_002 - Priya (KYC pending)</option>
+              <option value="cust_002">cust_002 - Priya (review pending)</option>
             </select>
           </div>
         </div>
@@ -289,13 +290,11 @@ export default function CustomerDashboardPage() {
             <div className="stat-sub">All rides</div>
           </div>
           <div className="stat-card">
-            <div className="stat-label">KYC Status</div>
-            <div className="stat-value" style={{ fontSize: "1rem", marginTop: 6 }}>
-              <span className={`badge badge-${userId === "cust_001" ? "verified" : "pending"}`}>
-                {userId === "cust_001" ? "Verified" : "Pending"}
-              </span>
+            <div className="stat-label">Pending review</div>
+            <div className="stat-value accent">
+              {(statusCounts["pending_kyc"] || 0) + (statusCounts["admin_review"] || 0)}
             </div>
-            <div className="stat-sub">DigiLocker</div>
+            <div className="stat-sub">Awaiting team confirmation</div>
           </div>
         </div>
 

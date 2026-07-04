@@ -22,13 +22,33 @@ function StaffLoginForm() {
   const { data: session } = authClient.useSession();
 
   useEffect(() => {
-    if (session?.user && !showOtp) {
-      const userRole = (session.user as any).role as string;
-      if (userRole === "admin") router.push("/admin");
-      else if (userRole === "partner_investor") router.push("/partner");
-      else router.push("/");
+    if (!session?.user || showOtp) return;
+
+    let cancelled = false;
+
+    async function redirectStaff() {
+      try {
+        const response = await fetch("/api/account/me", {
+          credentials: "include",
+          cache: "no-store"
+        });
+        const json = await response.json();
+        if (cancelled || !response.ok || !json?.ok) return;
+
+        const role = json.data?.user?.role as string | undefined;
+        if (role === "admin") router.push("/admin");
+        else if (role === "partner_investor") router.push("/partner");
+        else router.push("/");
+      } catch {
+        if (!cancelled) router.push("/");
+      }
     }
-  }, [session, router, showOtp]);
+
+    redirectStaff();
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.user, router, showOtp]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,9 +76,8 @@ function StaffLoginForm() {
       const { error } = await authClient.signUp.email({
         email,
         password,
-        name,
-        role: role === "admin" ? "admin" : "partner_investor"
-      } as any);
+        name
+      });
 
       if (error) {
         setError(error.message || "Failed to register. Please try again.");
@@ -87,6 +106,18 @@ function StaffLoginForm() {
       setError(error.message || "Invalid or expired OTP. Please try again.");
       setLoading(false);
     } else {
+      const roleRes = await fetch("/api/account/staff-role", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role: role === "admin" ? "admin" : "partner_investor" })
+      });
+      const roleJson = await roleRes.json();
+      if (!roleRes.ok || !roleJson.ok) {
+        setError(roleJson?.error?.message ?? "Account verified, but staff role assignment failed.");
+        setLoading(false);
+        return;
+      }
       router.push(role === "admin" ? "/admin" : "/partner");
     }
   };

@@ -1,23 +1,24 @@
 import { assertCanTransition } from "@/lib/bookings/state-machine";
 import { recordAudit } from "@/lib/audit/service";
 import { getSupabaseServiceClient } from "@/lib/db/supabase-client";
-import { sendBookingConfirmationEmail, sendBookingApprovedEmail, sendBookingRejectedEmail } from "@/lib/notifications/service";
+import { sendBookingConfirmationEmail } from "@/lib/notifications/service";
+import { insertBookingWithCapacityGuard } from "@/lib/bookings/inventory-guard";
 import {
   assertBengaluruCity,
   getBookingOrThrow,
-  getKycRecordOrThrow,
+  getLatestPaymentOrderForBooking,
   getUserOrThrow,
   getVehicleOrThrow,
-  insertBooking,
   insertDamageIncident,
   insertPaymentOrder,
   insertVehicleBlock,
   listBookings,
   listVehicleBlocks,
-  upsertKycRecord,
   updateBooking
 } from "@/lib/data/repository";
-import { createRazorpayOrder, createRazorpayPaymentLink } from "@/lib/integrations/razorpay";
+import { createRazorpayOrder, isRazorpayConfigured } from "@/lib/integrations/razorpay";
+import { issueBookingRefund } from "@/lib/payments/service";
+import { isVehicleAvailableForWindow } from "@/lib/fleet/availability";
 import {
   computeCancellationBreakup,
   computePricingQuote,
@@ -29,7 +30,7 @@ import type {
   ExtendBookingRequest,
   QuoteRequest
 } from "@/lib/types/contracts";
-import type { KycRecord, PricingQuote, Role } from "@/lib/types/domain";
+import type { PricingQuote, Role } from "@/lib/types/domain";
 import { ApiException } from "@/lib/utils/errors";
 import { newId } from "@/lib/utils/ids";
 
@@ -48,23 +49,6 @@ export async function createBooking(
 
   const user = await getUserOrThrow(input.user_id);
   const vehicle = await getVehicleOrThrow(input.vehicle_id);
-  let kyc: KycRecord;
-  try {
-    kyc = await getKycRecordOrThrow(input.user_id);
-  } catch (error) {
-    if (!(error instanceof ApiException) || error.code !== "kyc_not_found") {
-      throw error;
-    }
-    kyc = await upsertKycRecord({
-      user_id: input.user_id,
-      status: "not_started",
-      provider: "setu_digilocker",
-      aadhaar_verified: false,
-      dl_verified: false,
-      needs_manual_review: false,
-      updated_at: new Date().toISOString()
-    });
-  }
   const pickupTs = new Date(input.pickup_at).getTime();
   const dropTs = new Date(input.drop_at).getTime();
 
@@ -110,22 +94,25 @@ export async function createBooking(
     );
   }
   if (
-    await hasVehicleBookingOverlap(input.vehicle_id, input.pickup_at, input.drop_at)
+    !(await isVehicleAvailableForWindow(
+      input.vehicle_id,
+      input.pickup_at,
+      input.drop_at
+    ))
   ) {
     throw new ApiException(
       409,
       "vehicle_unavailable",
-      "Vehicle is already booked for requested time."
+      "Vehicle has no free units left for the requested time."
     );
   }
 
-  const booking = await insertBooking({
+  const booking = await insertBookingWithCapacityGuard({
     id: newId("booking"),
     user_id: input.user_id,
     vehicle_id: input.vehicle_id,
     city: "bengaluru",
-    status:
-      kyc.status === "verified" ? ("payment_pending" as const) : ("pending_kyc" as const),
+    status: "admin_review",
     pickup_at: input.pickup_at,
     drop_at: input.drop_at,
     quote,
@@ -135,31 +122,6 @@ export async function createBooking(
     created_at: now,
     updated_at: now
   });
-
-  let paymentOrder: Awaited<ReturnType<typeof createRazorpayOrder>> | null = null;
-
-  if (booking.status === "payment_pending") {
-    try {
-      const createdOrder = await createRazorpayOrder({
-        amountInPaise: booking.quote.total_payable * 100,
-        receipt: booking.id
-      });
-      paymentOrder = createdOrder;
-      await insertPaymentOrder({
-        id: newId("pay_order"),
-        booking_id: booking.id,
-        provider: "razorpay",
-        provider_order_id: createdOrder.order_id,
-        amount: createdOrder.amount,
-        currency: "INR",
-        status: "created",
-        created_at: now,
-        updated_at: now
-      });
-    } catch {
-      paymentOrder = null;
-    }
-  }
 
   await recordAudit({
     actorId: actor.userId,
@@ -186,7 +148,7 @@ export async function createBooking(
 
   return {
     ...booking,
-    payment_order: paymentOrder
+    payment_order: null
   };
 }
 
@@ -231,12 +193,12 @@ export async function extendBooking(
     );
   }
   if (
-    await hasVehicleBookingOverlap(
+    !(await isVehicleAvailableForWindow(
       booking.vehicle_id,
       booking.drop_at,
       input.requested_drop_at,
-      booking.id
-    )
+      { ignoreBookingId: booking.id }
+    ))
   ) {
     throw new ApiException(
       409,
@@ -267,7 +229,67 @@ export async function extendBooking(
     total_payable: additionalQuote.total_payable - additionalQuote.deposit_amount
   };
 
-  assertCanTransition("extension_requested", "extended", "booking.extend.confirm");
+  const extensionAmountPaise = extensionQuote.total_payable * 100;
+  let paymentOrder: Awaited<ReturnType<typeof createRazorpayOrder>> | null = null;
+  const requiresPayment = isRazorpayConfigured() && extensionAmountPaise > 0;
+
+  if (requiresPayment) {
+    const createdOrder = await createRazorpayOrder({
+      amountInPaise: extensionAmountPaise,
+      receipt: `ext_${booking.id}`
+    });
+    paymentOrder = createdOrder;
+    await insertPaymentOrder({
+      id: newId("pay_order"),
+      booking_id: booking.id,
+      provider: "razorpay",
+      provider_order_id: createdOrder.order_id,
+      amount: createdOrder.amount,
+      currency: "INR",
+      status: "created",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    });
+
+    const updated = await updateBooking(booking.id, {
+      status: "extension_requested",
+      updated_at: new Date().toISOString()
+    });
+
+    await recordAudit({
+      actorId: actor.userId,
+      actorRole: actor.role,
+      action: "booking.extension_pending",
+      resourceType: "booking",
+      resourceId: booking.id,
+      metadata: {
+        requested_drop_at: input.requested_drop_at,
+        additional_payable: extensionQuote.total_payable,
+        extension_quote: extensionQuote
+      }
+    });
+
+    await recordAudit({
+      actorId: actor.userId,
+      actorRole: actor.role,
+      action: "booking.extend",
+      resourceType: "booking",
+      resourceId: booking.id,
+      metadata: {
+        requested_drop_at: input.requested_drop_at,
+        additional_payable: extensionQuote.total_payable
+      }
+    });
+
+    return {
+      booking_id: updated.id,
+      status: updated.status,
+      additional_quote: extensionQuote,
+      payment_order: paymentOrder
+    };
+  }
+
+  assertCanTransition(booking.status, "extended", "booking.extend.confirm");
   const updated = await updateBooking(booking.id, {
     status: "extended",
     drop_at: input.requested_drop_at,
@@ -293,14 +315,16 @@ export async function extendBooking(
     resourceId: booking.id,
     metadata: {
       requested_drop_at: input.requested_drop_at,
-      additional_payable: extensionQuote.total_payable
+      additional_payable: extensionQuote.total_payable,
+      payment_bypassed: true
     }
   });
 
   return {
     booking_id: updated.id,
     status: updated.status,
-    additional_quote: extensionQuote
+    additional_quote: extensionQuote,
+    payment_order: null
   };
 }
 
@@ -317,10 +341,12 @@ export async function cancelBooking(
 
   const cancellableStates = new Set([
     "pending_kyc",
+    "admin_review",
     "payment_pending",
     "confirmed",
     "ongoing",
-    "extended"
+    "extended",
+    "extension_requested"
   ]);
   if (!cancellableStates.has(booking.status)) {
     throw new ApiException(
@@ -342,6 +368,23 @@ export async function cancelBooking(
     updated_at: new Date().toISOString()
   });
 
+  let refundIssued = false;
+  if (breakup.refund_amount > 0) {
+    const paymentOrder = await getLatestPaymentOrderForBooking(booking.id);
+    if (paymentOrder?.status === "paid" && paymentOrder.provider_payment_id) {
+      try {
+        await issueBookingRefund({
+          bookingId: booking.id,
+          amountInPaise: breakup.refund_amount * 100,
+          reason: input.reason
+        });
+        refundIssued = true;
+      } catch (error) {
+        console.error("Failed to issue cancellation refund:", error);
+      }
+    }
+  }
+
   await recordAudit({
     actorId: actor.userId,
     actorRole: actor.role,
@@ -351,7 +394,8 @@ export async function cancelBooking(
     metadata: {
       reason: input.reason,
       cancellation_charge: breakup.cancellation_charge,
-      refund_amount: breakup.refund_amount
+      refund_amount: breakup.refund_amount,
+      refund_issued: refundIssued
     }
   });
 
@@ -360,7 +404,8 @@ export async function cancelBooking(
     status: updated.status,
     cancellation_charge: breakup.cancellation_charge,
     refund_amount: breakup.refund_amount,
-    charge_rate: breakup.charge_rate
+    charge_rate: breakup.charge_rate,
+    refund_issued: refundIssued
   };
 }
 
@@ -426,135 +471,4 @@ async function isVehicleBlockedDuring(
     const blockEnd = new Date(block.ends_at).getTime();
     return start < blockEnd && end > blockStart;
   });
-}
-
-async function hasVehicleBookingOverlap(
-  vehicleId: string,
-  windowStart: string,
-  windowEnd: string,
-  ignoreBookingId?: string
-) {
-  const start = new Date(windowStart).getTime();
-  const end = new Date(windowEnd).getTime();
-  const bookings = await listBookings({
-    vehicleId,
-    excludeStatuses: ["cancelled", "completed"]
-  });
-  return bookings.some((booking) => {
-    if (booking.id === ignoreBookingId) return false;
-    const bookingStart = new Date(booking.pickup_at).getTime();
-    const bookingEnd = new Date(booking.drop_at).getTime();
-    return start < bookingEnd && end > bookingStart;
-  });
-}
-
-export async function approveBooking(
-  bookingId: string,
-  actor: { userId: string; role: Role }
-) {
-  if (actor.role !== "admin") {
-    throw new ApiException(403, "forbidden", "Only admin can approve bookings.");
-  }
-
-  const booking = await getBookingOrThrow(bookingId);
-  
-  if (booking.status !== "pending_kyc" && (booking.status as string) !== "admin_review") {
-    throw new ApiException(400, "invalid_state", "Booking must be in pending_kyc state to be approved.");
-  }
-
-  const user = await getUserOrThrow(booking.user_id);
-  
-  const supabase = getSupabaseServiceClient();
-  const { data: authUser } = await supabase.from("user").select("email").eq("id", user.id).single();
-  
-  const paymentLinkData = await createRazorpayPaymentLink({
-    amountInPaise: booking.quote.total_payable * 100,
-    receipt: booking.id,
-    description: `Payment for booking ${booking.id}`,
-    customer: {
-      name: user.name,
-      email: authUser?.email,
-    }
-  });
-  await insertPaymentOrder({
-    id: newId("pay_order"),
-    booking_id: booking.id,
-    provider: "razorpay",
-    provider_order_id: paymentLinkData.id,
-    amount: booking.quote.total_payable * 100,
-    currency: "INR",
-    status: "created",
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  });
-
-  const updated = await updateBooking(booking.id, {
-    status: "payment_pending",
-    updated_at: new Date().toISOString()
-  });
-
-  await recordAudit({
-    actorId: actor.userId,
-    actorRole: actor.role,
-    action: "booking.approve",
-    resourceType: "booking",
-    resourceId: booking.id,
-    metadata: {
-      payment_link_id: paymentLinkData.id
-    }
-  });
-
-  try {
-    if (authUser?.email) {
-      await sendBookingApprovedEmail(authUser.email, booking, paymentLinkData.short_url);
-    }
-  } catch (e) {
-    console.error("Failed to send booking approval email:", e);
-  }
-
-  return updated;
-}
-
-export async function rejectBooking(
-  bookingId: string,
-  actor: { userId: string; role: Role }
-) {
-  if (actor.role !== "admin") {
-    throw new ApiException(403, "forbidden", "Only admin can reject bookings.");
-  }
-
-  const booking = await getBookingOrThrow(bookingId);
-  
-  if (booking.status !== "pending_kyc" && (booking.status as string) !== "admin_review") {
-    throw new ApiException(400, "invalid_state", "Booking must be in pending_kyc state to be rejected.");
-  }
-
-  const updated = await updateBooking(booking.id, {
-    status: "cancelled",
-    cancel_reason: "kyc_rejected",
-    updated_at: new Date().toISOString()
-  });
-
-  await recordAudit({
-    actorId: actor.userId,
-    actorRole: actor.role,
-    action: "booking.reject",
-    resourceType: "booking",
-    resourceId: booking.id,
-    metadata: {
-      reason: "kyc_rejected"
-    }
-  });
-
-  try {
-    const supabase = getSupabaseServiceClient();
-    const { data: authUser } = await supabase.from("user").select("email").eq("id", booking.user_id).single();
-    if (authUser?.email) {
-      await sendBookingRejectedEmail(authUser.email, booking);
-    }
-  } catch (e) {
-    console.error("Failed to send booking rejection email:", e);
-  }
-
-  return updated;
 }

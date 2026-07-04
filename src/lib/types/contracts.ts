@@ -56,6 +56,7 @@ export interface RevenueResponse {
   totals: {
     booking_count: number;
     gross_revenue: number;
+    pending_revenue: number;
     completed_revenue: number;
   };
   booking_wise: Array<{

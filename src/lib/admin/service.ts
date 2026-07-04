@@ -1,17 +1,24 @@
 import { recordAudit } from "@/lib/audit/service";
+import { assertCanTransition } from "@/lib/bookings/state-machine";
+import { computeCancellationBreakup } from "@/lib/pricing/engine";
+import { issueBookingRefund } from "@/lib/payments/service";
 import {
   getBookingOrThrow,
-  getKycRecordOrThrow,
+  getLatestPaymentOrderForBooking,
+  getOpenPaymentOrderForBooking,
   getUserOrThrow,
+  insertPaymentOrder,
   listBookings,
   listUsersByIds,
   updateBooking
 } from "@/lib/data/repository";
+import { getSupabaseServiceClient } from "@/lib/db/supabase-client";
+import { createRazorpayOrder, isRazorpayConfigured } from "@/lib/integrations/razorpay";
+import { sendBookingApprovedEmail, notifyAdmin, notifyUser } from "@/lib/notifications/service";
 import type { Role } from "@/lib/types/domain";
 import type { ApproveBookingRequest, RejectBookingRequest } from "@/lib/types/contracts";
-import { assertCanTransition } from "@/lib/bookings/state-machine";
 import { ApiException } from "@/lib/utils/errors";
-import { notifyAdmin, notifyUser } from "@/lib/notifications/service";
+import { newId } from "@/lib/utils/ids";
 import { getServerAppBaseUrl } from "@/lib/utils/app-url";
 
 function getPaymentUrl(bookingId: string) {
@@ -23,21 +30,10 @@ export async function listBookingsForAdmin(filters?: { status?: string }) {
   const bookings = await listBookings({ status: filters?.status });
   const users = await listUsersByIds(bookings.map((booking) => booking.user_id));
   const userMap = new Map(users.map((user) => [user.id, user]));
-  const kycItems = await Promise.all(
-    bookings.map(async (booking) => {
-      try {
-        return [booking.user_id, await getKycRecordOrThrow(booking.user_id)] as const;
-      } catch {
-        return [booking.user_id, null] as const;
-      }
-    })
-  );
-  const kycMap = new Map(kycItems);
 
   return bookings.map((booking) => ({
     ...booking,
-    user: userMap.get(booking.user_id) ?? null,
-    kyc: kycMap.get(booking.user_id) ?? null
+    user: userMap.get(booking.user_id) ?? null
   }));
 }
 
@@ -67,6 +63,47 @@ export async function approveBooking(
   });
   const user = await getUserOrThrow(updated.user_id);
 
+  let paymentUrl = getPaymentUrl(updated.id);
+  const existingOrder = await getOpenPaymentOrderForBooking(booking.id);
+
+  if (!existingOrder && isRazorpayConfigured()) {
+    try {
+      const supabase = getSupabaseServiceClient();
+      const { data: authUser } = await supabase
+        .from("user")
+        .select("email")
+        .eq("id", user.id)
+        .single();
+
+      const createdOrder = await createRazorpayOrder({
+        amountInPaise: booking.quote.total_payable * 100,
+        receipt: booking.id
+      });
+
+      await insertPaymentOrder({
+        id: newId("pay_order"),
+        booking_id: booking.id,
+        provider: "razorpay",
+        provider_order_id: createdOrder.order_id,
+        amount: createdOrder.amount,
+        currency: "INR",
+        status: "created",
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      });
+
+      try {
+        if (authUser?.email) {
+          await sendBookingApprovedEmail(authUser.email, booking, paymentUrl);
+        }
+      } catch (error) {
+        console.error("Failed to send booking approval email:", error);
+      }
+    } catch (error) {
+      console.error("Failed to create Razorpay order:", error);
+    }
+  }
+
   await recordAudit({
     actorId: actor.userId,
     actorRole: actor.role,
@@ -87,7 +124,7 @@ export async function approveBooking(
         booking_id: updated.id,
         vehicle_id: updated.vehicle_id,
         total_payable: updated.quote.total_payable,
-        payment_url: getPaymentUrl(updated.id)
+        payment_url: paymentUrl
       }
     }),
     notifyAdmin({
@@ -123,11 +160,31 @@ export async function rejectBooking(
   }
 
   assertCanTransition(booking.status, "cancelled", "admin.reject_booking");
+  const breakup = computeCancellationBreakup({
+    totalPayable: booking.quote.total_payable,
+    pickupAt: booking.pickup_at
+  });
+
   const updated = await updateBooking(booking.id, {
     status: "cancelled",
     cancel_reason: input.reason,
     updated_at: new Date().toISOString()
   });
+
+  if (breakup.refund_amount > 0) {
+    const paymentOrder = await getLatestPaymentOrderForBooking(booking.id);
+    if (paymentOrder?.status === "paid" && paymentOrder.provider_payment_id) {
+      try {
+        await issueBookingRefund({
+          bookingId: booking.id,
+          amountInPaise: breakup.refund_amount * 100,
+          reason: input.reason
+        });
+      } catch (error) {
+        console.error("Failed to issue rejection refund:", error);
+      }
+    }
+  }
 
   await recordAudit({
     actorId: actor.userId,

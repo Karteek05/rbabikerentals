@@ -1,18 +1,18 @@
 "use client";
 
-import { useState } from 'react';
-import Script from 'next/script';
+import { useState } from "react";
+import { openRazorpayCheckout } from "@/lib/payments/razorpay-checkout-client";
 
 interface RazorpayCheckoutButtonProps {
-  amount: number; // Amount in paise (minimum 100)
-  currency?: string;
-  onSuccess?: (details: any) => void;
-  onError?: (error: any) => void;
+  bookingId: string;
+  description?: string;
+  onSuccess?: () => void;
+  onError?: (error: unknown) => void;
 }
 
 export default function RazorpayCheckoutButton({
-  amount,
-  currency = 'INR',
+  bookingId,
+  description,
   onSuccess,
   onError
 }: RazorpayCheckoutButtonProps) {
@@ -20,91 +20,56 @@ export default function RazorpayCheckoutButton({
   const [error, setError] = useState<string | null>(null);
 
   const handlePayment = async () => {
-    if (amount < 100) {
-      setError("Amount must be at least 100 paise (₹1).");
-      if (onError) onError(new Error("Amount too low"));
-      return;
-    }
-
     setLoading(true);
     setError(null);
 
     try {
-      // 1. Create order on the backend
-      const res = await fetch('/api/create-order', {
-        method: 'POST',
+      const res = await fetch("/api/payments/order", {
+        method: "POST",
+        credentials: "include",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json"
         },
-        body: JSON.stringify({ amount, currency }),
+        body: JSON.stringify({ booking_id: bookingId })
       });
 
       const orderData = await res.json();
 
-      if (!res.ok) {
-        throw new Error(orderData.error || 'Failed to create order');
+      if (!res.ok || !orderData.ok) {
+        throw new Error(orderData?.error?.message || "Failed to create order");
       }
 
-      // 2. Initialize Razorpay Checkout
-      const options = {
-        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID, // Enter the Key ID generated from the Dashboard
-        amount: orderData.amount, // Amount is in currency subunits. Default currency is INR. Hence, 50000 refers to 50000 paise
-        currency: orderData.currency,
-        name: "RBA Bike Rentals",
-        description: "Test Transaction",
-        order_id: orderData.order_id, //This is a sample Order ID. Pass the `id` obtained in the response of Step 1
-        handler: async function (response: any) {
-          try {
-            // 3. Verify payment signature on the backend
-            const verifyRes = await fetch('/api/verify-payment', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                razorpay_order_id: response.razorpay_order_id,
-                razorpay_payment_id: response.razorpay_payment_id,
-                razorpay_signature: response.razorpay_signature,
-              }),
-            });
+      const order = orderData.data.order;
+      if (order.provider === "upi_fallback") {
+        throw new Error("Online payment is not configured for this booking.");
+      }
 
-            const verifyData = await verifyRes.json();
+      if (!order.key_id || !order.order_id) {
+        throw new Error("Razorpay checkout is not configured.");
+      }
 
-            if (!verifyRes.ok || !verifyData.success) {
-              throw new Error(verifyData.error || 'Payment verification failed');
-            }
-
-            if (onSuccess) onSuccess(verifyData);
-            alert("Payment Successful!");
-          } catch (err: any) {
-            console.error("Verification error:", err);
-            setError(err.message || "Payment verification failed");
-            if (onError) onError(err);
-          }
+      await openRazorpayCheckout({
+        keyId: order.key_id,
+        amount: order.amount,
+        currency: order.currency,
+        orderId: order.order_id,
+        description: description ?? `Payment for booking ${bookingId}`,
+        onSuccess: () => {
+          onSuccess?.();
+          alert("Payment submitted. Your booking will update once payment is confirmed.");
         },
-        prefill: {
-          name: "Test User",
-          email: "test@example.com",
-          contact: "9999999999"
+        onFailure: (message) => {
+          setError(message);
+          onError?.(new Error(message));
         },
-        theme: {
-          color: "#3399cc"
-        },
-      };
-
-      const razorpay = new (window as any).Razorpay(options);
-      
-      razorpay.on('payment.failed', function (response: any){
-        console.error("Payment failed:", response.error);
-        setError(`Payment failed: ${response.error.description}`);
-        if (onError) onError(response.error);
+        onDismiss: () => {
+          setError("Payment window closed before completion.");
+        }
       });
-      
-      razorpay.open();
-    } catch (err: any) {
-      console.error('Payment error:', err);
-      setError(err.message || 'Something went wrong');
-      if (onError) onError(err);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Something went wrong";
+      setError(message);
+      onError?.(err);
     } finally {
       setLoading(false);
     }
@@ -112,22 +77,15 @@ export default function RazorpayCheckoutButton({
 
   return (
     <div className="flex flex-col items-center">
-      <Script
-        src="https://checkout.razorpay.com/v1/checkout.js"
-        strategy="lazyOnload"
-      />
-      
       <button
         onClick={handlePayment}
         disabled={loading}
         className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
       >
-        {loading ? 'Processing...' : 'Pay with Razorpay'}
+        {loading ? "Processing..." : "Pay with Razorpay"}
       </button>
-      
-      {error && (
-        <p className="mt-2 text-red-500 text-sm">{error}</p>
-      )}
+
+      {error && <p className="mt-2 text-red-500 text-sm">{error}</p>}
     </div>
   );
 }

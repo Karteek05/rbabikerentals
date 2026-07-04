@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Sidebar from "../../components/Sidebar";
 import Icon from "../../components/Icon";
+import { getVehicleDisplayName, formatBookingReference } from "@/lib/fleet/display";
+import { formatBookingStatus } from "@/lib/bookings/status-labels";
 import VehicleTrackingMap, { type TrackingVehicleItem } from "../../components/VehicleTrackingMap";
 
 type Booking = {
@@ -23,24 +25,6 @@ type Booking = {
     pan_number?: string | null;
     date_of_birth?: string | null;
   } | null;
-  kyc?: {
-    status?: string;
-    aadhaar_verified?: boolean;
-    dl_verified?: boolean;
-    cibil_score?: number | null;
-    cibil_risk_band?: string | null;
-  } | null;
-};
-
-type KycItem = {
-  user_id: string;
-  status: string;
-  updated_at: string;
-  aadhaar_verified?: boolean;
-  dl_verified?: boolean;
-  cibil_score?: number;
-  cibil_risk_band?: string | null;
-  failure_reason?: string;
 };
 
 type VehicleItem = {
@@ -96,7 +80,7 @@ const emptyVehicleForm: VehicleForm = {
 function StatusBadge({ status }: { status: string }) {
   return (
     <span className={`badge badge-${status.replace(/_/g, "_")}`}>
-      {status.replace(/_/g, " ")}
+      {formatBookingStatus(status)}
     </span>
   );
 }
@@ -130,7 +114,6 @@ function mapVehicleToForm(vehicle: VehicleItem): VehicleForm {
 
 export default function AdminDashboardPage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
-  const [kycItems, setKycItems] = useState<KycItem[]>([]);
   const [vehicles, setVehicles] = useState<VehicleItem[]>([]);
   const [trackingItems, setTrackingItems] = useState<TrackingVehicleItem[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -142,11 +125,12 @@ export default function AdminDashboardPage() {
   const [newImageUrl, setNewImageUrl] = useState("");
   const [uploadFile, setUploadFile] = useState<File | null>(null);
 
-  const headers = useMemo(
+  const fetchInit = useMemo(
     () => ({
-      "content-type": "application/json",
-      "x-user-id": "admin_001",
-      "x-role": "admin"
+      credentials: "include" as const,
+      headers: {
+        "content-type": "application/json"
+      }
     }),
     []
   );
@@ -166,9 +150,9 @@ export default function AdminDashboardPage() {
     setLoading("refresh");
     try {
       const [bookingsRes, trackingRes, vehiclesRes] = await Promise.all([
-        fetch("/api/admin/bookings", { headers }),
-        fetch("/api/admin/tracking", { headers }),
-        fetch("/api/admin/vehicles?include_inactive=true", { headers })
+        fetch("/api/admin/bookings", { ...fetchInit }),
+        fetch("/api/admin/tracking", { ...fetchInit }),
+        fetch("/api/admin/vehicles?include_inactive=true", { ...fetchInit })
       ]);
       const [bookingsJson, trackingJson, vehiclesJson] = await Promise.all([
         bookingsRes.json(),
@@ -191,7 +175,6 @@ export default function AdminDashboardPage() {
 
       const nextVehicles = (vehiclesJson.data.vehicles as VehicleItem[]) ?? [];
       setBookings(bookingsJson.data.bookings);
-      setKycItems([]);
       setTrackingItems(trackingJson.data.items ?? []);
       setVehicles(nextVehicles);
 
@@ -202,7 +185,7 @@ export default function AdminDashboardPage() {
     } finally {
       setLoading(null);
     }
-  }, [headers, editingVehicleId]);
+  }, [fetchInit, editingVehicleId]);
 
   useEffect(() => {
     refreshAll().catch((e) => setError(String(e)));
@@ -214,7 +197,7 @@ export default function AdminDashboardPage() {
     try {
       const res = await fetch(`/api/admin/bookings/${bookingId}/reject`, {
         method: "POST",
-        headers,
+        ...fetchInit,
         body: JSON.stringify({ reason: "Admin rejected during ops review" })
       });
       const json = await res.json();
@@ -235,7 +218,7 @@ export default function AdminDashboardPage() {
     try {
       const res = await fetch(`/api/admin/bookings/${bookingId}/approve`, {
         method: "POST",
-        headers,
+        ...fetchInit,
         body: JSON.stringify({ note: "Approved for payment after ops review" })
       });
       const json = await res.json();
@@ -243,47 +226,6 @@ export default function AdminDashboardPage() {
         setError(json?.error?.message ?? "Failed to approve booking");
       } else {
         showSuccess(`Booking ${bookingId} approved for payment.`);
-        await refreshAll();
-      }
-    } finally {
-      setLoading(null);
-    }
-  }
-
-  async function approveKyc(userId: string) {
-    setError(null);
-    setLoading(`approve-kyc-${userId}`);
-    try {
-      const res = await fetch(`/api/admin/kyc/${userId}/approve`, {
-        method: "POST",
-        headers
-      });
-      const json = await res.json();
-      if (!res.ok || !json.ok) {
-        setError(json?.error?.message ?? "Failed to approve KYC");
-      } else {
-        showSuccess(`KYC for ${userId} approved.`);
-        await refreshAll();
-      }
-    } finally {
-      setLoading(null);
-    }
-  }
-
-  async function rejectKyc(userId: string) {
-    setError(null);
-    setLoading(`reject-kyc-${userId}`);
-    try {
-      const res = await fetch(`/api/admin/kyc/${userId}/reject`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ reason: "Document mismatch" })
-      });
-      const json = await res.json();
-      if (!res.ok || !json.ok) {
-        setError(json?.error?.message ?? "Failed to reject KYC");
-      } else {
-        showSuccess(`KYC for ${userId} rejected.`);
         await refreshAll();
       }
     } finally {
@@ -305,7 +247,7 @@ export default function AdminDashboardPage() {
       const method = editingVehicleId ? "PATCH" : "POST";
       const res = await fetch(url, {
         method,
-        headers,
+        ...fetchInit,
         body: JSON.stringify(payload)
       });
       const json = await res.json();
@@ -345,7 +287,7 @@ export default function AdminDashboardPage() {
     try {
       const res = await fetch(`/api/admin/vehicles/${vehicle.id}`, {
         method: "PATCH",
-        headers,
+        ...fetchInit,
         body: JSON.stringify({ is_active: !vehicle.is_active })
       });
       const json = await res.json();
@@ -369,7 +311,7 @@ export default function AdminDashboardPage() {
     try {
       const res = await fetch(`/api/admin/vehicles/${vehicleId}`, {
         method: "DELETE",
-        headers
+        ...fetchInit
       });
       const json = await res.json();
       if (!res.ok || !json.ok) {
@@ -398,7 +340,7 @@ export default function AdminDashboardPage() {
     try {
       const res = await fetch(`/api/admin/vehicles/${editingVehicleId}/images`, {
         method: "POST",
-        headers,
+        ...fetchInit,
         body: JSON.stringify({ image_url: newImageUrl.trim() })
       });
       const json = await res.json();
@@ -430,10 +372,7 @@ export default function AdminDashboardPage() {
       formData.append("file", uploadFile);
       const res = await fetch(`/api/admin/vehicles/${editingVehicleId}/images`, {
         method: "POST",
-        headers: {
-          "x-user-id": "admin_001",
-          "x-role": "admin"
-        },
+        credentials: "include",
         body: formData
       });
       const json = await res.json();
@@ -457,7 +396,7 @@ export default function AdminDashboardPage() {
       const nextImages = (selectedVehicle.image_urls ?? []).filter((item) => item !== imageUrl);
       const res = await fetch(`/api/admin/vehicles/${selectedVehicle.id}`, {
         method: "PATCH",
-        headers,
+        ...fetchInit,
         body: JSON.stringify({ image_urls: nextImages })
       });
       const json = await res.json();
@@ -492,7 +431,7 @@ export default function AdminDashboardPage() {
 
   const filterTabs = [
     { key: "all", label: "All" },
-    { key: "pending_kyc", label: "Pending" },
+    { key: "pending_kyc", label: "Pending review" },
     { key: "admin_review", label: "Admin Review" },
     { key: "payment_pending", label: "Payment Pending" },
     { key: "confirmed", label: "Confirmed" },
@@ -829,7 +768,12 @@ export default function AdminDashboardPage() {
                   <tbody>
                     {sortedVehicles.map((vehicle) => (
                       <tr key={vehicle.id}>
-                        <td className="td-id">{vehicle.id}</td>
+                        <td className="td-id">
+                          <div style={{ fontWeight: 700 }}>
+                            {vehicle.brand} {vehicle.model}
+                          </div>
+                          <div className="text-xs text-muted">{vehicle.id}</div>
+                        </td>
                         <td>
                           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                             <img
@@ -954,7 +898,7 @@ export default function AdminDashboardPage() {
                 <tbody>
                   {filteredBookings.map((booking) => (
                     <tr key={booking.id}>
-                      <td className="td-id">{booking.id}</td>
+                      <td className="td-id">{formatBookingReference(booking.id)}</td>
                       <td className="td-muted">
                         <div style={{ fontWeight: 700, color: "var(--on-surface)" }}>
                           {booking.user?.name ?? booking.user_id}
@@ -962,7 +906,10 @@ export default function AdminDashboardPage() {
                         <div className="text-xs text-muted">{booking.user?.email ?? booking.user_id}</div>
                         {booking.user?.phone && <div className="text-xs text-muted">{booking.user.phone}</div>}
                       </td>
-                      <td className="td-muted">{booking.vehicle_id}</td>
+                      <td className="td-muted">
+                        <div style={{ fontWeight: 700 }}>{getVehicleDisplayName(booking.vehicle_id)}</div>
+                        <div className="text-xs text-muted">{booking.vehicle_id}</div>
+                      </td>
                       <td className="td-muted">
                         <div>{formatDate(booking.pickup_at)}</div>
                         <div className="text-xs text-muted">{booking.pickup_zone ?? "Bengaluru"}</div>
@@ -978,7 +925,7 @@ export default function AdminDashboardPage() {
                               ? "Awaiting admin approval"
                               : booking.status === "payment_pending"
                                 ? "Payment link sent"
-                                : booking.status.replace(/_/g, " ")}
+                                : formatBookingStatus(booking.status)}
                           </span>
                         </div>
                       </td>
@@ -989,7 +936,7 @@ export default function AdminDashboardPage() {
                       </td>
                       <td>
                         <div className="flex gap-2" style={{ flexWrap: "wrap" }}>
-                          {booking.status === "pending_kyc" && (
+                          {approvableStatuses.has(booking.status) && (
                             <button
                               className="btn btn-success btn-sm"
                               onClick={() => approveBooking(booking.id)}

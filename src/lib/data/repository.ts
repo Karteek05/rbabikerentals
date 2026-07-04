@@ -6,9 +6,11 @@ import type {
   BookingStatus,
   DamageIncident,
   KycRecord,
+  KycStatus,
   NotificationJob,
   PaymentEvent,
   PaymentOrder,
+  Role,
   User,
   Vehicle,
   VehicleLiveLocation,
@@ -41,7 +43,7 @@ function throwStructuredDbError(error: unknown): never {
     throw new ApiException(
       409,
       "vehicle_unavailable",
-      "Vehicle already has an active booking in the requested time window."
+      "Vehicle already has no free units in the requested time window."
     );
   }
 
@@ -57,7 +59,19 @@ function throwStructuredDbError(error: unknown): never {
 }
 
 export function getDataMode(): DataMode {
-  return isSupabaseConfigured() ? "supabase" : "memory";
+  if (!isSupabaseConfigured()) {
+    const isProduction =
+      process.env.APP_ENV === "production" || process.env.NODE_ENV === "production";
+    if (isProduction) {
+      throw new ApiException(
+        500,
+        "supabase_not_configured",
+        "SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required in production."
+      );
+    }
+    return "memory";
+  }
+  return "supabase";
 }
 
 export function assertBengaluruCity(city: string) {
@@ -75,6 +89,220 @@ function withVehicleDefaults(vehicle: Vehicle): Vehicle {
     ...vehicle,
     image_urls: vehicle.image_urls ?? []
   };
+}
+
+export async function findAppUsersByEmail(email: string): Promise<User[]> {
+  const normalized = email.trim().toLowerCase();
+  if (!normalized) return [];
+
+  if (getDataMode() === "memory") {
+    return store.users.filter(
+      (user) => user.email?.trim().toLowerCase() === normalized && !user.deleted_at
+    );
+  }
+
+  const supabase = getSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("app_users")
+    .select("*")
+    .ilike("email", normalized);
+  if (error) throw new ApiException(500, "db_error", error.message);
+  return (data ?? []) as User[];
+}
+
+const KYC_STATUS_RANK: Record<KycRecord["status"], number> = {
+  verified: 5,
+  manual_review: 4,
+  in_progress: 3,
+  not_started: 2,
+  failed: 1,
+  expired: 0
+};
+
+function pickPreferredKycRecord(records: KycRecord[]) {
+  return [...records].sort((left, right) => {
+    const statusDelta = KYC_STATUS_RANK[right.status] - KYC_STATUS_RANK[left.status];
+    if (statusDelta !== 0) return statusDelta;
+    const verifiedDelta =
+      Number(right.aadhaar_verified) +
+      Number(right.dl_verified) -
+      (Number(left.aadhaar_verified) + Number(left.dl_verified));
+    if (verifiedDelta !== 0) return verifiedDelta;
+    return right.updated_at.localeCompare(left.updated_at);
+  })[0];
+}
+
+function mergeKycRecordsInMemory(
+  canonicalUserId: string,
+  duplicateIds: string[]
+) {
+  const duplicateIdSet = new Set(duplicateIds);
+  const canonicalKyc = store.kycRecords.find((item) => item.user_id === canonicalUserId);
+  const duplicateKycs = store.kycRecords.filter((item) => duplicateIdSet.has(item.user_id));
+  if (!duplicateKycs.length) return;
+
+  if (!canonicalKyc) {
+    const preferred = pickPreferredKycRecord(duplicateKycs);
+    preferred.user_id = canonicalUserId;
+    store.kycRecords = store.kycRecords.filter(
+      (item) => item.user_id === canonicalUserId || !duplicateIdSet.has(item.user_id)
+    );
+    return;
+  }
+
+  store.kycRecords = store.kycRecords.filter((item) => !duplicateIdSet.has(item.user_id));
+}
+
+async function mergeKycRecordsForUserReconcile(
+  canonicalUserId: string,
+  duplicateIds: string[]
+) {
+  if (!duplicateIds.length) return;
+
+  const supabase = getSupabaseServiceClient();
+  const { data: canonicalKyc, error: canonicalError } = await supabase
+    .from("kyc_records")
+    .select("*")
+    .eq("user_id", canonicalUserId)
+    .maybeSingle();
+  if (canonicalError) throw new ApiException(500, "db_error", canonicalError.message);
+
+  const { data: duplicateKycs, error: duplicateError } = await supabase
+    .from("kyc_records")
+    .select("*")
+    .in("user_id", duplicateIds);
+  if (duplicateError) throw new ApiException(500, "db_error", duplicateError.message);
+
+  const duplicates = (duplicateKycs ?? []) as KycRecord[];
+  if (!duplicates.length) return;
+
+  if (!canonicalKyc) {
+    const preferred = pickPreferredKycRecord(duplicates);
+    const { error: moveError } = await supabase
+      .from("kyc_records")
+      .update({ user_id: canonicalUserId })
+      .eq("user_id", preferred.user_id);
+    if (moveError) throw new ApiException(500, "db_error", moveError.message);
+
+    const extraDuplicateIds = duplicates
+      .map((item) => item.user_id)
+      .filter((userId) => userId !== preferred.user_id);
+    if (extraDuplicateIds.length) {
+      const { error: deleteError } = await supabase
+        .from("kyc_records")
+        .delete()
+        .in("user_id", extraDuplicateIds);
+      if (deleteError) throw new ApiException(500, "db_error", deleteError.message);
+    }
+    return;
+  }
+
+  const { error: deleteError } = await supabase
+    .from("kyc_records")
+    .delete()
+    .in(
+      "user_id",
+      duplicates.map((item) => item.user_id)
+    );
+  if (deleteError) throw new ApiException(500, "db_error", deleteError.message);
+}
+
+const ROLE_RANK: Record<Role, number> = {
+  admin: 3,
+  partner_investor: 2,
+  customer: 1
+};
+
+const USER_KYC_STATUS_RANK: Record<KycStatus, number> = {
+  verified: 5,
+  manual_review: 4,
+  in_progress: 3,
+  not_started: 2,
+  failed: 1,
+  expired: 0
+};
+
+function pickPreferredRole(roles: Role[]) {
+  return roles.reduce((best, role) => (ROLE_RANK[role] > ROLE_RANK[best] ? role : best));
+}
+
+function pickPreferredUserKycStatus(statuses: KycStatus[]) {
+  return statuses.reduce((best, status) =>
+    USER_KYC_STATUS_RANK[status] > USER_KYC_STATUS_RANK[best] ? status : best
+  );
+}
+
+function firstPresentValue<T>(values: Array<T | null | undefined>) {
+  return values.find((value) => value !== null && value !== undefined && value !== "") ?? null;
+}
+
+function mergeDuplicateUserProfiles(canonical: User, duplicates: User[]): User {
+  const candidates = [canonical, ...duplicates];
+  return {
+    ...canonical,
+    role: pickPreferredRole(candidates.map((user) => user.role)),
+    kyc_status: pickPreferredUserKycStatus(candidates.map((user) => user.kyc_status)),
+    name: firstPresentValue(candidates.map((user) => user.name)) ?? canonical.name,
+    phone: firstPresentValue(candidates.map((user) => user.phone)),
+    pan_number: firstPresentValue(candidates.map((user) => user.pan_number)),
+    date_of_birth: firstPresentValue(candidates.map((user) => user.date_of_birth)),
+    cibil_consent_at: firstPresentValue(candidates.map((user) => user.cibil_consent_at))
+  };
+}
+
+function mergeDuplicateProfilesInMemory(canonicalUserId: string, duplicates: User[]) {
+  const canonicalIndex = store.users.findIndex((user) => user.id === canonicalUserId);
+  if (canonicalIndex < 0) return;
+  const canonical = store.users[canonicalIndex];
+  store.users[canonicalIndex] = mergeDuplicateUserProfiles(canonical, duplicates);
+}
+
+export async function reconcileAppUsersForCanonicalId(
+  canonicalUserId: string,
+  email: string
+) {
+  const related = await findAppUsersByEmail(email);
+  const duplicateIds = related
+    .filter((user) => user.id !== canonicalUserId && !user.deleted_at)
+    .map((user) => user.id);
+
+  if (!duplicateIds.length) {
+    return { mergedUserIds: [] as string[] };
+  }
+
+  const duplicates = related.filter((user) => duplicateIds.includes(user.id));
+
+  if (getDataMode() === "memory") {
+    for (const booking of store.bookings) {
+      if (duplicateIds.includes(booking.user_id)) {
+        booking.user_id = canonicalUserId;
+      }
+    }
+    mergeKycRecordsInMemory(canonicalUserId, duplicateIds);
+    mergeDuplicateProfilesInMemory(canonicalUserId, duplicates);
+    store.users = store.users.filter((user) => !duplicateIds.includes(user.id));
+    return { mergedUserIds: duplicateIds };
+  }
+
+  const canonical = await getUserOrThrow(canonicalUserId);
+  await upsertUser(mergeDuplicateUserProfiles(canonical, duplicates));
+
+  const supabase = getSupabaseServiceClient();
+  const { error: bookingError } = await supabase
+    .from("bookings")
+    .update({ user_id: canonicalUserId })
+    .in("user_id", duplicateIds);
+  if (bookingError) throw new ApiException(500, "db_error", bookingError.message);
+
+  await mergeKycRecordsForUserReconcile(canonicalUserId, duplicateIds);
+
+  const { error: deleteError } = await supabase
+    .from("app_users")
+    .delete()
+    .in("id", duplicateIds);
+  if (deleteError) throw new ApiException(500, "db_error", deleteError.message);
+
+  return { mergedUserIds: duplicateIds };
 }
 
 export async function getUserOrThrow(userId: string): Promise<User> {
@@ -510,13 +738,27 @@ export async function updateBooking(
 export async function listBookings(filter?: {
   status?: string;
   userId?: string;
+  userIds?: string[];
+  includeRelatedUserIds?: boolean;
   vehicleId?: string;
   excludeStatuses?: BookingStatus[];
 }): Promise<Booking[]> {
+  let userIds = filter?.userIds;
+  if (filter?.includeRelatedUserIds && filter.userId) {
+    const user = await getUserOrThrow(filter.userId);
+    if (user.email) {
+      const related = await findAppUsersByEmail(user.email);
+      userIds = [...new Set(related.map((entry) => entry.id))];
+    } else {
+      userIds = [filter.userId];
+    }
+  }
+
   if (getDataMode() === "memory") {
     return store.bookings.filter((item) => {
       if (filter?.status && item.status !== filter.status) return false;
-      if (filter?.userId && item.user_id !== filter.userId) return false;
+      if (userIds?.length && !userIds.includes(item.user_id)) return false;
+      if (!userIds?.length && filter?.userId && item.user_id !== filter.userId) return false;
       if (filter?.vehicleId && item.vehicle_id !== filter.vehicleId) return false;
       if (filter?.excludeStatuses?.includes(item.status)) return false;
       return true;
@@ -526,10 +768,12 @@ export async function listBookings(filter?: {
   const supabase = getSupabaseServiceClient();
   let query = supabase.from("bookings").select("*");
   if (filter?.status) query = query.eq("status", filter.status);
-  if (filter?.userId) query = query.eq("user_id", filter.userId);
+  if (userIds?.length) query = query.in("user_id", userIds);
+  else if (filter?.userId) query = query.eq("user_id", filter.userId);
   if (filter?.vehicleId) query = query.eq("vehicle_id", filter.vehicleId);
   if (filter?.excludeStatuses?.length) {
-    query = query.not("status", "in", `(${filter.excludeStatuses.join(",")})`);
+    const quoted = filter.excludeStatuses.map((status) => `"${status}"`).join(",");
+    query = query.not("status", "in", `(${quoted})`);
   }
 
   const { data, error } = await query;
@@ -576,6 +820,41 @@ export async function insertAuditEvent(event: AuditEvent): Promise<void> {
   const supabase = getSupabaseServiceClient();
   const { error } = await supabase.from("audit_events").insert(event);
   if (error) throw new ApiException(500, "db_error", error.message);
+}
+
+export async function getLatestAuditEventForResource(
+  resourceType: string,
+  resourceId: string,
+  action?: string
+): Promise<AuditEvent | null> {
+  if (getDataMode() === "memory") {
+    const matches = store.auditEvents
+      .filter(
+        (item) =>
+          item.resource_type === resourceType &&
+          item.resource_id === resourceId &&
+          (!action || item.action === action)
+      )
+      .sort((left, right) => right.created_at.localeCompare(left.created_at));
+    return matches[0] ?? null;
+  }
+
+  const supabase = getSupabaseServiceClient();
+  let query = supabase
+    .from("audit_events")
+    .select("*")
+    .eq("resource_type", resourceType)
+    .eq("resource_id", resourceId)
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  if (action) {
+    query = query.eq("action", action);
+  }
+
+  const { data, error } = await query.maybeSingle();
+  if (error) throw new ApiException(500, "db_error", error.message);
+  return (data as AuditEvent | null) ?? null;
 }
 
 export async function insertPaymentOrder(order: PaymentOrder): Promise<PaymentOrder> {
@@ -697,6 +976,26 @@ export async function hasProcessedPaymentEvent(providerEventId: string): Promise
   return Boolean(data);
 }
 
+export async function claimPaymentEvent(event: PaymentEvent): Promise<boolean> {
+  if (getDataMode() === "memory") {
+    if (store.paymentEvents.some((item) => item.provider_event_id === event.provider_event_id)) {
+      return false;
+    }
+    store.paymentEvents.push(event);
+    return true;
+  }
+
+  const supabase = getSupabaseServiceClient();
+  const { error } = await supabase.from("payment_events").insert(event);
+  if (error) {
+    if (error.code === "23505") {
+      return false;
+    }
+    throw new ApiException(500, "db_error", error.message);
+  }
+  return true;
+}
+
 export async function insertPaymentEvent(event: PaymentEvent): Promise<void> {
   if (getDataMode() === "memory") {
     store.paymentEvents.push(event);
@@ -805,4 +1104,28 @@ export async function listNotificationJobs(filter?: {
   const { data, error } = await query;
   if (error) throw new ApiException(500, "db_error", error.message);
   return (data ?? []) as NotificationJob[];
+}
+
+export async function hasNotificationJobForPayload(params: {
+  templateKey: string;
+  payloadField: string;
+  payloadValue: string;
+}): Promise<boolean> {
+  if (getDataMode() === "memory") {
+    return store.notificationJobs.some(
+      (job) =>
+        job.template_key === params.templateKey &&
+        String(job.payload[params.payloadField] ?? "") === params.payloadValue
+    );
+  }
+
+  const supabase = getSupabaseServiceClient();
+  const { count, error } = await supabase
+    .from("notification_jobs")
+    .select("id", { count: "exact", head: true })
+    .eq("template_key", params.templateKey)
+    .eq(`payload->>${params.payloadField}`, params.payloadValue);
+
+  if (error) throw new ApiException(500, "db_error", error.message);
+  return (count ?? 0) > 0;
 }
