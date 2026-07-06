@@ -492,12 +492,31 @@ export async function processRazorpayWebhook(params: {
   if (payload.event === "payment_link.paid") {
     const paymentLinkId = payload.payload?.payment_link?.entity?.id;
     const paidAmount = payload.payload?.payment_link?.entity?.amount;
+    const referenceId = payload.payload?.payment_link?.entity?.reference_id || "";
+    const description = (payload.payload?.payment_link?.entity as any)?.description || "";
+
     if (paymentLinkId) {
-      const updatedOrder = await updatePaymentOrderByProviderId(paymentLinkId, {
+      let updatedOrder = await updatePaymentOrderByProviderId(paymentLinkId, {
         provider_payment_id: payload.payload?.payment?.entity?.id,
         status: "paid",
         updated_at: new Date().toISOString()
       });
+
+      // Fallback for manual payment links created from Razorpay Dashboard
+      if (!updatedOrder) {
+        const match = (referenceId + " " + description).match(/(booking_[a-zA-Z0-9\-]+)/);
+        if (match && match[1]) {
+          const bookingId = match[1];
+          const latestOrder = await getLatestPaymentOrderForBooking(bookingId);
+          if (latestOrder && latestOrder.status !== "paid") {
+            updatedOrder = await updatePaymentOrderById(latestOrder.id, {
+              provider_payment_id: payload.payload?.payment?.entity?.id,
+              status: "paid",
+              updated_at: new Date().toISOString()
+            });
+          }
+        }
+      }
 
       if (updatedOrder) {
         await finalizeCapturedPayment({ updatedOrder, paidAmount });
