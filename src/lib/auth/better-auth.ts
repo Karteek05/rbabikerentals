@@ -1,8 +1,56 @@
 import { betterAuth } from "better-auth";
 import { emailOTP } from "better-auth/plugins";
+import { nextCookies } from "better-auth/next-js";
 import { Pool } from "pg";
 import { sendResetPasswordEmail, sendOtpEmail } from "@/lib/notifications/service";
 import { getServerAppBaseUrl, isProductionRuntime } from "@/lib/utils/app-url";
+
+function resolveTrustedOrigins() {
+  const origins = new Set<string>();
+  const baseUrl = getServerAppBaseUrl();
+  if (baseUrl) {
+    try {
+      origins.add(new URL(baseUrl).origin);
+    } catch {
+      // ignore invalid base URL
+    }
+  }
+
+  for (const value of process.env.BETTER_AUTH_TRUSTED_ORIGINS?.split(",") ?? []) {
+    const trimmed = value.trim();
+    if (trimmed) origins.add(trimmed);
+  }
+
+  if (isProductionRuntime()) {
+    origins.add("https://www.rbabikerentals.com");
+    origins.add("https://rbabikerentals.com");
+  }
+
+  return [...origins];
+}
+
+function resolveCrossSubDomainCookies() {
+  if (!isProductionRuntime()) return {};
+
+  const baseUrl = getServerAppBaseUrl();
+  if (!baseUrl) return {};
+
+  try {
+    const host = new URL(baseUrl).hostname;
+    if (host === "rbabikerentals.com" || host.endsWith(".rbabikerentals.com")) {
+      return {
+        crossSubDomainCookies: {
+          enabled: true,
+          domain: "rbabikerentals.com"
+        }
+      } as const;
+    }
+  } catch {
+    // ignore invalid base URL
+  }
+
+  return {};
+}
 
 export function resolveAuthDatabaseUrl(
   env: Record<string, string | undefined> = process.env
@@ -32,11 +80,18 @@ if (!authSecret) {
 
 export const auth = betterAuth({
   advanced: {
-    cookiePrefix: "rba"
+    cookiePrefix: "rba",
+    ...resolveCrossSubDomainCookies()
   },
   basePath: process.env.BETTER_AUTH_BASE_PATH ?? "/api/auth",
   baseURL: getServerAppBaseUrl(),
+  trustedOrigins: resolveTrustedOrigins(),
   secret: authSecret,
+  session: {
+    cookieCache: {
+      enabled: false
+    }
+  },
   database: dbUrl
     ? new Pool({
         connectionString: dbUrl,
@@ -51,6 +106,7 @@ export const auth = betterAuth({
     }
   },
   plugins: [
+    nextCookies(),
     emailOTP({
       async sendVerificationOTP({ email, otp, type }, request) {
         await sendOtpEmail(email, otp);
