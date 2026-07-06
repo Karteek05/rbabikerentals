@@ -164,6 +164,7 @@ alter table if exists bookings add column if not exists pickup_zone text;
 alter table if exists bookings add column if not exists pickup_address text;
 alter table if exists bookings add column if not exists pickup_latitude double precision;
 alter table if exists bookings add column if not exists pickup_longitude double precision;
+alter table if exists bookings add column if not exists requested_drop_at timestamptz;
 
 create index if not exists idx_bookings_vehicle_window on bookings(vehicle_id, pickup_at, drop_at);
 create index if not exists idx_bookings_status on bookings(status);

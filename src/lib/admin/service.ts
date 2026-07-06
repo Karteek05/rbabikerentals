@@ -1,10 +1,9 @@
 import { recordAudit } from "@/lib/audit/service";
 import { assertCanTransition } from "@/lib/bookings/state-machine";
 import { computeCancellationBreakup } from "@/lib/pricing/engine";
-import { issueBookingRefund } from "@/lib/payments/service";
+import { refundBookingAmount } from "@/lib/payments/service";
 import {
   getBookingOrThrow,
-  getLatestPaymentOrderForBooking,
   getOpenPaymentOrderForBooking,
   getUserOrThrow,
   insertPaymentOrder,
@@ -56,6 +55,28 @@ export async function approveBooking(
   }
 
   assertCanTransition(booking.status, "payment_pending", "admin.approve_booking");
+
+  const existingOrder = await getOpenPaymentOrderForBooking(booking.id);
+
+  if (!existingOrder && isRazorpayConfigured()) {
+    const createdOrder = await createRazorpayOrder({
+      amountInPaise: booking.quote.total_payable * 100,
+      receipt: booking.id
+    });
+
+    await insertPaymentOrder({
+      id: newId("pay_order"),
+      booking_id: booking.id,
+      provider: "razorpay",
+      provider_order_id: createdOrder.order_id,
+      amount: createdOrder.amount,
+      currency: "INR",
+      status: "created",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    });
+  }
+
   const updated = await updateBooking(booking.id, {
     status: "payment_pending",
     updated_at: new Date().toISOString()
@@ -63,31 +84,7 @@ export async function approveBooking(
   const user = await getUserOrThrow(updated.user_id);
   const customerEmail = await resolveUserNotificationEmail(user.id, user.email);
 
-  let paymentUrl = getPaymentUrl(updated.id);
-  const existingOrder = await getOpenPaymentOrderForBooking(booking.id);
-
-  if (!existingOrder && isRazorpayConfigured()) {
-    try {
-      const createdOrder = await createRazorpayOrder({
-        amountInPaise: booking.quote.total_payable * 100,
-        receipt: booking.id
-      });
-
-      await insertPaymentOrder({
-        id: newId("pay_order"),
-        booking_id: booking.id,
-        provider: "razorpay",
-        provider_order_id: createdOrder.order_id,
-        amount: createdOrder.amount,
-        currency: "INR",
-        status: "created",
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      });
-    } catch (error) {
-      console.error("Failed to create Razorpay order:", error);
-    }
-  }
+  const paymentUrl = getPaymentUrl(updated.id);
 
   await recordAudit({
     actorId: actor.userId,
@@ -157,17 +154,14 @@ export async function rejectBooking(
   });
 
   if (breakup.refund_amount > 0) {
-    const paymentOrder = await getLatestPaymentOrderForBooking(booking.id);
-    if (paymentOrder?.status === "paid" && paymentOrder.provider_payment_id) {
-      try {
-        await issueBookingRefund({
-          bookingId: booking.id,
-          amountInPaise: breakup.refund_amount * 100,
-          reason: input.reason
-        });
-      } catch (error) {
-        console.error("Failed to issue rejection refund:", error);
-      }
+    try {
+      await refundBookingAmount({
+        bookingId: booking.id,
+        amountInPaise: breakup.refund_amount * 100,
+        reason: input.reason
+      });
+    } catch (error) {
+      console.error("Failed to issue rejection refund:", error);
     }
   }
 

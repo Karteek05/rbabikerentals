@@ -73,9 +73,9 @@ export default function PrivacyPage() {
 
       <LegalSection title="4. Consent and withdrawal">
         <p>
-          By creating an account, submitting a booking, or ticking an consent checkbox where shown, you consent to
-          processing as described in this policy. You may withdraw consent for optional processing (such as
-          non-essential marketing) at any time by emailing{" "}
+          By creating an account, submitting a booking, or signing in, you consent to processing as described in
+          this policy. You may withdraw consent for optional processing (such as non-essential marketing) at any
+          time by emailing{" "}
           <a href={`mailto:${COMPANY.grievanceEmail}`} className="nav-focus underline underline-offset-2">
             {COMPANY.grievanceEmail}
           </a>

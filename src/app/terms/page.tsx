@@ -40,14 +40,14 @@ export default function TermsPage() {
       <LegalSection title="3. Bookings and confirmation">
         <p>
           A booking request is subject to vehicle availability and internal review. A booking is confirmed only when
-          status is updated to a confirmed or active rental state and any required payment or deposit steps are
+          status is updated to confirmed, ongoing, or extended and any required payment or deposit steps are
           completed as communicated. Displayed availability is indicative and may change until confirmation.
         </p>
       </LegalSection>
 
       <LegalSection title="4. Pricing and payments">
         <ul className="list-disc space-y-2 pl-5">
-          <li>Package fares shown on the website include GST unless stated otherwise.</li>
+          <li>Package fares shown on the website include GST.</li>
           <li>A refundable security deposit may apply and is collected as part of the booking flow.</li>
           <li>Extensions, late returns, damage charges, traffic fines, and fuel or accessory costs may be charged separately.</li>
           <li>Payments are processed through authorised payment partners. You agree to provide valid payment authorisation.</li>

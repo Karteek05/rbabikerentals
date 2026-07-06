@@ -1,4 +1,5 @@
 import { assertCanTransition } from "@/lib/bookings/state-machine";
+import { advanceBookingLifecycleIfDue } from "@/lib/bookings/lifecycle";
 import { recordAudit } from "@/lib/audit/service";
 import { getSupabaseServiceClient } from "@/lib/db/supabase-client";
 import { sendBookingConfirmationEmail } from "@/lib/notifications/service";
@@ -14,10 +15,11 @@ import {
   insertVehicleBlock,
   listBookings,
   listVehicleBlocks,
-  updateBooking
+  updateBooking,
+  updatePaymentOrderByProviderId
 } from "@/lib/data/repository";
 import { createRazorpayOrder, isRazorpayConfigured } from "@/lib/integrations/razorpay";
-import { issueBookingRefund } from "@/lib/payments/service";
+import { refundBookingAmount } from "@/lib/payments/service";
 import { isVehicleAvailableForWindow } from "@/lib/fleet/availability";
 import {
   computeCancellationBreakup,
@@ -30,7 +32,7 @@ import type {
   ExtendBookingRequest,
   QuoteRequest
 } from "@/lib/types/contracts";
-import type { PricingQuote, Role } from "@/lib/types/domain";
+import type { Booking, PricingQuote, Role } from "@/lib/types/domain";
 import { ApiException } from "@/lib/utils/errors";
 import { newId } from "@/lib/utils/ids";
 
@@ -159,17 +161,25 @@ export async function extendBooking(
   input: ExtendBookingRequest,
   actor: { userId: string; role: Role }
 ) {
-  const booking = await getBookingOrThrow(bookingId);
+  let booking = await getBookingOrThrow(bookingId);
   const ownerAllowed = actor.role === "customer" && booking.user_id === actor.userId;
   if (!ownerAllowed && actor.role !== "admin") {
     throw new ApiException(403, "forbidden", "Not allowed to extend this booking.");
   }
 
-  if (booking.status !== "ongoing" && booking.status !== "extended") {
+  if (booking.status === "confirmed") {
+    const advanced = await advanceBookingLifecycleIfDue(booking);
+    if (advanced.status !== booking.status) {
+      booking = advanced;
+    }
+  }
+
+  const extendableStatuses = new Set(["ongoing", "extended"]);
+  if (!extendableStatuses.has(booking.status)) {
     throw new ApiException(
       409,
       "invalid_state",
-      "Booking can be extended only from ongoing or extended status."
+      "Booking can be extended only once the ride has started (ongoing or extended status)."
     );
   }
 
@@ -209,8 +219,6 @@ export async function extendBooking(
     );
   }
 
-  assertCanTransition(booking.status, "extension_requested", "booking.extend.request");
-
   const resolvedExtensionDurationValue = resolveDurationValueFromWindow({
     duration_bucket: input.duration_bucket,
     start_at: booking.drop_at,
@@ -233,43 +241,70 @@ export async function extendBooking(
 
   const extensionAmountPaise = extensionQuote.total_payable * 100;
   let paymentOrder: Awaited<ReturnType<typeof createRazorpayOrder>> | null = null;
+
+  if (extensionAmountPaise > 0 && !isRazorpayConfigured()) {
+    throw new ApiException(
+      503,
+      "payment_unavailable",
+      "Extension payment is unavailable right now. Please contact support."
+    );
+  }
+
   const requiresPayment = isRazorpayConfigured() && extensionAmountPaise > 0;
 
   if (requiresPayment) {
-    const createdOrder = await createRazorpayOrder({
-      amountInPaise: extensionAmountPaise,
-      receipt: `ext_${booking.id}`
-    });
-    paymentOrder = createdOrder;
-    await insertPaymentOrder({
-      id: newId("pay_order"),
-      booking_id: booking.id,
-      provider: "razorpay",
-      provider_order_id: createdOrder.order_id,
-      amount: createdOrder.amount,
-      currency: "INR",
-      status: "created",
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    });
+    assertCanTransition(booking.status, "extension_requested", "booking.extend.request");
 
-    const updated = await updateBooking(booking.id, {
-      status: "extension_requested",
-      updated_at: new Date().toISOString()
-    });
+    let createdOrder: Awaited<ReturnType<typeof createRazorpayOrder>>;
+    try {
+      createdOrder = await createRazorpayOrder({
+        amountInPaise: extensionAmountPaise,
+        receipt: `ext_${booking.id}`
+      });
+      await insertPaymentOrder({
+        id: newId("pay_order"),
+        booking_id: booking.id,
+        provider: "razorpay",
+        provider_order_id: createdOrder.order_id,
+        amount: createdOrder.amount,
+        currency: "INR",
+        status: "created",
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      });
+    } catch (error) {
+      throw error;
+    }
 
-    await recordAudit({
-      actorId: actor.userId,
-      actorRole: actor.role,
-      action: "booking.extension_pending",
-      resourceType: "booking",
-      resourceId: booking.id,
-      metadata: {
+    let updated: Booking;
+    try {
+      updated = await updateBooking(booking.id, {
+        status: "extension_requested",
         requested_drop_at: input.requested_drop_at,
-        additional_payable: extensionQuote.total_payable,
-        extension_quote: extensionQuote
-      }
-    });
+        updated_at: new Date().toISOString()
+      });
+
+      await recordAudit({
+        actorId: actor.userId,
+        actorRole: actor.role,
+        action: "booking.extension_pending",
+        resourceType: "booking",
+        resourceId: booking.id,
+        metadata: {
+          requested_drop_at: input.requested_drop_at,
+          additional_payable: extensionQuote.total_payable,
+          extension_quote: extensionQuote
+        }
+      });
+    } catch (error) {
+      await updatePaymentOrderByProviderId(createdOrder.order_id, {
+        status: "failed",
+        updated_at: new Date().toISOString()
+      });
+      throw error;
+    }
+
+    paymentOrder = createdOrder;
 
     await recordAudit({
       actorId: actor.userId,
@@ -291,10 +326,18 @@ export async function extendBooking(
     };
   }
 
-  assertCanTransition(booking.status, "extended", "booking.extend.confirm");
+  assertCanTransition(booking.status, "extension_requested", "booking.extend.request");
+  await updateBooking(booking.id, {
+    status: "extension_requested",
+    requested_drop_at: input.requested_drop_at,
+    updated_at: new Date().toISOString()
+  });
+
+  assertCanTransition("extension_requested", "extended", "booking.extend.confirm");
   const updated = await updateBooking(booking.id, {
     status: "extended",
     drop_at: input.requested_drop_at,
+    requested_drop_at: null,
     quote: {
       ...booking.quote,
       base_amount: booking.quote.base_amount + extensionQuote.base_amount,
@@ -367,23 +410,21 @@ export async function cancelBooking(
   const updated = await updateBooking(booking.id, {
     status: "cancelled",
     cancel_reason: input.reason,
+    requested_drop_at: null,
     updated_at: new Date().toISOString()
   });
 
   let refundIssued = false;
   if (breakup.refund_amount > 0) {
-    const paymentOrder = await getLatestPaymentOrderForBooking(booking.id);
-    if (paymentOrder?.status === "paid" && paymentOrder.provider_payment_id) {
-      try {
-        await issueBookingRefund({
-          bookingId: booking.id,
-          amountInPaise: breakup.refund_amount * 100,
-          reason: input.reason
-        });
-        refundIssued = true;
-      } catch (error) {
-        console.error("Failed to issue cancellation refund:", error);
-      }
+    try {
+      await refundBookingAmount({
+        bookingId: booking.id,
+        amountInPaise: breakup.refund_amount * 100,
+        reason: input.reason
+      });
+      refundIssued = true;
+    } catch (error) {
+      console.error("Failed to issue cancellation refund:", error);
     }
   }
 

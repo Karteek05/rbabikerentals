@@ -6,10 +6,10 @@ const transitions: Record<BookingStatus, BookingStatus[]> = {
   pending_kyc: ["admin_review", "payment_pending", "cancelled"],
   admin_review: ["payment_pending", "cancelled"],
   payment_pending: ["confirmed", "cancelled"],
-  confirmed: ["ongoing", "cancelled"],
-  ongoing: ["extension_requested", "completed", "cancelled"],
-  extension_requested: ["extended", "cancelled"],
-  extended: ["ongoing", "completed", "cancelled"],
+  confirmed: ["ongoing", "extension_requested", "extended", "cancelled"],
+  ongoing: ["extension_requested", "extended", "completed", "cancelled"],
+  extension_requested: ["extended", "ongoing", "cancelled"],
+  extended: ["ongoing", "extension_requested", "completed", "cancelled"],
   completed: [],
   cancelled: []
 };

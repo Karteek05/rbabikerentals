@@ -1,9 +1,14 @@
 "use client";
 
-import { Suspense, useState, useEffect } from "react";
+import { Suspense, useState, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { authClient } from "@/lib/auth/auth-client";
 import { isGoogleAuthEnabled, startGoogleSignIn } from "@/lib/auth/google-sign-in";
+import {
+  fetchAccountRole,
+  resolvePostLoginPath,
+  resolveSafeReturnTo
+} from "@/lib/auth/post-login-redirect";
 import Link from "next/link";
 import Icon from "@/app/components/Icon";
 import { motion } from "framer-motion";
@@ -11,6 +16,7 @@ import { motion } from "framer-motion";
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const returnTo = resolveSafeReturnTo(searchParams.get("returnTo") ?? searchParams.get("next"));
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -18,45 +24,50 @@ function LoginForm() {
 
   const { data: session } = authClient.useSession();
 
-  // Redirect if already logged in
   useEffect(() => {
     if (searchParams.get("mode") === "register") {
       router.replace("/signup");
     }
   }, [router, searchParams]);
 
+  const redirectAuthenticatedUser = useCallback(async () => {
+    const role = await fetchAccountRole();
+    router.push(resolvePostLoginPath({ role, returnTo, fallback: "/profile" }));
+  }, [router, returnTo]);
+
   useEffect(() => {
     if (session?.user) {
-      const role = (session.user as any).role as string;
-      if (role === "admin") router.push("/admin");
-      else if (role === "partner_investor") router.push("/partner");
-      else if (role === "customer") router.push("/customer");
-      else router.push("/");
+      redirectAuthenticatedUser();
     }
-  }, [session, router]);
+  }, [session?.user, redirectAuthenticatedUser]);
 
   const handleEmailSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError("");
 
-    const { error } = await authClient.signIn.email({
-      email,
-      password,
-    });
+    try {
+      const { error: signInError } = await authClient.signIn.email({
+        email,
+        password
+      });
 
-    if (error) {
-      setError(error.message || "Failed to sign in. Please check your credentials.");
+      if (signInError) {
+        setError(signInError.message || "Failed to sign in. Please check your credentials.");
+        return;
+      }
+
+      const role = await fetchAccountRole();
+      router.push(resolvePostLoginPath({ role, returnTo, fallback: "/profile" }));
+    } finally {
       setLoading(false);
-    } else {
-      // The useEffect will handle redirect once session updates
     }
   };
 
   const handleGoogleSignIn = async () => {
     setLoading(true);
     setError("");
-    const result = await startGoogleSignIn("/profile");
+    const result = await startGoogleSignIn(returnTo ?? "/profile");
     if (!result.ok) {
       setError(result.error);
       setLoading(false);
@@ -149,7 +160,10 @@ function LoginForm() {
 
         <p className="mt-6 text-center text-sm text-[#526074]">
           Don't have an account?{" "}
-          <Link href="/signup" className="font-bold text-brand-dark hover:underline">
+          <Link
+            href={returnTo ? `/signup?returnTo=${encodeURIComponent(returnTo)}` : "/signup"}
+            className="font-bold text-brand-dark hover:underline"
+          >
             Sign up
           </Link>
         </p>

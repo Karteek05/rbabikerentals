@@ -1,13 +1,20 @@
 "use client";
 
-import { Suspense, useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState, useEffect, useCallback } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { authClient } from "@/lib/auth/auth-client";
+import {
+  fetchAccountRole,
+  resolvePostLoginPath,
+  resolveSafeReturnTo
+} from "@/lib/auth/post-login-redirect";
 import Icon from "@/app/components/Icon";
 import { motion } from "framer-motion";
 
 function AdminLoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const returnTo = resolveSafeReturnTo(searchParams.get("next"));
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -15,32 +22,52 @@ function AdminLoginForm() {
 
   const { data: session } = authClient.useSession();
 
+  const redirectAuthenticatedUser = useCallback(async () => {
+    const role = await fetchAccountRole();
+    if (role === "admin") {
+      router.push(returnTo ?? "/admin");
+      return;
+    }
+    setError("This account does not have admin access.");
+  }, [router, returnTo]);
+
   useEffect(() => {
     if (session?.user) {
-      const role = (session.user as any).role as string;
-      if (role === "admin") router.push("/admin");
-      else router.push("/");
+      redirectAuthenticatedUser();
     }
-  }, [session, router]);
+  }, [session?.user, redirectAuthenticatedUser]);
 
   const handleEmailSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError("");
 
-    if (!email.trim().toLowerCase().endsWith("@rbabikerentals.com")) {
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail.endsWith("@rbabikerentals.com")) {
       setError("Unauthorized. Admin access requires an @rbabikerentals.com email address.");
       setLoading(false);
       return;
     }
 
-    const { error } = await authClient.signIn.email({
-      email,
-      password,
-    });
+    try {
+      const { error: signInError } = await authClient.signIn.email({
+        email: normalizedEmail,
+        password
+      });
 
-    if (error) {
-      setError(error.message || "Failed to sign in. Please check your credentials.");
+      if (signInError) {
+        setError(signInError.message || "Failed to sign in. Please check your credentials.");
+        return;
+      }
+
+      const role = await fetchAccountRole();
+      if (role !== "admin") {
+        setError("This account does not have admin access.");
+        return;
+      }
+
+      router.push(resolvePostLoginPath({ role, returnTo, fallback: "/admin" }));
+    } finally {
       setLoading(false);
     }
   };
@@ -76,7 +103,7 @@ function AdminLoginForm() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@example.com"
+                placeholder="admin@rbabikerentals.com"
                 required
               />
             </label>

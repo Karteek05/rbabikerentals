@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth/auth-client";
+import { loginPathForDashboard } from "@/lib/auth/post-login-redirect";
 import type { Role } from "@/lib/types/domain";
 
 function requiredRoleForPath(pathname: string): Role | null {
@@ -23,7 +24,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
     if (!session?.user) {
       setAuthorized(false);
-      router.push("/login");
+      const loginPath = loginPathForDashboard(pathname);
+      const nextParam =
+        pathname && pathname !== loginPath
+          ? `?next=${encodeURIComponent(pathname)}`
+          : "";
+      router.push(`${loginPath}${nextParam}`);
       return;
     }
 
@@ -45,7 +51,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         if (cancelled) return;
 
         if (!res.ok || !json.ok || !role) {
-          router.push("/login");
+          router.push(`${loginPathForDashboard(pathname)}?next=${encodeURIComponent(pathname)}`);
           return;
         }
 
@@ -57,7 +63,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         setAuthorized(true);
       } catch {
         if (!cancelled) {
-          router.push("/login");
+          router.push(`${loginPathForDashboard(pathname)}?next=${encodeURIComponent(pathname)}`);
         }
       }
     }

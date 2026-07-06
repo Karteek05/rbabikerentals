@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { LogOut, Menu, X } from "lucide-react";
 import { authClient } from "@/lib/auth/auth-client";
+import { dashboardPathForRole } from "@/lib/auth/post-login-redirect";
 
 const NAV_LINKS = [
   { href: "/browse", label: "Browse Bikes" },
@@ -27,7 +28,40 @@ function isLinkActive(pathname: string, href: string) {
 export default function Navbar() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const [dashboardHref, setDashboardHref] = useState<string | null>(null);
   const { data: session } = authClient.useSession();
+
+  useEffect(() => {
+    if (!session?.user) {
+      setDashboardHref(null);
+      return;
+    }
+
+    let cancelled = false;
+    async function loadDashboardHref() {
+      try {
+        const response = await fetch("/api/account/me", {
+          credentials: "include",
+          cache: "no-store"
+        });
+        const json = await response.json();
+        if (cancelled || !response.ok || !json?.ok) {
+          setDashboardHref(null);
+          return;
+        }
+        const role = json.data?.user?.role as string | undefined;
+        const href = dashboardPathForRole(role);
+        setDashboardHref(href === "/profile" ? null : href);
+      } catch {
+        if (!cancelled) setDashboardHref(null);
+      }
+    }
+
+    loadDashboardHref();
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.user]);
 
   useEffect(() => {
     setOpen(false);
@@ -71,8 +105,6 @@ export default function Navbar() {
 
   const displayName = session?.user?.name || session?.user?.email || "Customer";
   const initial = displayName.trim().charAt(0).toUpperCase() || "C";
-  const role = session?.user ? ((session.user as any).role as string) : null;
-  const dashboardHref = role === "admin" ? "/admin" : role === "partner_investor" ? "/partner" : role === "customer" ? "/customer" : null;
   const authMode =
     pathname === "/signup"
       ? "register"

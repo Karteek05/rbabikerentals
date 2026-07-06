@@ -1,15 +1,18 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { authClient } from "@/lib/auth/auth-client";
 import { isGoogleAuthEnabled, startGoogleSignIn } from "@/lib/auth/google-sign-in";
+import { resolvePostLoginPath, resolveSafeReturnTo } from "@/lib/auth/post-login-redirect";
 import Link from "next/link";
 import Icon from "@/app/components/Icon";
 import { motion } from "framer-motion";
 
-export default function SignUpPage() {
+function SignUpForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const returnTo = resolveSafeReturnTo(searchParams.get("returnTo"));
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -24,9 +27,9 @@ export default function SignUpPage() {
 
   useEffect(() => {
     if (session?.user && !showOtp) {
-      router.push("/profile");
+      router.push(returnTo ?? "/profile");
     }
-  }, [session, router, showOtp]);
+  }, [session, router, showOtp, returnTo]);
 
   const handleEmailSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,16 +75,21 @@ export default function SignUpPage() {
       setError(error.message || "Invalid or expired OTP. Please try again.");
       setLoading(false);
     } else {
-      // Successfully verified, now log them in
-      await authClient.signIn.email({ email, password });
-      router.push("/profile");
+      const { error: signInError } = await authClient.signIn.email({ email, password });
+      if (signInError) {
+        setError(signInError.message || "Email verified, but sign-in failed. Please try logging in.");
+        setLoading(false);
+        return;
+      }
+      router.push(resolvePostLoginPath({ role: "customer", returnTo, fallback: "/profile" }));
+      setLoading(false);
     }
   };
 
   const handleGoogleSignUp = async () => {
     setLoading(true);
     setError("");
-    const result = await startGoogleSignIn("/profile");
+    const result = await startGoogleSignIn(returnTo ?? "/profile");
     if (!result.ok) {
       setError(result.error);
       setLoading(false);
@@ -284,5 +292,13 @@ export default function SignUpPage() {
         ) : null}
       </motion.div>
     </div>
+  );
+}
+
+export default function SignUpPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#f7f7f7]" />}>
+      <SignUpForm />
+    </Suspense>
   );
 }

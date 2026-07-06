@@ -928,11 +928,29 @@ export async function getOpenPaymentOrderForBooking(
 export async function getLatestPaymentOrderForBooking(
   bookingId: string
 ): Promise<PaymentOrder | null> {
+  const orders = await listPaymentOrdersForBooking(bookingId);
+  return orders[orders.length - 1] ?? null;
+}
+
+export async function getLatestPaidPaymentOrderForBooking(
+  bookingId: string
+): Promise<PaymentOrder | null> {
+  const orders = await listPaymentOrdersForBooking(bookingId);
+  const refundable = orders.filter((order) => {
+    if (order.status === "paid") return true;
+    const refunded = order.refunded_amount ?? 0;
+    return order.status === "refunded" && refunded < order.amount;
+  });
+  return refundable[refundable.length - 1] ?? null;
+}
+
+export async function listPaymentOrdersForBooking(
+  bookingId: string
+): Promise<PaymentOrder[]> {
   if (getDataMode() === "memory") {
-    const matches = store.paymentOrders
+    return store.paymentOrders
       .filter((item) => item.booking_id === bookingId)
-      .sort((left, right) => right.created_at.localeCompare(left.created_at));
-    return matches[0] ?? null;
+      .sort((left, right) => left.created_at.localeCompare(right.created_at));
   }
 
   const supabase = getSupabaseServiceClient();
@@ -940,8 +958,25 @@ export async function getLatestPaymentOrderForBooking(
     .from("payment_orders")
     .select("*")
     .eq("booking_id", bookingId)
-    .order("created_at", { ascending: false })
-    .limit(1)
+    .order("created_at", { ascending: true });
+  if (error) throwStructuredDbError(error);
+  return (data as PaymentOrder[]) ?? [];
+}
+
+export async function getPaymentOrderByProviderId(
+  providerOrderId: string
+): Promise<PaymentOrder | null> {
+  if (getDataMode() === "memory") {
+    return (
+      store.paymentOrders.find((item) => item.provider_order_id === providerOrderId) ?? null
+    );
+  }
+
+  const supabase = getSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("payment_orders")
+    .select("*")
+    .eq("provider_order_id", providerOrderId)
     .maybeSingle();
   if (error) throwStructuredDbError(error);
   return (data as PaymentOrder | null) ?? null;

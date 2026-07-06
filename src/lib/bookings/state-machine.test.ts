@@ -20,10 +20,24 @@ describe("booking state machine", () => {
     ).not.toThrow();
   });
 
+  it("allows confirmed and extended to request extension", () => {
+    expect(() =>
+      assertCanTransition("confirmed", "extension_requested", "booking.extend.request")
+    ).not.toThrow();
+    expect(() =>
+      assertCanTransition("extended", "extension_requested", "booking.extend.request")
+    ).not.toThrow();
+  });
+
+  it("allows extension_requested to resume as ongoing", () => {
+    expect(() =>
+      assertCanTransition("extension_requested", "ongoing", "booking.resume_after_pickup")
+    ).not.toThrow();
+  });
+
   it("blocks completed to ongoing", () => {
     expect(() =>
       assertCanTransition("completed", "ongoing", "invalid_reopen")
     ).toThrow();
   });
 });
-

@@ -79,7 +79,7 @@ const FAQS = [
   },
   {
     q: "Can I extend a live booking?",
-    a: "Yes. Extension is available through the booking flow, subject to vehicle availability."
+    a: "Yes. Use the extension option from My Bookings on an active ride, subject to vehicle availability."
   },
   {
     q: "How is pricing shown?",
@@ -772,7 +772,7 @@ export default function HomePage() {
       <section className="bg-white py-16 sm:py-20 lg:py-24">
         <div className="section-shell">
           <div className="mb-10 grid gap-6 md:grid-cols-[0.9fr_1.1fr] md:items-end">
-            <h2 className="section-title">Pickup hubs across Bengaluru</h2>
+            <h2 className="section-title">Pickup hub in Bengaluru</h2>
             <p className="section-copy">
               Choose a convenient pickup zone during booking and confirm availability in the flow.
             </p>
@@ -794,6 +794,11 @@ export default function HomePage() {
           <div className="mb-8">
             <p className="mb-3 text-sm font-semibold text-[color:var(--color-accent-strong)]">FAQ</p>
             <h2 className="section-title">Common questions</h2>
+            <p className="mt-3 text-sm text-[color:var(--color-copy)]">
+              <Link href="/faq" className="nav-focus font-semibold underline underline-offset-2">
+                View all FAQs
+              </Link>
+            </p>
           </div>
 
           <div className="rounded-lg border border-[color:var(--color-line)] bg-white px-4 py-2 sm:px-8">

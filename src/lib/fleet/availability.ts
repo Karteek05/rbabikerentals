@@ -1,4 +1,5 @@
 import { PUBLIC_FLEET, PUBLIC_FLEET_BY_ID } from "@/lib/fleet/catalog";
+import { getBookingInventoryWindow } from "@/lib/bookings/inventory-window";
 import { listBookings, listVehicles } from "@/lib/data/repository";
 import type { BookingStatus } from "@/lib/types/domain";
 
@@ -47,7 +48,8 @@ export async function countOverlappingInventoryBookings(
     if (!INVENTORY_HOLDING_STATUSES.has(booking.status)) {
       return false;
     }
-    return windowsOverlap(booking.pickup_at, booking.drop_at, pickupAt, dropAt);
+    const window = getBookingInventoryWindow(booking);
+    return windowsOverlap(window.pickupAt, window.dropAt, pickupAt, dropAt);
   }).length;
 }
 
@@ -78,15 +80,17 @@ export async function getFleetAvailability(params: {
     const isActive = dbVehicle?.is_active ?? catalogVehicle.is_active;
     const totalUnits = getVehicleStockCapacity(catalogVehicle.id);
     const overlappingBookings = bookings.filter(
-      (booking) =>
-        booking.vehicle_id === catalogVehicle.id &&
-        INVENTORY_HOLDING_STATUSES.has(booking.status) &&
-        windowsOverlap(
-          booking.pickup_at,
-          booking.drop_at,
+      (booking) => {
+        if (booking.vehicle_id !== catalogVehicle.id) return false;
+        if (!INVENTORY_HOLDING_STATUSES.has(booking.status)) return false;
+        const window = getBookingInventoryWindow(booking);
+        return windowsOverlap(
+          window.pickupAt,
+          window.dropAt,
           params.pickupAt,
           params.dropAt
-        )
+        );
+      }
     ).length;
     const availableUnits = Math.max(0, totalUnits - overlappingBookings);
 

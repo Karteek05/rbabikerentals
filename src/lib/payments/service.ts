@@ -4,10 +4,13 @@ import {
   getBookingOrThrow,
   getLatestAuditEventForResource,
   getLatestPaymentOrderForBooking,
+  getLatestPaidPaymentOrderForBooking,
   getOpenPaymentOrderForBooking,
+  getPaymentOrderByProviderId,
   getUserOrThrow,
   claimPaymentEvent,
   insertPaymentOrder,
+  listPaymentOrdersForBooking,
   updateBookingIfStatus,
   updatePaymentOrderById,
   updatePaymentOrderByProviderId
@@ -122,6 +125,7 @@ async function finalizeCapturedPayment(params: {
     const updatedBooking = await updateBookingIfStatus(booking.id, "extension_requested", {
       status: "extended",
       drop_at: requestedDropAt,
+      requested_drop_at: null,
       quote: {
         ...booking.quote,
         base_amount: booking.quote.base_amount + extensionQuote.base_amount,
@@ -201,6 +205,43 @@ async function finalizeCapturedPayment(params: {
 
 function isCheckoutOrderId(providerOrderId: string) {
   return providerOrderId.startsWith("order_");
+}
+
+async function resolveCapturedAmount(orderId: string, fallbackAmount: number) {
+  if (!isRazorpayConfigured() || !isCheckoutOrderId(orderId)) {
+    return fallbackAmount;
+  }
+
+  try {
+    const capturedPayment = await fetchCapturedPaymentForOrder(orderId);
+    return capturedPayment?.amount ?? fallbackAmount;
+  } catch (error) {
+    console.error("Failed to fetch captured payment amount:", error);
+    return fallbackAmount;
+  }
+}
+
+async function handlePaymentCapturedEvent(params: {
+  orderId: string;
+  paymentId?: string;
+  paidAmount?: number;
+}) {
+  const existingOrder = await getPaymentOrderByProviderId(params.orderId);
+  let updatedOrder =
+    existingOrder?.status === "paid"
+      ? existingOrder
+      : await updatePaymentOrderByProviderId(params.orderId, {
+          provider_payment_id: params.paymentId,
+          status: "paid",
+          updated_at: new Date().toISOString()
+        });
+
+  if (updatedOrder) {
+    await finalizeCapturedPayment({
+      updatedOrder,
+      paidAmount: params.paidAmount
+    });
+  }
 }
 
 async function syncOpenPaymentOrderForBooking(bookingId: string) {
@@ -293,7 +334,7 @@ export async function confirmRazorpayCheckoutPayment(params: {
 
   const confirmedBooking = await finalizeCapturedPayment({
     updatedOrder,
-    paidAmount: updatedOrder.amount
+    paidAmount: await resolveCapturedAmount(params.orderId, updatedOrder.amount)
   });
 
   if (confirmedBooking.status !== "confirmed" && confirmedBooking.status !== "extended") {
@@ -469,24 +510,30 @@ export async function processRazorpayWebhook(params: {
     payload_hash: payloadHash,
     created_at: new Date().toISOString()
   });
+
+  const paymentEntity = payload.payload?.payment?.entity;
+
   if (!claimed) {
+    if (payload.event === "payment.captured" && paymentEntity?.order_id) {
+      try {
+        await handlePaymentCapturedEvent({
+          orderId: paymentEntity.order_id,
+          paymentId: paymentEntity.id,
+          paidAmount: paymentEntity.amount
+        });
+      } catch (error) {
+        console.error("Failed to retry finalize on duplicate webhook:", error);
+      }
+    }
     return { processed: false, reason: "duplicate_event" };
   }
 
-  if (payload.event === "payment.captured") {
-    const orderId = payload.payload?.payment?.entity?.order_id;
-    const paidAmount = payload.payload?.payment?.entity?.amount;
-    if (orderId) {
-      const updatedOrder = await updatePaymentOrderByProviderId(orderId, {
-        provider_payment_id: payload.payload?.payment?.entity?.id,
-        status: "paid",
-        updated_at: new Date().toISOString()
-      });
-
-      if (updatedOrder) {
-        await finalizeCapturedPayment({ updatedOrder, paidAmount });
-      }
-    }
+  if (payload.event === "payment.captured" && paymentEntity?.order_id) {
+    await handlePaymentCapturedEvent({
+      orderId: paymentEntity.order_id,
+      paymentId: paymentEntity.id,
+      paidAmount: paymentEntity.amount
+    });
   }
 
   if (payload.event === "payment_link.paid") {
@@ -525,26 +572,91 @@ export async function processRazorpayWebhook(params: {
   }
 
   if (payload.event === "payment.failed") {
-    const orderId = payload.payload?.payment?.entity?.order_id;
+    const orderId = paymentEntity?.order_id;
     if (orderId) {
-      await updatePaymentOrderByProviderId(orderId, {
-        status: "failed",
-        updated_at: new Date().toISOString()
-      });
+      const existingOrder = await getPaymentOrderByProviderId(orderId);
+      if (existingOrder?.status === "created") {
+        await updatePaymentOrderByProviderId(orderId, {
+          status: "failed",
+          updated_at: new Date().toISOString()
+        });
+      }
     }
   }
 
   return { processed: true, event: payload.event };
 }
 
-export async function issueBookingRefund(params: {
+export async function refundBookingAmount(params: {
   bookingId: string;
   amountInPaise: number;
   reason?: string;
 }) {
+  if (!Number.isInteger(params.amountInPaise) || params.amountInPaise <= 0) {
+    throw new ApiException(400, "invalid_refund_amount", "Refund amount must be a positive integer.");
+  }
+
+  await getBookingOrThrow(params.bookingId);
+  const paymentOrders = (await listPaymentOrdersForBooking(params.bookingId)).filter(
+    (order) => order.status === "paid" || order.status === "refunded"
+  );
+  if (paymentOrders.length === 0) {
+    throw new ApiException(409, "payment_not_refundable", "Booking does not have a paid payment order.");
+  }
+
+  let remaining = params.amountInPaise;
+  const refunds: Awaited<ReturnType<typeof issueBookingRefund>>[] = [];
+
+  for (const order of paymentOrders) {
+    if (remaining <= 0) {
+      break;
+    }
+    const alreadyRefunded = order.refunded_amount ?? 0;
+    const refundableBalance = order.amount - alreadyRefunded;
+    if (refundableBalance <= 0 || !order.provider_payment_id) {
+      continue;
+    }
+
+    const refundAmount = Math.min(remaining, refundableBalance);
+    refunds.push(
+      await issueBookingRefund({
+        bookingId: params.bookingId,
+        paymentOrderId: order.id,
+        amountInPaise: refundAmount,
+        reason: params.reason
+      })
+    );
+    remaining -= refundAmount;
+  }
+
+  if (remaining > 0) {
+    throw new ApiException(
+      400,
+      "refund_exceeds_payment",
+      "Refund amount exceeds remaining refundable balance across payment orders."
+    );
+  }
+
+  return {
+    booking_id: params.bookingId,
+    refunds,
+    total_refunded: params.amountInPaise
+  };
+}
+
+export async function issueBookingRefund(params: {
+  bookingId: string;
+  paymentOrderId?: string;
+  amountInPaise: number;
+  reason?: string;
+}) {
   const booking = await getBookingOrThrow(params.bookingId);
-  const paymentOrder = await getLatestPaymentOrderForBooking(params.bookingId);
-  if (!paymentOrder || paymentOrder.status !== "paid") {
+  const paymentOrder = params.paymentOrderId
+    ? (await listPaymentOrdersForBooking(params.bookingId)).find(
+        (order) => order.id === params.paymentOrderId
+      ) ?? null
+    : await getLatestPaymentOrderForBooking(params.bookingId);
+  if (!paymentOrder || (paymentOrder.status !== "paid" && paymentOrder.status !== "refunded")) {
     throw new ApiException(409, "payment_not_refundable", "Booking does not have a paid payment order.");
   }
   if (!paymentOrder.provider_payment_id) {
@@ -598,7 +710,7 @@ export async function refundPaymentForBooking(params: {
     throw new ApiException(403, "forbidden", "Only admin can create refunds.");
   }
 
-  const paymentOrder = await getLatestPaymentOrderForBooking(params.bookingId);
+  const paymentOrder = await getLatestPaidPaymentOrderForBooking(params.bookingId);
   if (!paymentOrder) {
     throw new ApiException(409, "payment_not_refundable", "Booking does not have a paid payment order.");
   }

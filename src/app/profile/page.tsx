@@ -20,6 +20,7 @@ import { authClient } from "@/lib/auth/auth-client";
 import { formatBookingReference, getVehicleDisplayName } from "@/lib/fleet/display";
 import { formatBookingStatus } from "@/lib/bookings/status-labels";
 import { isGoogleAuthEnabled, startGoogleSignIn } from "@/lib/auth/google-sign-in";
+import { COMPANY } from "@/lib/legal/company";
 import type { Booking, User } from "@/lib/types/domain";
 import {
   readAccountPayload,
@@ -301,7 +302,14 @@ export default function ProfilePage() {
             </p>
             {account?.accountDeleted ? (
               <div className="mt-5 rounded-[var(--radius-md)] border border-[color:var(--color-danger)]/35 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
-                This account was deleted. Contact RBA support if you need access restored.
+                This account was deleted.{" "}
+                <a
+                  href={`mailto:${COMPANY.supportEmail}?subject=RBA%20account%20restore%20request`}
+                  className="underline underline-offset-2"
+                >
+                  Contact RBA support
+                </a>{" "}
+                if you need access restored.
               </div>
             ) : null}
             {error ? (
@@ -312,9 +320,11 @@ export default function ProfilePage() {
           </div>
 
           <div className="flex min-w-0 flex-col justify-center gap-3 rounded-[var(--radius-md)] border border-[color:var(--color-line)] bg-[color:var(--color-paper)] p-4">
-            <button type="button" onClick={handleGoogleSignIn} className="btn-primary w-full">
-              Continue with Google
-            </button>
+            {isGoogleAuthEnabled ? (
+              <button type="button" onClick={handleGoogleSignIn} className="btn-primary w-full">
+                Continue with Google
+              </button>
+            ) : null}
             <Link href="/login" className="btn-secondary w-full">
               Email sign in
             </Link>
@@ -440,7 +450,14 @@ export default function ProfilePage() {
                 value={user.email || session?.user?.email || "Not added"}
               />
               <p className="text-xs text-[color:var(--color-copy)]">
-                Email is tied to sign-in. Contact support if you need to change it.
+                Email is tied to sign-in.{" "}
+                <a
+                  href={`mailto:${COMPANY.supportEmail}?subject=RBA%20email%20change%20request`}
+                  className="font-semibold underline underline-offset-2"
+                >
+                  Contact support
+                </a>{" "}
+                if you need to change it.
               </p>
               <div className="flex flex-wrap gap-2 pt-1">
                 <button type="submit" disabled={savingProfile} className="btn-primary">

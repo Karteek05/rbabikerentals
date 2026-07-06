@@ -4,14 +4,20 @@ import { COMPANY } from "@/lib/legal/company";
 type LegalPageShellProps = {
   title: string;
   subtitle?: string;
+  eyebrow?: string;
   children: React.ReactNode;
 };
 
-export default function LegalPageShell({ title, subtitle, children }: LegalPageShellProps) {
+export default function LegalPageShell({
+  title,
+  subtitle,
+  eyebrow = "Legal",
+  children
+}: LegalPageShellProps) {
   return (
     <div className="bg-[color:var(--color-paper)] py-12 sm:py-16 lg:py-20">
       <div className="section-shell max-w-3xl">
-        <p className="mb-3 text-sm font-semibold text-[color:var(--color-accent-strong)]">Support</p>
+        <p className="mb-3 text-sm font-semibold text-[color:var(--color-accent-strong)]">{eyebrow}</p>
         <h1 className="section-title mb-3">{title}</h1>
         {subtitle ? (
           <p className="section-copy mb-8 text-[color:var(--color-copy)]">{subtitle}</p>

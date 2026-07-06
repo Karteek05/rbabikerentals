@@ -9,7 +9,9 @@ const FOOTER_LINKS = {
     { label: "My Bookings", href: "/my-bookings" }
   ],
   Support: [
-    { label: "FAQ & Contact", href: "/faq" },
+    { label: "FAQ", href: "/faq" },
+    { label: "Contact", href: "/contact" },
+    { label: "About", href: "/about" },
     { label: "Safety", href: "/safety" },
     { label: "Privacy Policy", href: "/privacy" },
     { label: "Terms & Conditions", href: "/terms" }
@@ -30,18 +32,14 @@ export default function Footer() {
               Bengaluru scooter rentals with GST-inclusive weekly, 15-day, and monthly packages.
             </p>
             <div className="flex flex-col gap-2 text-xs">
-              <Link href="/faq" className="nav-focus text-white/65 hover:text-white transition-colors inline-flex items-center gap-2">
+              <Link href="/contact" className="nav-focus text-white/65 hover:text-white transition-colors inline-flex items-center gap-2">
                 <Icon name="support" className="w-3.5 h-3.5" />
-                FAQ &amp; Contact
+                Contact Support
               </Link>
-              <a href="/login" className="nav-focus text-white/65 hover:text-white transition-colors inline-flex items-center gap-2">
-                <Icon name="mail" className="w-3.5 h-3.5" />
-                Account Login
-              </a>
-              <a href="/my-bookings" className="nav-focus text-white/65 hover:text-white transition-colors inline-flex items-center gap-2">
+              <Link href="/faq" className="nav-focus text-white/65 hover:text-white transition-colors inline-flex items-center gap-2">
                 <Icon name="chat" className="w-3.5 h-3.5" />
-                Booking Support
-              </a>
+                FAQ
+              </Link>
             </div>
           </div>
 

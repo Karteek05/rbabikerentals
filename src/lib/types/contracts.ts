@@ -139,6 +139,7 @@ export interface ConfirmPaymentRequest {
 
 export interface RefundPaymentRequest {
   booking_id: string;
+  /** Amount in paise (INR × 100). Omit to refund the remaining balance on the latest order. */
   amount?: number;
   reason?: string;
 }

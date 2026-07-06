@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
+import type { ReactNode } from "react";
 import Link from "next/link";
 import LegalPageShell from "@/app/components/LegalPageShell";
 import { COMPANY } from "@/lib/legal/company";
 
-const FAQ_ITEMS = [
+const FAQ_ITEMS: Array<{ q: string; a: ReactNode }> = [
   {
     q: "Are package prices inclusive of GST?",
     a: "Yes. Weekly, 15-day, and monthly package rates shown on the website include GST, so you can compare fares directly."
@@ -26,7 +27,7 @@ const FAQ_ITEMS = [
   },
   {
     q: "Can I extend my rental?",
-    a: "Yes, if the scooter is available. Use the extension option from your active booking. Extension charges are calculated from the applicable package rate and must be paid before the new drop time is confirmed."
+    a: "Yes, if the scooter is available. Use the extension option from your active booking in My Bookings. Extension charges are calculated from the applicable package rate and must be paid before the new drop time is confirmed."
   },
   {
     q: "What is your cancellation policy?",
@@ -38,21 +39,48 @@ const FAQ_ITEMS = [
   },
   {
     q: "Where can I pick up the scooter?",
-    a: "Pickup locations are shown during booking. Our current service area focuses on Bengaluru, including Sarjapur Road and nearby zones as listed on the site."
+    a: "Pickup is currently available at Sarjapur Road in Bengaluru, as shown during booking."
   },
   {
     q: "What if the scooter breaks down?",
-    a: "Stop safely and contact us at support@rbabikerentals.com with your booking reference. We will guide you on roadside assistance or a replacement where operationally possible."
+    a: (
+      <>
+        Stop safely and contact us at{" "}
+        <a
+          href={`mailto:${COMPANY.supportEmail}?subject=RBA%20breakdown%20support`}
+          className="nav-focus underline underline-offset-2"
+        >
+          {COMPANY.supportEmail}
+        </a>{" "}
+        with your booking reference. We will guide you on roadside assistance or a replacement where operationally possible.
+      </>
+    )
   },
   {
     q: "Do I need a helmet?",
-    a: "Yes. Always wear an ISI-marked helmet. See our Safety guidelines for full rider expectations."
+    a: (
+      <>
+        Yes. Always wear an ISI-marked helmet. See our{" "}
+        <Link href="/safety" className="nav-focus underline underline-offset-2">
+          Safety guidelines
+        </Link>{" "}
+        for full rider expectations.
+      </>
+    )
   },
   {
     q: "How is my personal data handled?",
-    a: "We process data under India's Digital Personal Data Protection Act, 2023. Read our Privacy Policy for details on collection, rights, and grievance contact."
+    a: (
+      <>
+        We process data under India&apos;s Digital Personal Data Protection Act, 2023. Read our{" "}
+        <Link href="/privacy" className="nav-focus underline underline-offset-2">
+          Privacy Policy
+        </Link>{" "}
+        for details on collection, rights, and grievance contact.
+      </>
+    )
   }
-] as const;
+];
 
 export const metadata: Metadata = {
   title: "FAQ | RBA Bike Rentals",
@@ -62,6 +90,7 @@ export const metadata: Metadata = {
 export default function FaqPage() {
   return (
     <LegalPageShell
+      eyebrow="Help & policies"
       title="Frequently asked questions"
       subtitle="Quick answers about booking, payments, deposits, and riding with RBA in Bengaluru."
     >
@@ -103,8 +132,20 @@ export default function FaqPage() {
             Terms
           </Link>
           {" · "}
+          <Link href="/cookies" className="nav-focus underline underline-offset-2">
+            Cookies
+          </Link>
+          {" · "}
           <Link href="/safety" className="nav-focus underline underline-offset-2">
             Safety
+          </Link>
+          {" · "}
+          <Link href="/about" className="nav-focus underline underline-offset-2">
+            About
+          </Link>
+          {" · "}
+          <Link href="/contact" className="nav-focus underline underline-offset-2">
+            Contact
           </Link>
         </p>
       </section>

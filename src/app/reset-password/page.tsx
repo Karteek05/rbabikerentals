@@ -10,7 +10,7 @@ import { motion } from "framer-motion";
 function ResetPasswordForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const token = searchParams.get("token") || undefined;
+  const token = searchParams.get("token");
   
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -20,6 +20,11 @@ function ResetPasswordForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!token) {
+      setError("This reset link is invalid or has expired. Please request a new password reset email.");
+      return;
+    }
+
     setLoading(true);
     setError("");
 
@@ -29,13 +34,13 @@ function ResetPasswordForm() {
       return;
     }
 
-    const { error } = await authClient.resetPassword({
+    const { error: resetError } = await authClient.resetPassword({
       newPassword: password,
-      token,
+      token
     });
 
-    if (error) {
-      setError(error.message || "Failed to reset password. The link might be expired or invalid.");
+    if (resetError) {
+      setError(resetError.message || "Failed to reset password. The link might be expired or invalid.");
     } else {
       setSuccess(true);
       setTimeout(() => {
@@ -79,6 +84,15 @@ function ResetPasswordForm() {
               </p>
               <Link href="/login" className="btn-secondary w-full py-3 block text-sm font-bold">
                 Go to Login
+              </Link>
+            </div>
+          ) : !token ? (
+            <div className="text-center">
+              <p className="text-sm text-[#526074] mb-6">
+                This reset link is invalid or has expired. Request a new password reset email to continue.
+              </p>
+              <Link href="/forgot-password" className="btn-primary w-full py-3 block text-sm font-bold">
+                Request new reset link
               </Link>
             </div>
           ) : (

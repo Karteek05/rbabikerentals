@@ -84,6 +84,7 @@ export interface Booking {
   pickup_address?: string | null;
   pickup_latitude?: number | null;
   pickup_longitude?: number | null;
+  requested_drop_at?: string | null;
   quote: PricingQuote;
   coupon_code?: string;
   km_limit_bucket: "day" | "week" | "month";

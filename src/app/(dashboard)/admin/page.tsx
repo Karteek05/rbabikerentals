@@ -233,6 +233,46 @@ export default function AdminDashboardPage() {
     }
   }
 
+  async function startBookingRide(bookingId: string) {
+    setError(null);
+    setLoading(`start-${bookingId}`);
+    try {
+      const res = await fetch(`/api/admin/bookings/${bookingId}/start`, {
+        method: "POST",
+        ...fetchInit
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) {
+        setError(json?.error?.message ?? "Failed to start booking");
+      } else {
+        showSuccess(`Booking ${bookingId} marked as ongoing.`);
+        await refreshAll();
+      }
+    } finally {
+      setLoading(null);
+    }
+  }
+
+  async function completeBookingRide(bookingId: string) {
+    setError(null);
+    setLoading(`complete-${bookingId}`);
+    try {
+      const res = await fetch(`/api/admin/bookings/${bookingId}/complete`, {
+        method: "POST",
+        ...fetchInit
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) {
+        setError(json?.error?.message ?? "Failed to complete booking");
+      } else {
+        showSuccess(`Booking ${bookingId} marked as completed.`);
+        await refreshAll();
+      }
+    } finally {
+      setLoading(null);
+    }
+  }
+
   async function saveVehicle() {
     setError(null);
     setLoading("save-vehicle");
@@ -948,6 +988,34 @@ export default function AdminDashboardPage() {
                                 <Icon name="checkCircle" className="w-4 h-4" />
                               )}{" "}
                               Approve
+                            </button>
+                          )}
+                          {["confirmed", "extended", "extension_requested"].includes(booking.status) && (
+                            <button
+                              className="btn btn-primary btn-sm"
+                              onClick={() => startBookingRide(booking.id)}
+                              disabled={loading === `start-${booking.id}`}
+                            >
+                              {loading === `start-${booking.id}` ? (
+                                <span className="spinner" />
+                              ) : (
+                                <Icon name="scooter" className="w-4 h-4" />
+                              )}{" "}
+                              Start
+                            </button>
+                          )}
+                          {["ongoing", "extended"].includes(booking.status) && (
+                            <button
+                              className="btn btn-secondary btn-sm"
+                              onClick={() => completeBookingRide(booking.id)}
+                              disabled={loading === `complete-${booking.id}`}
+                            >
+                              {loading === `complete-${booking.id}` ? (
+                                <span className="spinner" />
+                              ) : (
+                                <Icon name="checkCircle" className="w-4 h-4" />
+                              )}{" "}
+                              Complete
                             </button>
                           )}
                         {!["cancelled", "completed"].includes(booking.status) && (

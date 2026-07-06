@@ -303,7 +303,7 @@ export default function MyBookingsPage() {
   async function handleExtend(booking: Booking) {
     setActionLoading(`extend-${booking.id}`);
     setError(null);
-    const drop = new Date(Date.now() + 24 * 3_600_000).toISOString();
+    const drop = new Date(new Date(booking.drop_at).getTime() + 24 * 3_600_000).toISOString();
     try {
       const res = await fetch(`/api/bookings/${booking.id}/extend`, {
         method: "POST",

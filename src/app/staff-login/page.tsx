@@ -111,6 +111,17 @@ function StaffLoginForm() {
       setError(error.message || "Invalid or expired OTP. Please try again.");
       setLoading(false);
     } else {
+      const normalizedEmail = email.trim().toLowerCase();
+      const { error: signInError } = await authClient.signIn.email({
+        email: normalizedEmail,
+        password
+      });
+      if (signInError) {
+        setError(signInError.message || "Email verified, but sign-in failed. Please try logging in.");
+        setLoading(false);
+        return;
+      }
+
       const roleRes = await fetch("/api/account/staff-role", {
         method: "POST",
         credentials: "include",
