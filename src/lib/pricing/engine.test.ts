@@ -48,6 +48,33 @@ describe("pricing engine", () => {
     expect(quote.excess_km_rate).toBe(5);
   });
 
+  it("derives list daily rate from weekly rate when hourly rate is zero", () => {
+    const quote = buildPricingQuoteFromVehicle(
+      {
+        id: "veh_001",
+        owner_id: "partner_001",
+        city: "bengaluru",
+        category: "scooter",
+        brand: "Honda",
+        model: "Activa",
+        is_active: true,
+        deposit_amount: 2000,
+        rate_per_hour: 0,
+        rate_per_day: 3200,
+        rate_per_week: 1600,
+        rate_per_month: 6000
+      },
+      {
+        duration_bucket: "week",
+        duration_value: 1
+      }
+    );
+
+    expect(quote.vehicle_rental_cost).toBe(1600);
+    expect(quote.plan_discount).toBe(0);
+    expect(quote.total_payable).toBe(3600);
+  });
+
   it("does not change weekly package payable totals", () => {
     const quote = buildPricingQuoteFromVehicle(sampleVehicle, {
       duration_bucket: "week",

@@ -17,9 +17,6 @@ export const metadata: Metadata = {
   description: DEFAULT_SEO.description,
   keywords: [...DEFAULT_SEO.keywords],
   applicationName: SITE_NAME,
-  alternates: {
-    canonical: siteUrl
-  },
   openGraph: {
     type: "website",
     locale: "en_IN",

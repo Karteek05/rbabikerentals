@@ -70,7 +70,7 @@ export function resolveListDailyRate(vehicle: Pick<Vehicle, "rate_per_hour" | "r
   if (vehicle.rate_per_hour > 0) {
     return vehicle.rate_per_hour * 24;
   }
-  return Math.round((vehicle.rate_per_week / 7) * 3);
+  return vehicle.rate_per_week / 7;
 }
 
 function resolvePackageBaseAmount(
