@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import CostBreakdown from "../../components/CostBreakdown";
 import Sidebar from "../../components/Sidebar";
 import Icon, { type IconName } from "../../components/Icon";
 import { formatBookingStatus } from "@/lib/bookings/status-labels";
@@ -21,17 +22,7 @@ type Booking = {
   };
 };
 
-type QuoteData = {
-  base_amount?: number;
-  duration_amount?: number;
-  addon_amount?: number;
-  coupon_discount?: number;
-  deposit_amount?: number;
-  tax_amount?: number;
-  total_payable?: number;
-  km_included?: number;
-  excess_km_rate?: number;
-};
+import type { PricingQuote } from "@/lib/types/domain";
 
 type VehicleOption = {
   id: string;
@@ -70,7 +61,7 @@ function formatDate(iso: string) {
 
 export default function CustomerDashboardPage() {
   const [userId, setUserId] = useState("cust_001");
-  const [quote, setQuote] = useState<QuoteData | null>(null);
+  const [quote, setQuote] = useState<PricingQuote | null>(null);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -406,48 +397,8 @@ export default function CustomerDashboardPage() {
           </div>
 
           {quote && (
-            <div className="quote-panel mt-4">
-              <div style={{ fontWeight: 700, marginBottom: 12, color: "var(--primary)" }} className="inline-flex items-center gap-2">
-                <Icon name="money" className="w-4 h-4" />
-                Price Breakdown - {selectedVehicle.name}
-              </div>
-              <div className="quote-row">
-                <span className="text-muted">Base Amount</span>
-                <span>₹{(quote.base_amount ?? 0).toLocaleString()}</span>
-              </div>
-              <div className="quote-row">
-                <span className="text-muted">Duration</span>
-                <span>₹{(quote.duration_amount ?? 0).toLocaleString()}</span>
-              </div>
-              {(quote.addon_amount ?? 0) > 0 && (
-                <div className="quote-row">
-                  <span className="text-muted">Add-ons (Helmet)</span>
-                  <span>₹{(quote.addon_amount ?? 0).toLocaleString()}</span>
-                </div>
-              )}
-              {(quote.coupon_discount ?? 0) > 0 && (
-                <div className="quote-row">
-                  <span className="text-muted">Coupon Discount</span>
-                  <span style={{ color: "#22c55e" }}>-₹{(quote.coupon_discount ?? 0).toLocaleString()}</span>
-                </div>
-              )}
-              <div className="quote-row">
-                <span className="text-muted">Deposit</span>
-                <span>₹{(quote.deposit_amount ?? 0).toLocaleString()}</span>
-              </div>
-              <div className="quote-row">
-                <span className="text-muted">Tax</span>
-                <span>₹{(quote.tax_amount ?? 0).toLocaleString()}</span>
-              </div>
-              <div className="quote-row total">
-                <span>Total Payable</span>
-                <span>₹{(quote.total_payable ?? 0).toLocaleString()}</span>
-              </div>
-              {quote.km_included && (
-                <div style={{ marginTop: 10, fontSize: "0.78rem", color: "var(--on-surface-dim)" }}>
-                  Included: {quote.km_included} km • Excess: ₹{quote.excess_km_rate}/km
-                </div>
-              )}
+            <div className="mt-4">
+              <CostBreakdown quote={quote} showDeposit />
             </div>
           )}
         </div>

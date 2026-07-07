@@ -1,12 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import CostBreakdown from "../components/CostBreakdown";
 import Icon, { type IconName } from "../components/Icon";
 import { PUBLIC_FLEET_BY_ID } from "@/lib/fleet/catalog";
 import { formatBookingReference, getVehicleDisplayName } from "@/lib/fleet/display";
 import { formatBookingStatus } from "@/lib/bookings/status-labels";
 import { openRazorpayCheckout } from "@/lib/payments/razorpay-checkout-client";
 import { authClient } from "@/lib/auth/auth-client";
+
+import type { PricingQuote } from "@/lib/types/domain";
 
 type Booking = {
   id: string;
@@ -15,11 +18,7 @@ type Booking = {
   pickup_at: string;
   drop_at: string;
   pickup_zone?: string | null;
-  quote: {
-    total_payable: number;
-    base_amount?: number;
-    duration_amount?: number;
-  };
+  quote: PricingQuote;
   cancel_reason?: string;
 };
 
@@ -563,6 +562,23 @@ export default function MyBookingsPage() {
                             {actCancel ? "Cancelling..." : "Cancel Booking"}
                           </button>
                         )}
+                      </div>
+                    )}
+
+                    {(booking.status === "payment_pending" ||
+                      booking.status === "confirmed" ||
+                      booking.status === "extended" ||
+                      booking.status === "ongoing" ||
+                      booking.status === "completed") && (
+                      <div className="mt-4">
+                        <CostBreakdown
+                          quote={booking.quote}
+                          amountPaid={
+                            booking.status === "payment_pending" ? 0 : booking.quote.total_payable
+                          }
+                          variant="dark"
+                          showDeposit
+                        />
                       </div>
                     )}
 

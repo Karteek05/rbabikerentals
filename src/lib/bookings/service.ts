@@ -24,6 +24,7 @@ import { isVehicleAvailableForWindow } from "@/lib/fleet/availability";
 import {
   computeCancellationBreakup,
   computePricingQuote,
+  mergePricingQuotes,
   resolveDurationValueFromWindow
 } from "@/lib/pricing/engine";
 import type {
@@ -236,7 +237,7 @@ export async function extendBooking(
   const extensionQuote: PricingQuote = {
     ...additionalQuote,
     deposit_amount: 0,
-    total_payable: additionalQuote.total_payable - additionalQuote.deposit_amount
+    total_payable: additionalQuote.total_cost ?? additionalQuote.total_payable
   };
 
   const extensionAmountPaise = extensionQuote.total_payable * 100;
@@ -338,17 +339,7 @@ export async function extendBooking(
     status: "extended",
     drop_at: input.requested_drop_at,
     requested_drop_at: null,
-    quote: {
-      ...booking.quote,
-      base_amount: booking.quote.base_amount + extensionQuote.base_amount,
-      duration_amount: booking.quote.duration_amount + extensionQuote.duration_amount,
-      addon_amount: booking.quote.addon_amount + extensionQuote.addon_amount,
-      coupon_discount: booking.quote.coupon_discount + extensionQuote.coupon_discount,
-      tax_amount: booking.quote.tax_amount + extensionQuote.tax_amount,
-      total_payable: booking.quote.total_payable + extensionQuote.total_payable,
-      km_included: booking.quote.km_included + extensionQuote.km_included,
-      excess_km_rate: booking.quote.excess_km_rate
-    },
+    quote: mergePricingQuotes(booking.quote, extensionQuote),
     updated_at: new Date().toISOString()
   });
 

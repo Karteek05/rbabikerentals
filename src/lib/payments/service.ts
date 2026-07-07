@@ -24,6 +24,7 @@ import {
   verifyRazorpaySignature
 } from "@/lib/integrations/razorpay";
 import { notifyAdmin, notifyUser, resolveUserNotificationEmail } from "@/lib/notifications/service";
+import { mergePricingQuotes } from "@/lib/pricing/engine";
 import type { PricingQuote, Role } from "@/lib/types/domain";
 import { ApiException } from "@/lib/utils/errors";
 import { newId } from "@/lib/utils/ids";
@@ -126,17 +127,7 @@ async function finalizeCapturedPayment(params: {
       status: "extended",
       drop_at: requestedDropAt,
       requested_drop_at: null,
-      quote: {
-        ...booking.quote,
-        base_amount: booking.quote.base_amount + extensionQuote.base_amount,
-        duration_amount: booking.quote.duration_amount + extensionQuote.duration_amount,
-        addon_amount: booking.quote.addon_amount + extensionQuote.addon_amount,
-        coupon_discount: booking.quote.coupon_discount + extensionQuote.coupon_discount,
-        tax_amount: booking.quote.tax_amount + extensionQuote.tax_amount,
-        total_payable: booking.quote.total_payable + extensionQuote.total_payable,
-        km_included: booking.quote.km_included + extensionQuote.km_included,
-        excess_km_rate: booking.quote.excess_km_rate
-      },
+      quote: mergePricingQuotes(booking.quote, extensionQuote),
       updated_at: new Date().toISOString()
     });
     if (!updatedBooking) {

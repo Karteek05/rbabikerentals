@@ -6,7 +6,9 @@ import Icon from "../../components/Icon";
 import BookingScheduleFields from "../../components/BookingScheduleFields";
 import LoginPromptModal from "../../components/LoginPromptModal";
 import BookingFeedbackModal from "../../components/BookingFeedbackModal";
+import CostBreakdown from "../../components/CostBreakdown";
 import { authClient } from "@/lib/auth/auth-client";
+import { buildPricingQuoteFromVehicle } from "@/lib/pricing/engine";
 import {
   GST_INCLUSIVE_COPY,
   PACKAGE_PLANS,
@@ -28,16 +30,7 @@ import {
   toDateValue
 } from "@/lib/datetime/booking-schedule-ui";
 
-type Quote = {
-  base_amount: number;
-  addon_amount: number;
-  coupon_discount: number;
-  deposit_amount: number;
-  tax_amount: number;
-  total_payable: number;
-  km_included: number;
-  excess_km_rate: number;
-};
+import type { PricingQuote } from "@/lib/types/domain";
 
 const API_HEADERS = {
   "Content-Type": "application/json"
@@ -115,15 +108,6 @@ function getBookingErrorMessage(
   return error?.message ?? "Booking failed.";
 }
 
-function QuoteRow({ label, value, highlight = false }: { label: string; value: string; highlight?: boolean }) {
-  return (
-    <div className={`flex justify-between py-2.5 text-sm ${highlight ? "mt-1 border-t border-black/10 pt-3 font-bold text-black" : "text-uber-body-gray"}`}>
-      <span>{label}</span>
-      <span className="text-black">{value}</span>
-    </div>
-  );
-}
-
 export default function BookPage() {
   const params = useParams();
   const searchParams = useSearchParams();
@@ -152,7 +136,7 @@ export default function BookPage() {
   const [legalName, setLegalName] = useState("");
   const [profileEmail, setProfileEmail] = useState("");
   const [mobile, setMobile] = useState("");
-  const [quote, setQuote] = useState<Quote | null>(null);
+  const [quote, setQuote] = useState<PricingQuote | null>(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const [bookingLoading, setBookingLoading] = useState(false);
@@ -172,29 +156,37 @@ export default function BookPage() {
     return params ? `/book/${vehicleId}?${params}` : `/book/${vehicleId}`;
   }, [searchParams, vehicleId]);
 
-  const estimatedQuote = useMemo<Quote | null>(() => {
+  const durationBucket = PACKAGE_TO_BUCKET[packageKey];
+  const durationValue = PACKAGE_TO_VALUE[packageKey];
+
+  const estimatedQuote = useMemo<PricingQuote | null>(() => {
     if (!vehicle) return null;
-    const baseAmount = getPackageRate(vehicle, packageKey);
-    const addonAmount = extraHelmet ? 50 : 0;
-    const depositAmount = vehicle.deposit_amount;
-    const kmIncluded =
-      packageKey === "rate_per_month" ? 3600 : packageKey === "rate_per_day" ? 1800 : 900;
-    return {
-      base_amount: baseAmount,
-      addon_amount: addonAmount,
-      coupon_discount: 0,
-      deposit_amount: depositAmount,
-      tax_amount: 0,
-      total_payable: baseAmount + addonAmount + depositAmount,
-      km_included: kmIncluded,
-      excess_km_rate: 5
-    };
-  }, [vehicle, packageKey, extraHelmet]);
+    return buildPricingQuoteFromVehicle(
+      {
+        id: vehicle.id,
+        owner_id: "public",
+        city: vehicle.city,
+        category: vehicle.category,
+        brand: vehicle.brand,
+        model: vehicle.model,
+        is_active: vehicle.is_active,
+        deposit_amount: vehicle.deposit_amount,
+        rate_per_hour: vehicle.rate_per_hour,
+        rate_per_day: vehicle.rate_per_day,
+        rate_per_week: vehicle.rate_per_week,
+        rate_per_month: vehicle.rate_per_month
+      },
+      {
+        duration_bucket: durationBucket,
+        duration_value: durationValue,
+        extra_helmet_count: extraHelmet ? 1 : 0,
+        coupon_code: coupon || undefined
+      }
+    );
+  }, [vehicle, durationBucket, durationValue, extraHelmet, coupon]);
 
   const displayQuote = quote ?? (isSignedIn ? null : estimatedQuote);
 
-  const durationBucket = PACKAGE_TO_BUCKET[packageKey];
-  const durationValue = PACKAGE_TO_VALUE[packageKey];
   const pickupAt = toDateTimeIso(pickupDate, pickupTime);
   const dropAt = toDateTimeIso(dropDate, dropTime);
   const scheduleValid = fromDateTimeParts(dropDate, dropTime).getTime() > fromDateTimeParts(pickupDate, pickupTime).getTime();
@@ -570,21 +562,7 @@ export default function BookPage() {
                         Estimated total — sign in for your exact quote.
                       </p>
                     ) : null}
-                    <QuoteRow label="Package fare" value={rupees(displayQuote.base_amount)} />
-                    {displayQuote.addon_amount > 0 && (
-                      <QuoteRow label="Extra helmet" value={rupees(displayQuote.addon_amount)} />
-                    )}
-                    {displayQuote.coupon_discount > 0 && (
-                      <QuoteRow label="Coupon discount" value={`-${rupees(displayQuote.coupon_discount)}`} />
-                    )}
-                    <QuoteRow label="GST" value="Included" />
-                    {displayQuote.deposit_amount > 0 && (
-                      <QuoteRow label="Security deposit" value={rupees(displayQuote.deposit_amount)} />
-                    )}
-                    <QuoteRow label="Total payable" value={rupees(displayQuote.total_payable)} highlight />
-                    <p className="mt-2 text-xs text-uber-muted-gray">
-                      Includes {displayQuote.km_included} km - Rs. {displayQuote.excess_km_rate}/km extra
-                    </p>
+                    <CostBreakdown quote={displayQuote} showDeposit />
                   </>
                 ) : isSignedIn ? (
                   <p className="py-2 text-xs text-uber-muted-gray">Select dates to calculate your quote.</p>

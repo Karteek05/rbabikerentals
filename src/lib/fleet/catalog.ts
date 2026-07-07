@@ -20,7 +20,7 @@ export type PublicFleetVehicle = {
   spec: string;
 };
 
-export const GST_INCLUSIVE_COPY = "Rates include GST";
+export const GST_INCLUSIVE_COPY = "Package fares include GST";
 
 export const PUBLIC_FLEET: PublicFleetVehicle[] = [
   {

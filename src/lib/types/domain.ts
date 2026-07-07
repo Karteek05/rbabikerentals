@@ -21,12 +21,17 @@ export type BookingStatus =
   | "cancelled";
 
 export interface PricingQuote {
+  vehicle_rental_cost?: number;
+  plan_discount?: number;
   base_amount: number;
   duration_amount: number;
   addon_amount: number;
   coupon_discount: number;
   deposit_amount: number;
+  cgst_amount?: number;
+  sgst_amount?: number;
   tax_amount: number;
+  total_cost?: number;
   total_payable: number;
   km_included: number;
   excess_km_rate: number;
