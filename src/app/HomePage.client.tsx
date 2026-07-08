@@ -657,11 +657,10 @@ export default function HomePage() {
 
               <div className="mb-5">
                 <label className="mb-1.5 block text-xs font-bold text-[color:var(--color-muted)]">Pickup location</label>
-                <select value={pickupLocation} onChange={(e) => setPickupLocation(e.target.value)} className="field-control">
-                  {LOCATIONS.map((location) => (
-                    <option key={location}>{location}</option>
-                  ))}
-                </select>
+                <div className="field-control flex items-center bg-[color:var(--color-paper-2)] text-[color:var(--color-copy)]">
+                  <Icon name="location" className="mr-2 h-4 w-4 text-[color:var(--color-muted)]" />
+                  {pickupLocation}
+                </div>
               </div>
 
               <p className="mb-3 text-xs text-[color:var(--color-copy)]">
@@ -772,9 +771,9 @@ export default function HomePage() {
       <section className="bg-white py-16 sm:py-20 lg:py-24">
         <div className="section-shell">
           <div className="mb-10 grid gap-6 md:grid-cols-[0.9fr_1.1fr] md:items-end">
-            <h2 className="section-title">Pickup hub in Bengaluru</h2>
+            <h2 className="section-title">Our location in Bengaluru</h2>
             <p className="section-copy">
-              Choose a convenient pickup zone during booking and confirm availability in the flow.
+              Pick up your scooter at our Sarjapur Road store after confirming availability.
             </p>
           </div>
 
