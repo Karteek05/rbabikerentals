@@ -534,13 +534,17 @@ export default function MyBookingsPage() {
                       </div>
                     </div>
 
-                    {(isActionable || isCancellable) && (
+                    {(isActionable || isCancellable || booking.status === "payment_pending" || booking.status === "admin_review" || booking.status === "pending_kyc") && (
                       <div className="mt-4 pt-4 border-t border-black/5 flex gap-3 flex-wrap">
-                      {(isActionable || booking.status === "payment_pending") && (
+                      {(isActionable || booking.status === "payment_pending" || booking.status === "admin_review" || booking.status === "pending_kyc") && (
                         <button
-                          onClick={() =>
-                            booking.status === "payment_pending" ? handlePay(booking) : handleExtend(booking)
-                          }
+                          onClick={() => {
+                            if (booking.status === "admin_review" || booking.status === "pending_kyc") {
+                              alert("Please wait. Your booking is still being reviewed by the admin. You will be able to pay once it is approved.");
+                              return;
+                            }
+                            booking.status === "payment_pending" ? handlePay(booking) : handleExtend(booking);
+                          }}
                           disabled={booking.status === "payment_pending" ? actPay : actExtend}
                           className="btn-primary text-sm py-2 px-5 disabled:opacity-50"
                         >
