@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth/auth-client";
 import { loginPathForDashboard } from "@/lib/auth/post-login-redirect";
-import type { Role } from "@/lib/types/domain";
+import type { PartnerApplicationStatus, Role } from "@/lib/types/domain";
 
 function requiredRoleForPath(pathname: string): Role | null {
   if (pathname === "/admin" || pathname.startsWith("/admin/")) return "admin";
@@ -26,9 +26,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       setAuthorized(false);
       const loginPath = loginPathForDashboard(pathname);
       const nextParam =
-        pathname && pathname !== loginPath
-          ? `?next=${encodeURIComponent(pathname)}`
-          : "";
+        pathname && pathname !== loginPath ? `?next=${encodeURIComponent(pathname)}` : "";
       router.push(`${loginPath}${nextParam}`);
       return;
     }
@@ -46,17 +44,49 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       try {
         const res = await fetch("/api/account/me", { credentials: "include" });
         const json = await res.json();
-        const role = json?.data?.user?.role as Role | undefined;
+        const user = json?.data?.user as
+          | {
+              role?: Role;
+              partner_application_status?: PartnerApplicationStatus | null;
+            }
+          | undefined;
 
         if (cancelled) return;
 
-        if (!res.ok || !json.ok || !role) {
+        if (!res.ok || !json.ok || !user?.role) {
           router.push(`${loginPathForDashboard(pathname)}?next=${encodeURIComponent(pathname)}`);
           return;
         }
 
-        if (role !== requiredRole) {
-          router.push(role === "admin" ? "/admin" : role === "partner_investor" ? "/partner" : "/");
+        if (requiredRole === "partner_investor") {
+          if (user.role !== "partner_investor") {
+            if (user.partner_application_status === "pending") {
+              router.push("/partner-apply?status=pending");
+              return;
+            }
+            if (user.partner_application_status === "rejected") {
+              router.push("/partner-apply?status=rejected");
+              return;
+            }
+            router.push("/partner-apply");
+            return;
+          }
+          if (user.partner_application_status === "pending") {
+            router.push("/partner-apply?status=pending");
+            return;
+          }
+          if (user.partner_application_status === "rejected") {
+            router.push("/partner-apply?status=rejected");
+            return;
+          }
+        } else if (user.role !== requiredRole) {
+          router.push(
+            user.role === "admin"
+              ? "/admin"
+              : user.role === "partner_investor"
+                ? "/partner"
+                : "/"
+          );
           return;
         }
 
@@ -78,7 +108,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   if (!authorized) {
     return (
       <div className="flex h-screen items-center justify-center bg-[#f7f7f7]">
-        <div className="text-sm font-medium text-[#afafaf] uppercase tracking-wider">Loading...</div>
+        <div className="text-sm font-medium uppercase tracking-wider text-[#afafaf]">Loading...</div>
       </div>
     );
   }

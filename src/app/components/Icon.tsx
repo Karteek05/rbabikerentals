@@ -21,10 +21,12 @@ import {
   FileText,
   AlertTriangle,
   X,
+  Filter,
   Sparkles,
   Clock,
   Calendar,
   Briefcase,
+  ChevronRight,
   type LucideIcon,
   type LucideProps,
   UserPlus
@@ -58,7 +60,9 @@ export type IconName =
   | "clock"
   | "calendar"
   | "briefcase"
-  | "user-plus";
+  | "user-plus"
+  | "filter"
+  | "chevron-right";
 
 interface IconProps extends LucideProps {
   name: IconName;
@@ -93,6 +97,8 @@ const iconMap: Record<IconName, LucideIcon> = {
   calendar: Calendar,
   briefcase: Briefcase,
   "user-plus": UserPlus,
+  filter: Filter,
+  "chevron-right": ChevronRight,
 };
 
 export default function Icon({ name, className, ...props }: IconProps) {

@@ -114,7 +114,8 @@ export const store: {
       name: "Nikhil Fleet Partner",
       role: "partner_investor",
       city: "bengaluru",
-      kyc_status: "verified"
+      kyc_status: "verified",
+      partner_application_status: "approved"
     },
     {
       id: "admin_001",

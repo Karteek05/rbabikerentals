@@ -56,8 +56,26 @@ type VehicleForm = {
   rate_per_month: number;
 };
 
+type PartnerApplication = {
+  id: string;
+  name: string;
+  email?: string | null;
+  phone?: string | null;
+  partner_business_name?: string | null;
+  partner_application_status?: string | null;
+  partner_applied_at?: string | null;
+  partner_rejection_reason?: string | null;
+};
+
+type ApprovedPartner = {
+  id: string;
+  name: string;
+  vehicle_count: number;
+};
+
 const navItems = [
   { href: "/admin", icon: "settings", label: "Dashboard" },
+  { href: "/admin#partner-applications", icon: "briefcase", label: "Partners" },
   { href: "/admin#fleet", icon: "bike", label: "Fleet Ops" },
   { href: "/admin#bookings", icon: "list", label: "Bookings" },
   { href: "/admin#tracking", icon: "location", label: "Live Tracking" },
@@ -124,6 +142,14 @@ export default function AdminDashboardPage() {
   const [vehicleForm, setVehicleForm] = useState<VehicleForm>(emptyVehicleForm);
   const [newImageUrl, setNewImageUrl] = useState("");
   const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [partnerApplications, setPartnerApplications] = useState<PartnerApplication[]>([]);
+  const [approvedPartners, setApprovedPartners] = useState<ApprovedPartner[]>([]);
+  const [partnerAppFilter, setPartnerAppFilter] = useState<"pending" | "approved" | "rejected" | "all">(
+    "pending"
+  );
+  const [rejectReason, setRejectReason] = useState("");
+  const [rejectingUserId, setRejectingUserId] = useState<string | null>(null);
+  const [pendingPartnerCount, setPendingPartnerCount] = useState(0);
 
   const fetchInit = useMemo(
     () => ({
@@ -149,15 +175,23 @@ export default function AdminDashboardPage() {
     setError(null);
     setLoading("refresh");
     try {
-      const [bookingsRes, trackingRes, vehiclesRes] = await Promise.all([
+      const [bookingsRes, trackingRes, vehiclesRes, partnersRes, applicationsRes, pendingAppsRes] =
+        await Promise.all([
         fetch("/api/admin/bookings", { ...fetchInit }),
         fetch("/api/admin/tracking", { ...fetchInit }),
-        fetch("/api/admin/vehicles?include_inactive=true", { ...fetchInit })
+        fetch("/api/admin/vehicles?include_inactive=true", { ...fetchInit }),
+        fetch("/api/admin/partners", { ...fetchInit }),
+        fetch(`/api/admin/partners/applications?status=${partnerAppFilter}`, { ...fetchInit }),
+        fetch("/api/admin/partners/applications?status=pending", { ...fetchInit })
       ]);
-      const [bookingsJson, trackingJson, vehiclesJson] = await Promise.all([
+      const [bookingsJson, trackingJson, vehiclesJson, partnersJson, applicationsJson, pendingAppsJson] =
+        await Promise.all([
         bookingsRes.json(),
         trackingRes.json(),
-        vehiclesRes.json()
+        vehiclesRes.json(),
+        partnersRes.json(),
+        applicationsRes.json(),
+        pendingAppsRes.json()
       ]);
 
       if (!bookingsRes.ok || !bookingsJson.ok) {
@@ -178,6 +212,31 @@ export default function AdminDashboardPage() {
       setTrackingItems(trackingJson.data.items ?? []);
       setVehicles(nextVehicles);
 
+      if (!partnersRes.ok || !partnersJson.ok) {
+        setError(partnersJson?.error?.message ?? "Failed to load partners");
+      } else {
+        const nextPartners = (partnersJson.data.partners as ApprovedPartner[]) ?? [];
+        setApprovedPartners(nextPartners);
+        if (nextPartners.length) {
+          setVehicleForm((prev) => {
+            if (nextPartners.some((partner) => partner.id === prev.owner_id)) return prev;
+            return { ...prev, owner_id: nextPartners[0].id };
+          });
+        }
+      }
+
+      if (!applicationsRes.ok || !applicationsJson.ok) {
+        setError((current) =>
+          current ?? applicationsJson?.error?.message ?? "Failed to load partner applications"
+        );
+      } else {
+        setPartnerApplications(applicationsJson.data.applications ?? []);
+      }
+
+      if (pendingAppsRes.ok && pendingAppsJson.ok) {
+        setPendingPartnerCount((pendingAppsJson.data.applications ?? []).length);
+      }
+
       if (editingVehicleId && !nextVehicles.some((vehicle) => vehicle.id === editingVehicleId)) {
         setEditingVehicleId(null);
         setVehicleForm(emptyVehicleForm);
@@ -185,7 +244,7 @@ export default function AdminDashboardPage() {
     } finally {
       setLoading(null);
     }
-  }, [fetchInit, editingVehicleId]);
+  }, [fetchInit, editingVehicleId, partnerAppFilter]);
 
   useEffect(() => {
     refreshAll().catch((e) => setError(String(e)));
@@ -205,6 +264,49 @@ export default function AdminDashboardPage() {
         setError(json?.error?.message ?? "Failed to reject booking");
       } else {
         showSuccess(`Booking ${bookingId} rejected.`);
+        await refreshAll();
+      }
+    } finally {
+      setLoading(null);
+    }
+  }
+
+  async function approvePartnerApplication(userId: string) {
+    setError(null);
+    setLoading(`partner-approve-${userId}`);
+    try {
+      const res = await fetch(`/api/admin/partners/applications/${userId}/approve`, {
+        method: "POST",
+        ...fetchInit
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) {
+        setError(json?.error?.message ?? "Failed to approve partner application");
+      } else {
+        showSuccess(`Partner application approved for ${userId}.`);
+        await refreshAll();
+      }
+    } finally {
+      setLoading(null);
+    }
+  }
+
+  async function rejectPartnerApplication(userId: string) {
+    setError(null);
+    setLoading(`partner-reject-${userId}`);
+    try {
+      const res = await fetch(`/api/admin/partners/applications/${userId}/reject`, {
+        method: "POST",
+        ...fetchInit,
+        body: JSON.stringify({ reason: rejectReason || "Application not approved at this time." })
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) {
+        setError(json?.error?.message ?? "Failed to reject partner application");
+      } else {
+        showSuccess(`Partner application rejected for ${userId}.`);
+        setRejectingUserId(null);
+        setRejectReason("");
         await refreshAll();
       }
     } finally {
@@ -540,6 +642,138 @@ export default function AdminDashboardPage() {
             </div>
             <div className="stat-sub">Confirmed + active</div>
           </div>
+          <div className="stat-card">
+            <div className="stat-label">Partner Applications</div>
+            <div className="stat-value accent">{pendingPartnerCount}</div>
+            <div className="stat-sub">Pending review</div>
+          </div>
+        </div>
+
+        <div id="partner-applications" className="mb-6">
+          <div className="section-header mb-4">
+            <div>
+              <h2 className="inline-flex items-center gap-2">
+                <Icon name="briefcase" className="w-5 h-5" />
+                Partner Applications
+              </h2>
+              <p>Review partner onboarding requests before granting dashboard access.</p>
+            </div>
+          </div>
+
+          <div className="partner-tab-row mb-4">
+            {(["pending", "approved", "rejected", "all"] as const).map((filter) => (
+              <button
+                key={filter}
+                type="button"
+                className={`partner-tab${partnerAppFilter === filter ? " active" : ""}`}
+                onClick={() => setPartnerAppFilter(filter)}
+              >
+                {filter.charAt(0).toUpperCase() + filter.slice(1)}
+              </button>
+            ))}
+          </div>
+
+          <div className="card partner-table-card">
+            <div className="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Phone</th>
+                    <th>Business</th>
+                    <th>Applied</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {partnerApplications.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="partner-empty-cell">
+                        No applications in this filter
+                      </td>
+                    </tr>
+                  ) : (
+                    partnerApplications.map((application) => {
+                      const status = application.partner_application_status ?? "approved";
+                      return (
+                      <tr key={application.id}>
+                        <td>{application.name}</td>
+                        <td>{application.email ?? "—"}</td>
+                        <td>{application.phone ?? "—"}</td>
+                        <td>{application.partner_business_name ?? "—"}</td>
+                        <td>{formatDate(application.partner_applied_at ?? undefined)}</td>
+                        <td>
+                          <span className={`badge badge-${status}`}>
+                            {status}
+                          </span>
+                        </td>
+                        <td>
+                          {application.partner_application_status === "pending" ? (
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                className="btn btn-primary btn-sm"
+                                disabled={!!loading}
+                                onClick={() => approvePartnerApplication(application.id)}
+                              >
+                                Approve
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-secondary btn-sm"
+                                disabled={!!loading}
+                                onClick={() => setRejectingUserId(application.id)}
+                              >
+                                Reject
+                              </button>
+                            </div>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                      </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {rejectingUserId ? (
+            <div className="card mt-4 p-4">
+              <div className="form-label mb-2">Rejection reason</div>
+              <textarea
+                className="form-input mb-3"
+                rows={3}
+                value={rejectReason}
+                onChange={(event) => setRejectReason(event.target.value)}
+                placeholder="Reason sent to the partner by email"
+              />
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => {
+                    setRejectingUserId(null);
+                    setRejectReason("");
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  disabled={!!loading}
+                  onClick={() => rejectPartnerApplication(rejectingUserId)}
+                >
+                  Confirm reject
+                </button>
+              </div>
+            </div>
+          ) : null}
         </div>
 
         <div id="fleet" className="mb-6">
@@ -568,14 +802,24 @@ export default function AdminDashboardPage() {
 
               <div className="form-row mb-3" style={{ gridTemplateColumns: "1fr 1fr" }}>
                 <div className="form-group">
-                  <label className="form-label">Owner ID</label>
-                  <input
-                    className="form-input"
+                  <label className="form-label">Partner owner</label>
+                  <select
+                    className="form-input form-select"
                     value={vehicleForm.owner_id}
                     onChange={(event) =>
                       setVehicleForm((prev) => ({ ...prev, owner_id: event.target.value }))
                     }
-                  />
+                  >
+                    {approvedPartners.length === 0 ? (
+                      <option value="">No approved partners</option>
+                    ) : (
+                      approvedPartners.map((partner) => (
+                        <option key={partner.id} value={partner.id}>
+                          {partner.name} ({partner.id}) · {partner.vehicle_count} vehicles
+                        </option>
+                      ))
+                    )}
+                  </select>
                 </div>
                 <div className="form-group">
                   <label className="form-label">Category</label>

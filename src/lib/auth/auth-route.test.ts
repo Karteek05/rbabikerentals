@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   collectAuthCookieNames,
   expireAuthCookieHeader,
@@ -41,16 +41,13 @@ describe("auth route helpers", () => {
   });
 
   it("expires secure cookies in production", () => {
-    const previousNodeEnv = process.env.NODE_ENV;
-    const previousBaseUrl = process.env.BETTER_AUTH_URL;
-    process.env.NODE_ENV = "production";
-    process.env.BETTER_AUTH_URL = "https://www.rbabikerentals.com";
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("BETTER_AUTH_URL", "https://www.rbabikerentals.com");
     expect(expireAuthCookieHeader("__Secure-rba.session_data")).toContain("Secure");
     expect(expireAuthCookieHeader("__Secure-rba.session_data")).toContain(
       "Domain=rbabikerentals.com"
     );
     expect(resolveAuthCookieDomain()).toBe("rbabikerentals.com");
-    process.env.NODE_ENV = previousNodeEnv;
-    process.env.BETTER_AUTH_URL = previousBaseUrl;
+    vi.unstubAllEnvs();
   });
 });

@@ -33,7 +33,8 @@ async function run() {
     name: "Nikhil Fleet Partner",
     role: "partner_investor",
     city: "bengaluru",
-    kyc_status: "verified"
+    kyc_status: "verified",
+    partner_application_status: "approved"
   });
   await upsertUser({
     id: "admin_001",

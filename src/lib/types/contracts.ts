@@ -208,3 +208,14 @@ export interface AdminVehicleUpdateRequest {
 export interface AdminVehicleImageRequest {
   image_url: string;
 }
+
+export interface PartnerApplyRequest {
+  name?: string;
+  phone?: string;
+  partner_business_name?: string;
+  message?: string;
+}
+
+export interface RejectPartnerApplicationRequest {
+  reason?: string;
+}

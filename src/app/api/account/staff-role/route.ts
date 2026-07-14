@@ -1,11 +1,9 @@
 import { requireActor } from "@/lib/auth/context";
 import { getUserOrThrow, upsertUser } from "@/lib/data/repository";
-import type { Role } from "@/lib/types/domain";
 import { ApiException } from "@/lib/utils/errors";
 import { ok, fromError, parseJson } from "@/lib/utils/http";
-
 type StaffRoleRequest = {
-  role: Extract<Role, "admin" | "partner_investor">;
+  role: "admin";
 };
 
 function isCompanyEmail(email: string | null | undefined) {
@@ -26,8 +24,12 @@ export async function POST(request: Request) {
       );
     }
 
-    if (body.role !== "admin" && body.role !== "partner_investor") {
-      throw new ApiException(400, "invalid_role", "Staff role must be admin or partner_investor.");
+    if (body.role !== "admin") {
+      throw new ApiException(
+        400,
+        "invalid_role",
+        "Partner access requires submitting an application at /partner-apply."
+      );
     }
 
     if (user.role === body.role) {

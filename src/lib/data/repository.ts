@@ -8,6 +8,7 @@ import type {
   KycRecord,
   KycStatus,
   NotificationJob,
+  PartnerApplicationStatus,
   PaymentEvent,
   PaymentOrder,
   Role,
@@ -412,6 +413,68 @@ export async function listUsersByIds(userIds: string[]): Promise<User[]> {
   const { data, error } = await supabase.from("app_users").select("*").in("id", ids);
   if (error) throw new ApiException(500, "db_error", error.message);
   return (data ?? []) as User[];
+}
+
+export async function listPartnerApplications(filter?: {
+  status?: PartnerApplicationStatus | "all";
+}): Promise<User[]> {
+  if (getDataMode() === "memory") {
+    return store.users.filter((user) => {
+      if (user.role === "partner_investor") {
+        if (!filter?.status || filter.status === "all" || filter.status === "approved") return true;
+        return false;
+      }
+      if (!user.partner_application_status) return false;
+      if (!filter?.status || filter.status === "all") return true;
+      return user.partner_application_status === filter.status;
+    });
+  }
+
+  const supabase = getSupabaseServiceClient();
+  if (!filter?.status || filter.status === "all") {
+    const { data, error } = await supabase
+      .from("app_users")
+      .select("*")
+      .or("partner_application_status.not.is.null,role.eq.partner_investor");
+    if (error) throw new ApiException(500, "db_error", error.message);
+    return (data ?? []) as User[];
+  }
+
+  if (filter.status === "approved") {
+    const { data, error } = await supabase
+      .from("app_users")
+      .select("*")
+      .eq("role", "partner_investor");
+    if (error) throw new ApiException(500, "db_error", error.message);
+    return (data ?? []) as User[];
+  }
+
+  const { data, error } = await supabase
+    .from("app_users")
+    .select("*")
+    .eq("partner_application_status", filter.status);
+  if (error) throw new ApiException(500, "db_error", error.message);
+  return (data ?? []) as User[];
+}
+
+export async function listApprovedPartners(): Promise<User[]> {
+  if (getDataMode() === "memory") {
+    return store.users.filter(
+      (user) =>
+        user.role === "partner_investor" &&
+        (!user.partner_application_status || user.partner_application_status === "approved")
+    );
+  }
+
+  const supabase = getSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("app_users")
+    .select("*")
+    .eq("role", "partner_investor");
+  if (error) throw new ApiException(500, "db_error", error.message);
+  return ((data ?? []) as User[]).filter(
+    (user) => !user.partner_application_status || user.partner_application_status === "approved"
+  );
 }
 
 export async function getVehicleOrThrow(vehicleId: string): Promise<Vehicle> {
@@ -837,6 +900,26 @@ export async function listVehicleBlocks(vehicleId: string): Promise<VehicleBlock
     .from("vehicle_block_windows")
     .select("*")
     .eq("vehicle_id", vehicleId);
+  if (error) throw new ApiException(500, "db_error", error.message);
+  return (data ?? []) as VehicleBlockWindow[];
+}
+
+export async function listVehicleBlocksByVehicleIds(
+  vehicleIds: string[]
+): Promise<VehicleBlockWindow[]> {
+  const ids = [...new Set(vehicleIds)].filter(Boolean);
+  if (!ids.length) return [];
+
+  if (getDataMode() === "memory") {
+    const include = new Set(ids);
+    return store.vehicleBlocks.filter((item) => include.has(item.vehicle_id));
+  }
+
+  const supabase = getSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("vehicle_block_windows")
+    .select("*")
+    .in("vehicle_id", ids);
   if (error) throw new ApiException(500, "db_error", error.message);
   return (data ?? []) as VehicleBlockWindow[];
 }

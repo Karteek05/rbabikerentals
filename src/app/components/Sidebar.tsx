@@ -49,9 +49,11 @@ export default function Sidebar({ role, navItems, userName }: SidebarProps) {
       <nav className="sidebar-nav">
         <div className="sidebar-section-label">Navigation</div>
         {navItems.map((item) => {
-          const isActive =
-            pathname === item.href ||
-            (item.href !== "/" && pathname.startsWith(item.href));
+          const isExactPartner = item.href === "/partner";
+          const isActive = isExactPartner
+            ? pathname === "/partner"
+            : pathname === item.href ||
+              (item.href !== "/" && pathname.startsWith(item.href));
           return (
             <Link
               key={item.href}

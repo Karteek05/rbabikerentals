@@ -1,5 +1,7 @@
 export type Role = "customer" | "partner_investor" | "admin";
 
+export type PartnerApplicationStatus = "pending" | "approved" | "rejected";
+
 export type KycStatus =
   | "not_started"
   | "in_progress"
@@ -49,6 +51,12 @@ export interface User {
   date_of_birth?: string | null;
   cibil_consent_at?: string | null;
   deleted_at?: string | null;
+  partner_application_status?: PartnerApplicationStatus | null;
+  partner_applied_at?: string | null;
+  partner_reviewed_at?: string | null;
+  partner_reviewed_by?: string | null;
+  partner_rejection_reason?: string | null;
+  partner_business_name?: string | null;
 }
 
 export interface Vehicle {

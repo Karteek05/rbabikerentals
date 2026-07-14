@@ -47,6 +47,7 @@ export const NOINDEX_ROUTE_PREFIXES = [
   "/admin-login",
   "/staff-login",
   "/partner-login",
+  "/partner-apply",
   "/dashboard-access",
   "/forgot-password",
   "/reset-password",

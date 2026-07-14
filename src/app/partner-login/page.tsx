@@ -1,10 +1,10 @@
 "use client";
 
-import { Suspense, useState, useEffect, useCallback } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { authClient } from "@/lib/auth/auth-client";
 import {
-  fetchAccountRole,
   resolvePostLoginPath,
   resolveSafeReturnTo
 } from "@/lib/auth/post-login-redirect";
@@ -19,35 +19,53 @@ function PartnerLoginForm() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
 
   const { data: session } = authClient.useSession();
 
-  const redirectAuthenticatedUser = useCallback(async () => {
-    const role = await fetchAccountRole();
-    if (role === "partner_investor") {
-      router.push(returnTo ?? "/partner");
+  const handlePartnerAccess = useCallback(async () => {
+    const res = await fetch("/api/partner/application", { credentials: "include" });
+    const json = await res.json();
+    if (!res.ok || !json.ok) {
+      setError("Could not verify partner access.");
       return;
     }
-    setError("This account does not have partner access.");
+
+    const data = json.data;
+    if (data.is_approved_partner) {
+      router.push(resolvePostLoginPath({ role: "partner_investor", returnTo, fallback: "/partner" }));
+      return;
+    }
+    if (data.partner_application_status === "pending") {
+      setInfo("Your application is under admin review.");
+      setError("");
+      return;
+    }
+    if (data.partner_application_status === "rejected") {
+      setError(
+        data.partner_rejection_reason
+          ? `Application rejected: ${data.partner_rejection_reason}`
+          : "Your partner application was not approved."
+      );
+      return;
+    }
+    setError("This account does not have partner access yet.");
+    setInfo("");
   }, [router, returnTo]);
 
   useEffect(() => {
     if (session?.user) {
-      redirectAuthenticatedUser();
+      handlePartnerAccess();
     }
-  }, [session?.user, redirectAuthenticatedUser]);
+  }, [session?.user, handlePartnerAccess]);
 
-  const handleEmailSignIn = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleEmailSignIn = async (event: React.FormEvent) => {
+    event.preventDefault();
     setLoading(true);
     setError("");
+    setInfo("");
 
     const normalizedEmail = email.trim().toLowerCase();
-    if (!normalizedEmail.endsWith("@rbabikerentals.com")) {
-      setError("Unauthorized. Partner access requires an @rbabikerentals.com email address.");
-      setLoading(false);
-      return;
-    }
 
     try {
       const { error: signInError } = await authClient.signIn.email({
@@ -60,13 +78,7 @@ function PartnerLoginForm() {
         return;
       }
 
-      const role = await fetchAccountRole();
-      if (role !== "partner_investor") {
-        setError("This account does not have partner access.");
-        return;
-      }
-
-      router.push(resolvePostLoginPath({ role, returnTo, fallback: "/partner" }));
+      await handlePartnerAccess();
     } finally {
       setLoading(false);
     }
@@ -74,7 +86,7 @@ function PartnerLoginForm() {
 
   return (
     <div className="min-h-screen bg-[#f7f7f7] px-4 py-12">
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
@@ -90,27 +102,37 @@ function PartnerLoginForm() {
 
         <div className="rounded-2xl border border-brand-dark/10 bg-white p-6 shadow-[rgba(0,0,0,0.08)_0px_8px_24px]">
           {error && (
-            <div className="mb-6 p-3 rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm text-center font-medium">
+            <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-3 text-center text-sm font-medium text-red-600">
               {error}
+            </div>
+          )}
+          {info && (
+            <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-3 text-center text-sm font-medium text-amber-800">
+              {info}{" "}
+              <Link href="/partner-apply?status=pending" className="underline">
+                View status
+              </Link>
             </div>
           )}
 
           <form onSubmit={handleEmailSignIn} className="space-y-4">
             <label className="block">
-              <span className="mb-1.5 block text-xs font-bold text-[#526074] uppercase tracking-wider">Email</span>
+              <span className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-[#526074]">
+                Email
+              </span>
               <input
                 className="form-input"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="partner@rbabikerentals.com"
+                placeholder="you@example.com"
                 required
               />
             </label>
             <label className="block">
-              <div className="mb-1.5 flex items-center justify-between">
-                <span className="block text-xs font-bold text-[#526074] uppercase tracking-wider">Password</span>
-              </div>
+              <span className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-[#526074]">
+                Password
+              </span>
               <input
                 className="form-input"
                 type="password"
@@ -121,14 +143,17 @@ function PartnerLoginForm() {
               />
             </label>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="btn-primary w-full py-3 mt-2 text-sm font-bold"
-            >
+            <button type="submit" disabled={loading} className="btn-primary mt-2 w-full py-3 text-sm font-bold">
               {loading ? "Signing in..." : "Sign in"}
             </button>
           </form>
+
+          <p className="mt-6 text-center text-sm text-[#526074]">
+            New partner?{" "}
+            <Link href="/partner-apply" className="font-semibold text-brand-dark underline">
+              Apply here
+            </Link>
+          </p>
         </div>
       </motion.div>
     </div>

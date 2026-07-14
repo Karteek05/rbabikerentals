@@ -1,10 +1,10 @@
-import { requireActor } from "@/lib/auth/context";
+import { requireApprovedPartner } from "@/lib/auth/partner-access";
 import { listTrackingForActor } from "@/lib/tracking/service";
 import { fromError, ok } from "@/lib/utils/http";
 
 export async function GET(request: Request) {
   try {
-    const actor = await requireActor(request, ["partner_investor", "admin"]);
+    const actor = await requireApprovedPartner(request);
     const tracking = await listTrackingForActor(actor);
     return ok(tracking);
   } catch (error) {

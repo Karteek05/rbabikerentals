@@ -34,6 +34,11 @@ do $$ begin
 exception when duplicate_object then null;
 end $$;
 
+do $$ begin
+  create type partner_application_status_type as enum ('pending', 'approved', 'rejected');
+exception when duplicate_object then null;
+end $$;
+
 -- Better Auth persistence tables.
 -- These are used by the server-side Better Auth Postgres adapter when
 -- SUPABASE_DB_URL or DATABASE_URL is configured.
@@ -117,6 +122,16 @@ alter table if exists app_users add column if not exists pan_number text;
 alter table if exists app_users add column if not exists date_of_birth date;
 alter table if exists app_users add column if not exists cibil_consent_at timestamptz;
 alter table if exists app_users add column if not exists deleted_at timestamptz;
+alter table if exists app_users add column if not exists partner_application_status partner_application_status_type;
+alter table if exists app_users add column if not exists partner_applied_at timestamptz;
+alter table if exists app_users add column if not exists partner_reviewed_at timestamptz;
+alter table if exists app_users add column if not exists partner_reviewed_by text references app_users(id);
+alter table if exists app_users add column if not exists partner_rejection_reason text;
+alter table if exists app_users add column if not exists partner_business_name text;
+
+create index if not exists idx_app_users_partner_pending
+  on app_users(partner_application_status)
+  where partner_application_status = 'pending';
 
 create table if not exists vehicles (
   id text primary key,

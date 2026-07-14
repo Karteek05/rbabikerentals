@@ -424,7 +424,158 @@ export function buildUserEmail(params: {
     };
   }
 
+  if (params.templateKey === "partner_application_approved") {
+    const loginUrl = String(params.payload.login_url ?? "");
+    const partnerName = String(params.payload.partner_name ?? "Partner");
+    return {
+      subject: "Your RBA partner application is approved",
+      text: paragraph([
+        `Hi ${partnerName},`,
+        "",
+        "Your partner application has been approved.",
+        loginUrl ? `Sign in: ${loginUrl}` : "",
+        "",
+        "RBA Bike Rentals"
+      ]),
+      html: renderEmailHtml({
+        title: "Partner application approved",
+        intro: "Your partner application has been approved.",
+        rows: [["Partner", partnerName]],
+        cta: loginUrl ? { label: "Sign in", url: loginUrl } : undefined,
+        closing: "Our team will assign vehicles to your fleet."
+      })
+    };
+  }
+
+  if (params.templateKey === "partner_application_rejected") {
+    const reason = String(params.payload.reason ?? "Application not approved.");
+    const reapplyUrl = String(params.payload.reapply_url ?? "");
+    return {
+      subject: "Update on your RBA partner application",
+      text: paragraph([
+        "Your partner application was not approved at this time.",
+        "",
+        `Reason: ${reason}`,
+        reapplyUrl ? `Re-apply: ${reapplyUrl}` : "",
+        "",
+        "RBA Bike Rentals"
+      ]),
+      html: renderEmailHtml({
+        title: "Partner application update",
+        intro: "Your partner application was not approved at this time.",
+        rows: [["Reason", reason]],
+        cta: reapplyUrl ? { label: "Apply again", url: reapplyUrl } : undefined,
+        closing: "You can submit a new application when you are ready."
+      })
+    };
+  }
+
   return null;
+}
+
+export async function sendPartnerApplicationSubmittedEmail(
+  adminEmail: string,
+  details: {
+    name: string;
+    email?: string | null;
+    phone?: string | null;
+    business_name?: string | null;
+    applied_at?: string | null;
+    admin_url: string;
+  }
+) {
+  const appliedAt = details.applied_at
+    ? new Date(details.applied_at).toLocaleString("en-IN")
+    : "—";
+
+  await sendEmail({
+    to: adminEmail,
+    subject: `New partner application — ${details.name}`,
+    text: paragraph([
+      "A new partner application was submitted.",
+      "",
+      `Name: ${details.name}`,
+      `Email: ${details.email ?? "—"}`,
+      `Phone: ${details.phone ?? "—"}`,
+      `Business: ${details.business_name ?? "—"}`,
+      `Applied: ${appliedAt}`,
+      `Review: ${details.admin_url}`,
+      "",
+      "RBA Bike Rentals"
+    ]),
+    html: renderEmailHtml({
+      title: "New partner application",
+      intro: "A partner application is waiting for admin review.",
+      rows: [
+        ["Name", details.name],
+        ["Email", details.email ?? "—"],
+        ["Phone", details.phone ?? "—"],
+        ["Business", details.business_name ?? "—"],
+        ["Applied", appliedAt]
+      ],
+      cta: { label: "Review application", url: details.admin_url },
+      closing: "Approve the application before the partner can access the dashboard."
+    })
+  });
+}
+
+export async function sendPartnerApplicationApprovedEmail(
+  email: string,
+  details: { partner_name: string; login_url: string }
+) {
+  await sendEmail({
+    to: email,
+    subject: "Your RBA partner application is approved",
+    text: paragraph([
+      `Hi ${details.partner_name},`,
+      "",
+      "Your partner application has been approved.",
+      "",
+      `Sign in: ${details.login_url}`,
+      "",
+      "Our team will assign vehicles to your fleet. You can track bookings and revenue once vehicles are live.",
+      "",
+      "RBA Bike Rentals"
+    ]),
+    html: renderEmailHtml({
+      title: "Partner application approved",
+      intro: "Your partner application has been approved. You can now sign in to the partner dashboard.",
+      rows: [["Partner", details.partner_name]],
+      cta: { label: "Sign in to partner dashboard", url: details.login_url },
+      closing: "Our team will assign vehicles to your fleet. You will see them under Vehicles once they are live."
+    })
+  });
+}
+
+export async function sendPartnerApplicationRejectedEmail(
+  email: string,
+  details: { partner_name: string; reason: string; reapply_url: string }
+) {
+  await sendEmail({
+    to: email,
+    subject: "Update on your RBA partner application",
+    text: paragraph([
+      `Hi ${details.partner_name},`,
+      "",
+      "Your partner application was not approved at this time.",
+      "",
+      `Reason: ${details.reason}`,
+      "",
+      `You may submit a new application: ${details.reapply_url}`,
+      "",
+      "RBA Bike Rentals"
+    ]),
+    html: renderEmailHtml({
+      title: "Partner application update",
+      intro: "Your partner application was not approved at this time.",
+      rows: [
+        ["Partner", details.partner_name],
+        ["Reason", details.reason]
+      ],
+      cta: { label: "Submit a new application", url: details.reapply_url },
+      closing: "You can update your details and apply again when you are ready."
+    })
+  });
 }
 
 async function enqueue(
