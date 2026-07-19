@@ -34,6 +34,8 @@ type VehicleItem = {
   category: "scooter" | "bike" | "ev_bike";
   brand: string;
   model: string;
+  registration_number?: string;
+  chassis_number?: string;
   image_urls?: string[];
   is_active: boolean;
   deposit_amount: number;
@@ -48,6 +50,8 @@ type VehicleForm = {
   category: "scooter" | "bike" | "ev_bike";
   brand: string;
   model: string;
+  registration_number: string;
+  chassis_number: string;
   is_active: boolean;
   deposit_amount: number;
   rate_per_hour: number;
@@ -87,6 +91,8 @@ const emptyVehicleForm: VehicleForm = {
   category: "scooter",
   brand: "Honda",
   model: "Activa 110",
+  registration_number: "",
+  chassis_number: "",
   is_active: true,
   deposit_amount: 2000,
   rate_per_hour: 0,
@@ -121,6 +127,8 @@ function mapVehicleToForm(vehicle: VehicleItem): VehicleForm {
     category: vehicle.category,
     brand: vehicle.brand,
     model: vehicle.model,
+    registration_number: vehicle.registration_number ?? "",
+    chassis_number: vehicle.chassis_number ?? "",
     is_active: vehicle.is_active,
     deposit_amount: vehicle.deposit_amount,
     rate_per_hour: vehicle.rate_per_hour,
@@ -142,6 +150,11 @@ export default function AdminDashboardPage() {
   const [vehicleForm, setVehicleForm] = useState<VehicleForm>(emptyVehicleForm);
   const [newImageUrl, setNewImageUrl] = useState("");
   const [uploadFile, setUploadFile] = useState<File | null>(null);
+  
+  const [docType, setDocType] = useState<"rc" | "insurance" | "invoice">("rc");
+  const [uploadDocFile, setUploadDocFile] = useState<File | null>(null);
+  const [docExpiresAt, setDocExpiresAt] = useState("");
+  const [vehicleDocuments, setVehicleDocuments] = useState<any[]>([]);
   const [partnerApplications, setPartnerApplications] = useState<PartnerApplication[]>([]);
   const [approvedPartners, setApprovedPartners] = useState<ApprovedPartner[]>([]);
   const [partnerAppFilter, setPartnerAppFilter] = useState<"pending" | "approved" | "rejected" | "all">(
@@ -413,7 +426,19 @@ export default function AdminDashboardPage() {
     setVehicleForm(mapVehicleToForm(vehicle));
     setNewImageUrl("");
     setUploadFile(null);
+    setUploadDocFile(null);
+    setDocExpiresAt("");
     setError(null);
+    
+    // Fetch documents for the selected vehicle
+    fetch(`/api/vehicles/${vehicle.id}/documents`, { credentials: "include" })
+      .then((res) => res.json())
+      .then((json) => {
+        if (json.ok && json.data.documents) {
+          setVehicleDocuments(json.data.documents);
+        }
+      })
+      .catch((err) => console.error("Failed to load documents", err));
   }
 
   function resetVehicleEditor() {
@@ -421,6 +446,9 @@ export default function AdminDashboardPage() {
     setVehicleForm(emptyVehicleForm);
     setNewImageUrl("");
     setUploadFile(null);
+    setUploadDocFile(null);
+    setDocExpiresAt("");
+    setVehicleDocuments([]);
   }
 
   async function toggleVehicle(vehicle: VehicleItem) {
@@ -524,6 +552,49 @@ export default function AdminDashboardPage() {
         setUploadFile(null);
         showSuccess("Vehicle image uploaded.");
         await refreshAll();
+      }
+    } finally {
+      setLoading(null);
+    }
+  }
+
+  async function uploadVehicleDocument() {
+    if (!editingVehicleId) {
+      setError("Create or select a vehicle first before uploading documents.");
+      return;
+    }
+    if (!uploadDocFile) {
+      setError("Choose a document file first.");
+      return;
+    }
+    setError(null);
+    setLoading("document-file");
+    try {
+      const formData = new FormData();
+      formData.append("file", uploadDocFile);
+      formData.append("doc_type", docType);
+      if (docExpiresAt) {
+        formData.append("expires_at", docExpiresAt);
+      }
+      
+      const res = await fetch(`/api/admin/vehicles/${editingVehicleId}/documents`, {
+        method: "POST",
+        credentials: "include",
+        body: formData
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) {
+        setError(json?.error?.message ?? "Failed to upload document");
+      } else {
+        setUploadDocFile(null);
+        setDocExpiresAt("");
+        showSuccess("Vehicle document uploaded.");
+        // Refresh documents
+        const docRes = await fetch(`/api/vehicles/${editingVehicleId}/documents`, { credentials: "include" });
+        const docJson = await docRes.json();
+        if (docJson.ok) {
+          setVehicleDocuments(docJson.data.documents || []);
+        }
       }
     } finally {
       setLoading(null);
@@ -865,6 +936,30 @@ export default function AdminDashboardPage() {
 
               <div className="form-row mb-3" style={{ gridTemplateColumns: "1fr 1fr" }}>
                 <div className="form-group">
+                  <label className="form-label">Reg Number</label>
+                  <input
+                    className="form-input"
+                    value={vehicleForm.registration_number || ""}
+                    onChange={(event) =>
+                      setVehicleForm((prev) => ({ ...prev, registration_number: event.target.value }))
+                    }
+                    placeholder="KA-01-AB-1234"
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Chassis No.</label>
+                  <input
+                    className="form-input"
+                    value={vehicleForm.chassis_number || ""}
+                    onChange={(event) =>
+                      setVehicleForm((prev) => ({ ...prev, chassis_number: event.target.value }))
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="form-row mb-3" style={{ gridTemplateColumns: "1fr 1fr" }}>
+                <div className="form-group">
                   <label className="form-label">Deposit (₹)</label>
                   <input
                     type="number"
@@ -1021,6 +1116,68 @@ export default function AdminDashboardPage() {
                     ))}
                     {(selectedVehicle.image_urls ?? []).length === 0 && (
                       <div className="text-xs text-muted">No images added yet.</div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {selectedVehicle && (
+                <div style={{ marginTop: 18, borderTop: "1px solid rgba(0,0,0,0.08)", paddingTop: 14 }}>
+                  <div style={{ fontWeight: 700, marginBottom: 10 }}>Vehicle Documents</div>
+                  
+                  <div className="form-row mb-3" style={{ gridTemplateColumns: "1fr 1fr" }}>
+                    <div className="form-group">
+                      <label className="form-label">Document Type</label>
+                      <select
+                        className="form-input form-select"
+                        value={docType}
+                        onChange={(e) => setDocType(e.target.value as any)}
+                      >
+                        <option value="rc">Registration (RC)</option>
+                        <option value="insurance">Insurance</option>
+                        <option value="invoice">Invoice</option>
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Expiry (Optional)</label>
+                      <input
+                        type="date"
+                        className="form-input"
+                        value={docExpiresAt}
+                        onChange={(e) => setDocExpiresAt(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-group mb-3">
+                    <label className="form-label">Upload Document</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="file"
+                        className="form-input"
+                        accept="application/pdf,image/*"
+                        onChange={(event) => setUploadDocFile(event.target.files?.[0] ?? null)}
+                      />
+                      <button className="btn btn-secondary btn-sm" onClick={uploadVehicleDocument} disabled={!!loading}>
+                        {loading === "document-file" ? <span className="spinner" /> : "Upload"}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-2">
+                    {vehicleDocuments.map((doc: any) => (
+                      <div key={doc.id} className="card p-2 flex-between">
+                        <div>
+                          <div style={{ fontWeight: 600 }}>{doc.doc_type.toUpperCase()}</div>
+                          <div className="text-xs text-muted">Expires: {doc.expires_at ? formatDate(doc.expires_at) : "N/A"}</div>
+                        </div>
+                        <a href={doc.file_url} target="_blank" rel="noopener noreferrer" className="btn btn-secondary btn-sm">
+                          View
+                        </a>
+                      </div>
+                    ))}
+                    {vehicleDocuments.length === 0 && (
+                      <div className="text-xs text-muted">No documents uploaded yet.</div>
                     )}
                   </div>
                 </div>

@@ -85,6 +85,8 @@ export async function createVehicleByAdmin(
     category: input.category,
     brand: input.brand.trim(),
     model: input.model.trim(),
+    registration_number: input.registration_number?.trim() || null,
+    chassis_number: input.chassis_number?.trim() || null,
     image_urls: sanitizeImageUrls(input.image_urls),
     is_active: input.is_active ?? true,
     deposit_amount: Math.round(input.deposit_amount),
@@ -144,6 +146,8 @@ export async function updateVehicleByAdmin(
     category: input.category ?? current.category,
     brand: input.brand?.trim() || current.brand,
     model: input.model?.trim() || current.model,
+    registration_number: input.registration_number !== undefined ? (input.registration_number?.trim() || null) : current.registration_number,
+    chassis_number: input.chassis_number !== undefined ? (input.chassis_number?.trim() || null) : current.chassis_number,
     image_urls:
       input.image_urls !== undefined
         ? sanitizeImageUrls(input.image_urls)

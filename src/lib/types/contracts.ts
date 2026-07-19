@@ -181,6 +181,8 @@ export interface AdminVehicleUpsertRequest {
   category: "scooter" | "bike" | "ev_bike";
   brand: string;
   model: string;
+  registration_number?: string;
+  chassis_number?: string;
   is_active?: boolean;
   deposit_amount: number;
   rate_per_hour: number;
@@ -196,6 +198,8 @@ export interface AdminVehicleUpdateRequest {
   category?: "scooter" | "bike" | "ev_bike";
   brand?: string;
   model?: string;
+  registration_number?: string;
+  chassis_number?: string;
   is_active?: boolean;
   deposit_amount?: number;
   rate_per_hour?: number;

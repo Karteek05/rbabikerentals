@@ -140,6 +140,8 @@ create table if not exists vehicles (
   category text not null,
   brand text not null,
   model text not null,
+  registration_number text,
+  chassis_number text,
   image_urls text[] not null default '{}',
   is_active boolean not null default true,
   deposit_amount integer not null,
@@ -152,6 +154,8 @@ create table if not exists vehicles (
   constraint vehicles_city_check check (city = 'bengaluru')
 );
 alter table if exists vehicles add column if not exists image_urls text[] not null default '{}';
+alter table if exists vehicles add column if not exists registration_number text;
+alter table if exists vehicles add column if not exists chassis_number text;
 
 create table if not exists bookings (
   id text primary key,
@@ -256,10 +260,11 @@ create table if not exists vehicle_documents (
   vehicle_id text not null references vehicles(id),
   doc_type text not null,
   file_url text not null,
-  expires_at timestamptz not null,
+  expires_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+alter table if exists vehicle_documents alter column expires_at drop not null;
 
 create index if not exists idx_vehicle_documents_expiry on vehicle_documents(expires_at);
 

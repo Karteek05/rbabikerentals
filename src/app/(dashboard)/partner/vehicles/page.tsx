@@ -13,6 +13,8 @@ export default function PartnerVehiclesPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [documents, setDocuments] = useState<any[]>([]);
+  const [loadingDocs, setLoadingDocs] = useState(false);
 
   const loadVehicles = useCallback(async () => {
     setLoading(true);
@@ -114,9 +116,21 @@ export default function PartnerVehiclesPage() {
                           type="button"
                           className="partner-icon-btn"
                           aria-label="View details"
-                          onClick={() =>
-                            setExpandedId((current) => (current === vehicle.id ? null : vehicle.id))
-                          }
+                          onClick={() => {
+                            if (expandedId === vehicle.id) {
+                              setExpandedId(null);
+                            } else {
+                              setExpandedId(vehicle.id);
+                              setLoadingDocs(true);
+                              fetch(`/api/vehicles/${vehicle.id}/documents`, { credentials: "include" })
+                                .then(res => res.json())
+                                .then(json => {
+                                  if (json.ok) setDocuments(json.data.documents || []);
+                                  setLoadingDocs(false);
+                                })
+                                .catch(() => setLoadingDocs(false));
+                            }
+                          }}
                         >
                           <Icon name="chevron-right" className="w-4 h-4" />
                         </button>
@@ -125,10 +139,37 @@ export default function PartnerVehiclesPage() {
                     {expandedId === vehicle.id ? (
                       <tr className="partner-expand-row">
                         <td colSpan={6}>
-                          <div className="partner-expand-content">
-                            <span>Category: {vehicle.category}</span>
-                            <span>Brand: {vehicle.brand}</span>
-                            <span>Model: {vehicle.model}</span>
+                          <div className="partner-expand-content" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                            <div>
+                              <div style={{ fontWeight: 600, marginBottom: '0.5rem' }}>Vehicle Details</div>
+                              <div className="text-sm mb-1">Category: {vehicle.category}</div>
+                              <div className="text-sm mb-1">Brand: {vehicle.brand}</div>
+                              <div className="text-sm mb-1">Model: {vehicle.model}</div>
+                              <div className="text-sm mb-1">Reg No: {vehicle.registration_number || "—"}</div>
+                              <div className="text-sm mb-1">Chassis No: {vehicle.chassis_number || "—"}</div>
+                            </div>
+                            <div>
+                              <div style={{ fontWeight: 600, marginBottom: '0.5rem' }}>Vehicle Documents</div>
+                              {loadingDocs ? (
+                                <div className="text-sm text-muted">Loading documents...</div>
+                              ) : documents.length === 0 ? (
+                                <div className="text-sm text-muted">No documents available.</div>
+                              ) : (
+                                <div className="grid gap-2">
+                                  {documents.map((doc: any) => (
+                                    <div key={doc.id} className="card p-2 flex-between" style={{ padding: '8px' }}>
+                                      <div>
+                                        <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{doc.doc_type.toUpperCase()}</div>
+                                        <div className="text-xs text-muted">Expires: {doc.expires_at ? new Date(doc.expires_at).toLocaleDateString() : "N/A"}</div>
+                                      </div>
+                                      <a href={doc.file_url} target="_blank" rel="noopener noreferrer" className="btn btn-secondary btn-sm" style={{ padding: '2px 8px', fontSize: '0.75rem' }}>
+                                        View
+                                      </a>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </td>
                       </tr>

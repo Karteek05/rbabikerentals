@@ -66,6 +66,8 @@ export interface Vehicle {
   category: "scooter" | "bike" | "ev_bike";
   brand: string;
   model: string;
+  registration_number?: string | null;
+  chassis_number?: string | null;
   image_urls?: string[];
   is_active: boolean;
   deposit_amount: number;
@@ -188,9 +190,9 @@ export interface PaymentEvent {
 export interface VehicleDocument {
   id: string;
   vehicle_id: string;
-  doc_type: "rc" | "road_tax" | "permit" | "insurance" | "puc" | "service";
+  doc_type: "rc" | "road_tax" | "permit" | "insurance" | "puc" | "service" | "invoice";
   file_url: string;
-  expires_at: string;
+  expires_at?: string | null;
   created_at: string;
   updated_at: string;
 }

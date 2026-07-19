@@ -798,6 +798,41 @@ export async function updateBooking(
   return data as Booking;
 }
 
+export async function listVehicleDocuments(vehicleId: string): Promise<VehicleDocument[]> {
+  if (getDataMode() === "memory") {
+    return store.vehicleDocuments.filter((item) => item.vehicle_id === vehicleId);
+  }
+
+  const supabase = getSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("vehicle_documents")
+    .select("*")
+    .eq("vehicle_id", vehicleId);
+  if (error) throw new ApiException(500, "db_error", error.message);
+  return (data ?? []) as VehicleDocument[];
+}
+
+export async function upsertVehicleDocument(doc: VehicleDocument): Promise<VehicleDocument> {
+  if (getDataMode() === "memory") {
+    const existingIndex = store.vehicleDocuments.findIndex((item) => item.id === doc.id);
+    if (existingIndex >= 0) {
+      store.vehicleDocuments[existingIndex] = doc;
+    } else {
+      store.vehicleDocuments.push(doc);
+    }
+    return doc;
+  }
+
+  const supabase = getSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("vehicle_documents")
+    .upsert(doc, { onConflict: "id" })
+    .select("*")
+    .single();
+  if (error) throw new ApiException(500, "db_error", error.message);
+  return data as VehicleDocument;
+}
+
 export async function updateBookingIfStatus(
   bookingId: string,
   expectedStatus: BookingStatus,

@@ -66,6 +66,8 @@ export type PartnerVehicleRow = {
   position: VehiclePositionStatus;
   station: string | null;
   partner_name: string;
+  registration_number: string | null;
+  chassis_number: string | null;
 };
 
 export type PartnerBookingRow = {
@@ -221,7 +223,9 @@ export async function getPartnerVehicles(userId: string) {
         blockedVehicleIds.has(vehicle.id)
       ),
       station: latestStationForVehicle(bookings, vehicle.id),
-      partner_name: user.name
+      partner_name: user.name,
+      registration_number: vehicle.registration_number ?? null,
+      chassis_number: vehicle.chassis_number ?? null
     };
   });
 
