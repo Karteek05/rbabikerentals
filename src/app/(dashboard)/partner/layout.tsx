@@ -27,7 +27,7 @@ export default function PartnerLayout({ children }: { children: React.ReactNode 
   }, []);
 
   return (
-    <div className="dashboard-layout partner-shell">
+    <div className="dashboard-layout ops-shell">
       <Sidebar
         role="partner"
         navItems={PARTNER_NAV}

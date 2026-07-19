@@ -7,6 +7,7 @@ const contentSecurityPolicy = [
   "default-src 'self'",
   "base-uri 'self'",
   "object-src 'none'",
+  "worker-src 'self' blob:",
   "frame-ancestors 'none'",
   "img-src 'self' data: blob: https:",
   `script-src 'self' 'unsafe-inline' ${isDev ? "'unsafe-eval' " : ""}https://checkout.razorpay.com https://cdn.razorpay.com`,
@@ -21,7 +22,7 @@ const contentSecurityPolicy = [
   ]
     .filter(Boolean)
     .join(" "),
-  `frame-src 'self' ${razorpayHosts} https://www.openstreetmap.org`,
+  `frame-src 'self' blob: ${razorpayHosts} https://www.openstreetmap.org`,
   `form-action 'self' ${razorpayHosts}`
 ].join("; ");
 
@@ -37,6 +38,11 @@ const securityHeaders = [
   }
 ];
 
+const documentFileHeaders = [
+  { key: "X-Frame-Options", value: "SAMEORIGIN" },
+  { key: "Content-Security-Policy", value: "frame-ancestors 'self'" }
+];
+
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   env: {
@@ -50,6 +56,10 @@ const nextConfig: NextConfig = {
       {
         source: "/:path*",
         headers: securityHeaders
+      },
+      {
+        source: "/api/vehicles/:id/documents/:docId/file",
+        headers: documentFileHeaders
       }
     ];
   }

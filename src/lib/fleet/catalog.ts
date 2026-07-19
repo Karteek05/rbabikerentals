@@ -2,8 +2,8 @@ export type PublicFleetVehicle = {
   id: string;
   brand: string;
   model: string;
-  category: "scooter";
-  icon: "scooter";
+  category: "scooter" | "bike";
+  icon: "scooter" | "bike";
   stockApprox: number;
   engine: string;
   fuel: "Petrol";
@@ -85,6 +85,27 @@ export const PUBLIC_FLEET: PublicFleetVehicle[] = [
     city: "bengaluru",
     is_active: true,
     spec: "125 cc petrol scooter"
+  },
+  {
+    id: "veh_004",
+    brand: "TVS",
+    model: "Raider",
+    category: "bike",
+    icon: "bike",
+    stockApprox: 2,
+    engine: "125 cc",
+    fuel: "Petrol",
+    image: "/images/services/raider.svg",
+    fallbackImage: "/images/services/raider.svg",
+    imageAlt: "TVS Raider bike illustration",
+    deposit_amount: 2000,
+    rate_per_hour: 0,
+    rate_per_day: 3500,
+    rate_per_week: 1750,
+    rate_per_month: 7000,
+    city: "bengaluru",
+    is_active: false,
+    spec: "125 cc petrol bike"
   }
 ];
 
@@ -102,4 +123,49 @@ export type PackageRateKey = (typeof PACKAGE_PLANS)[number]["rateKey"];
 
 export function getPackageRate(vehicle: PublicFleetVehicle, rateKey: PackageRateKey) {
   return vehicle[rateKey];
+}
+
+/** Maps a physical unit to the customer-facing catalog model id. */
+export function inferFleetUnitFromChassis(chassis: string) {
+  const normalized = chassis.trim().toUpperCase();
+  if (normalized.startsWith("MD625")) {
+    return {
+      brand: "TVS",
+      model: "Raider",
+      category: "bike" as const,
+      image: "/images/services/raider.svg"
+    };
+  }
+  if (normalized.startsWith("ME4JK")) {
+    return {
+      brand: "Honda",
+      model: "Dio 110",
+      category: "scooter" as const,
+      image: "/images/services/dio-110.svg"
+    };
+  }
+  return {
+    brand: "Honda",
+    model: "Activa 110",
+    category: "scooter" as const,
+    image: "/images/services/activa-6g.svg"
+  };
+}
+
+/** Maps a physical unit to the customer-facing catalog model id. */
+export function inferCatalogVehicleId(input: {
+  brand?: string;
+  model?: string;
+  category?: string;
+}) {
+  const brand = (input.brand ?? "").toLowerCase();
+  const model = (input.model ?? "").toLowerCase();
+
+  if (brand.includes("honda") && model.includes("dio")) return "veh_002";
+  if (brand.includes("honda") && model.includes("activa")) return "veh_001";
+  if (brand.includes("tvs") && model.includes("jupiter")) return "veh_003";
+  if (brand.includes("tvs") && model.includes("raider")) return "veh_004";
+  if (brand.includes("honda")) return "veh_001";
+  if (brand.includes("tvs") && input.category === "scooter") return "veh_003";
+  return null;
 }

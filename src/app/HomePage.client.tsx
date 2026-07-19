@@ -190,11 +190,7 @@ function VehicleCard({ v }: { v: PublicFleetVehicle }) {
               event.currentTarget.src = v.fallbackImage;
             }}
           />
-          <span className="absolute bottom-3 left-3 flex h-11 w-11 items-center justify-center rounded-full bg-white/90 text-[color:var(--color-ink)] shadow-sm">
-            <Icon name={v.icon} className="h-5 w-5" />
-          </span>
           <div className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-white/90 px-3 py-1 text-[11px] font-semibold text-[color:var(--color-ink)] shadow-sm">
-            <Icon name="location" className="h-3 w-3" />
             Bengaluru
           </div>
         </div>

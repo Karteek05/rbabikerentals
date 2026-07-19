@@ -2,7 +2,9 @@ import { assertCanTransition } from "@/lib/bookings/state-machine";
 import { advanceBookingLifecycleIfDue } from "@/lib/bookings/lifecycle";
 import { recordAudit } from "@/lib/audit/service";
 import { getSupabaseServiceClient } from "@/lib/db/supabase-client";
-import { sendBookingConfirmationEmail } from "@/lib/notifications/service";
+import { getVehicleDisplayName, formatBookingReference } from "@/lib/fleet/display";
+import { sendBookingConfirmationEmail, notifyAdmin, sendBookingSubmittedAdminEmail } from "@/lib/notifications/service";
+import { getServerAppBaseUrl } from "@/lib/utils/app-url";
 import { insertBookingWithCapacityGuard } from "@/lib/bookings/inventory-guard";
 import {
   assertBengaluruCity,
@@ -141,14 +143,71 @@ export async function createBooking(
     }
   });
 
+  const adminUrl = `${(getServerAppBaseUrl() ?? "http://localhost:3000").replace(/\/$/, "")}/admin#bookings`;
+  const adminEmail = process.env.ADMIN_EMAIL;
+  const vehicleName = getVehicleDisplayName(vehicle.id, vehicle);
+  const bookingRef = formatBookingReference(booking.id);
+  let customerEmail = user.email ?? null;
+
   try {
     const supabase = getSupabaseServiceClient();
     const { data: authUser } = await supabase.from("user").select("email").eq("id", user.id).single();
-    if (authUser?.email) {
-      await sendBookingConfirmationEmail(authUser.email, booking);
-    }
+    customerEmail = authUser?.email ?? customerEmail;
+  } catch {
+    // Auth email lookup is optional when running in memory mode.
+  }
+
+  const notificationTasks: Array<Promise<unknown>> = [
+    notifyAdmin({
+      templateKey: "booking_submitted_admin",
+      payload: {
+        booking_id: booking.id,
+        booking_ref: bookingRef,
+        user_id: user.id,
+        customer_name: user.name,
+        customer_email: customerEmail,
+        customer_phone: user.phone,
+        vehicle_id: vehicle.id,
+        vehicle_name: vehicleName,
+        pickup_at: booking.pickup_at,
+        drop_at: booking.drop_at,
+        pickup_zone: booking.pickup_zone,
+        total_payable: booking.quote.total_payable
+      }
+    })
+  ];
+
+  if (customerEmail) {
+    notificationTasks.push(
+      sendBookingConfirmationEmail(customerEmail, { ...booking, vehicle })
+    );
+  }
+
+  if (adminEmail) {
+    notificationTasks.push(
+      sendBookingSubmittedAdminEmail(adminEmail, {
+        booking_id: booking.id,
+        booking_ref: bookingRef,
+        customer_name: user.name,
+        customer_email: customerEmail,
+        customer_phone: user.phone,
+        vehicle_name: vehicleName,
+        pickup_at: booking.pickup_at,
+        drop_at: booking.drop_at,
+        pickup_zone: booking.pickup_zone,
+        pickup_address: booking.pickup_address,
+        total_payable: booking.quote.total_payable,
+        admin_url: adminUrl
+      })
+    );
+  } else {
+    console.warn("ADMIN_EMAIL is not set — admin was not emailed about the new booking.");
+  }
+
+  try {
+    await Promise.all(notificationTasks);
   } catch (e) {
-    console.error("Failed to send booking confirmation email:", e);
+    console.error("Failed to send booking notification emails:", e);
   }
 
   return {

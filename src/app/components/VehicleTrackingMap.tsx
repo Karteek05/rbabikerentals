@@ -32,6 +32,16 @@ function formatTime(value: string) {
   }
 }
 
+function isDemoTrackingSource(source: string) {
+  return source === "seed_simulator" || source === "demo";
+}
+
+function isStalePing(updatedAt: string, maxAgeMs = 15 * 60 * 1000) {
+  const updated = new Date(updatedAt).getTime();
+  if (!Number.isFinite(updated)) return true;
+  return Date.now() - updated > maxAgeMs;
+}
+
 export default function VehicleTrackingMap({
   title,
   subtitle,
@@ -53,6 +63,9 @@ export default function VehicleTrackingMap({
     () => items.find((item) => item.vehicle_id === selectedVehicleId) ?? items[0],
     [items, selectedVehicleId]
   );
+
+  const demoOnly = items.length > 0 && items.every((item) => isDemoTrackingSource(item.source));
+  const selectedIsStale = selected ? isStalePing(selected.updated_at) : false;
 
   const embedUrl = useMemo(() => {
     if (!selected) return null;
@@ -86,6 +99,35 @@ export default function VehicleTrackingMap({
         </div>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 14 }}>
+          {demoOnly ? (
+            <div
+              style={{
+                padding: "10px 12px",
+                borderRadius: 8,
+                border: "1px solid #fcd34d",
+                background: "#fffbeb",
+                color: "#92400e",
+                fontSize: "0.875rem"
+              }}
+            >
+              Demo map data from initial seed setup (Koramangala / central Bengaluru samples).
+              Real GPS pings will appear here once devices post to the tracking API.
+            </div>
+          ) : null}
+          {!demoOnly && selectedIsStale ? (
+            <div
+              style={{
+                padding: "10px 12px",
+                borderRadius: 8,
+                border: "1px solid rgba(0,0,0,0.08)",
+                background: "#fafafa",
+                color: "var(--color-muted)",
+                fontSize: "0.875rem"
+              }}
+            >
+              Last location ping is older than 15 minutes. The vehicle may be parked or offline.
+            </div>
+          ) : null}
           <div className="form-group" style={{ maxWidth: 320 }}>
             <label className="form-label">Tracked Vehicle</label>
             <select
@@ -154,6 +196,12 @@ export default function VehicleTrackingMap({
               <div className="stat-label">Last Ping</div>
               <div className="stat-value" style={{ fontSize: "1.05rem", marginTop: 6 }}>
                 {formatTime(selected.updated_at)}
+              </div>
+            </div>
+            <div className="stat-card" style={{ padding: 12 }}>
+              <div className="stat-label">Source</div>
+              <div className="stat-value" style={{ fontSize: "1.05rem", marginTop: 6 }}>
+                {isDemoTrackingSource(selected.source) ? "Demo seed" : selected.source}
               </div>
             </div>
           </div>

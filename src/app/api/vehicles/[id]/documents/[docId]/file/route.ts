@@ -3,6 +3,7 @@ import { readFile } from "fs/promises";
 import { requireActor } from "@/lib/auth/context";
 import { getVehicleDocumentOrThrow, getVehicleOrThrow } from "@/lib/data/repository";
 import { assertVehicleDocumentAccess, LOCAL_DOC_PREFIX } from "@/lib/vehicles/documents";
+import { getSupabaseServiceClient, isSupabaseConfigured } from "@/lib/db/supabase-client";
 import { ApiException } from "@/lib/utils/errors";
 import { fromError } from "@/lib/utils/http";
 
@@ -63,6 +64,39 @@ async function readRemoteDocument(url: string, inlineOnly = false) {
   return new Response(buffer, { headers });
 }
 
+async function readStoredDocument(relativePath: string, inlineOnly = false) {
+  const fileName = path.basename(relativePath);
+
+  if (isSupabaseConfigured()) {
+    const bucket = process.env.SUPABASE_VEHICLE_DOC_BUCKET ?? "vehicle-documents";
+    const supabase = getSupabaseServiceClient();
+    const { data, error } = await supabase.storage.from(bucket).download(relativePath);
+    if (!error && data) {
+      const buffer = Buffer.from(await data.arrayBuffer());
+      return documentResponse(buffer, fileName, inlineOnly);
+    }
+  }
+
+  const storageRoot = path.join(process.cwd(), ".data", "vehicle-documents");
+  const absPath = resolvePathUnderRoot(storageRoot, relativePath);
+  try {
+    return await readLocalDocument(absPath, inlineOnly);
+  } catch {
+    throw new ApiException(404, "document_not_found", "Document file is unavailable on this server.");
+  }
+}
+
+function assertCustomerInlineFetch(request: Request) {
+  if (request.headers.get("x-rba-document-viewer") === "1") {
+    return;
+  }
+  throw new ApiException(
+    403,
+    "view_only",
+    "Open this document from the in-app viewer instead of downloading it directly."
+  );
+}
+
 export async function GET(
   request: Request,
   context: { params: Promise<{ id: string; docId: string }> }
@@ -75,6 +109,9 @@ export async function GET(
 
     const doc = await getVehicleDocumentOrThrow(id, docId);
     const inlineOnly = actor.role === "customer";
+    if (inlineOnly) {
+      assertCustomerInlineFetch(request);
+    }
     if (doc.file_url.startsWith("http://") || doc.file_url.startsWith("https://")) {
       return readRemoteDocument(doc.file_url, inlineOnly);
     }
@@ -88,10 +125,8 @@ export async function GET(
       throw new ApiException(404, "document_not_found", "Document file is unavailable.");
     }
 
-    const storageRoot = path.join(process.cwd(), ".data", "vehicle-documents");
     const relativePath = doc.file_url.slice(LOCAL_DOC_PREFIX.length);
-    const absPath = resolvePathUnderRoot(storageRoot, relativePath);
-    return readLocalDocument(absPath, inlineOnly);
+    return readStoredDocument(relativePath, inlineOnly);
   } catch (error) {
     return fromError(error);
   }

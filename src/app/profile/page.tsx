@@ -21,8 +21,8 @@ import { formatBookingReference, getVehicleDisplayName } from "@/lib/fleet/displ
 import { formatBookingStatus } from "@/lib/bookings/status-labels";
 import { isGoogleAuthEnabled, startGoogleSignIn } from "@/lib/auth/google-sign-in";
 import { COMPANY } from "@/lib/legal/company";
-import type { Booking, User } from "@/lib/types/domain";
-import VehicleDocsPanel from "@/components/VehicleDocsPanel";
+import type { Booking, KycStatus, User } from "@/lib/types/domain";
+import BookingRequirementsPanel from "@/components/BookingRequirementsPanel";
 import {
   readAccountPayload,
   readBookingsPayload,
@@ -69,6 +69,11 @@ export default function ProfilePage() {
   const [profileForm, setProfileForm] = useState({ name: "", phone: "" });
   const [profileSuccess, setProfileSuccess] = useState("");
   const [bookingsError, setBookingsError] = useState("");
+  const [kyc, setKyc] = useState<{
+    status: KycStatus;
+    aadhaar_verified: boolean;
+    dl_verified: boolean;
+  } | null>(null);
 
   const fetchOptions = {
     credentials: "include" as const,
@@ -148,6 +153,40 @@ export default function ProfilePage() {
     }
 
     loadBookings();
+    return () => {
+      cancelled = true;
+    };
+  }, [account?.authenticated, account?.user]);
+
+  useEffect(() => {
+    if (!account?.authenticated || !account.user) {
+      setKyc(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadKyc() {
+      try {
+        const response = await fetch(`/api/kyc/${account.user!.id}`, fetchOptions);
+        const json = await response.json();
+        if (!response.ok || !json.ok || !json.data) {
+          if (!cancelled) setKyc(null);
+          return;
+        }
+        if (!cancelled) {
+          setKyc({
+            status: json.data.status as KycStatus,
+            aadhaar_verified: Boolean(json.data.aadhaar_verified),
+            dl_verified: Boolean(json.data.dl_verified)
+          });
+        }
+      } catch {
+        if (!cancelled) setKyc(null);
+      }
+    }
+
+    void loadKyc();
     return () => {
       cancelled = true;
     };
@@ -530,7 +569,7 @@ export default function ProfilePage() {
           </div>
           <div className="mt-5 grid gap-3">
             {pendingBookings.map((booking) => (
-              <RideCard key={booking.id} booking={booking} />
+              <RideCard key={booking.id} booking={booking} kyc={kyc} />
             ))}
           </div>
         </section>
@@ -557,7 +596,7 @@ export default function ProfilePage() {
                 Loading rides...
               </div>
             ) : confirmedRides.length ? (
-              confirmedRides.map((booking) => <RideCard key={booking.id} booking={booking} />)
+              confirmedRides.map((booking) => <RideCard key={booking.id} booking={booking} kyc={kyc} />)
             ) : (
               <div className="rounded-[var(--radius-md)] border border-dashed border-[color:var(--color-line)] bg-[color:var(--color-paper)] p-6 text-center">
                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[color:var(--color-white)] text-[color:var(--color-ink)]">
@@ -658,7 +697,17 @@ function ProfileFact({
   );
 }
 
-function RideCard({ booking }: { booking: Booking }) {
+function RideCard({
+  booking,
+  kyc
+}: {
+  booking: Booking;
+  kyc: {
+    status: KycStatus;
+    aadhaar_verified: boolean;
+    dl_verified: boolean;
+  } | null;
+}) {
   return (
     <article className="grid gap-4 rounded-[var(--radius-md)] border border-[color:var(--color-line)] bg-[color:var(--color-paper)] p-4 sm:grid-cols-[minmax(0,1fr)_auto]">
       <div className="min-w-0">
@@ -691,13 +740,17 @@ function RideCard({ booking }: { booking: Booking }) {
         </p>
       </div>
       <div className="sm:col-span-2">
-        <VehicleDocsPanel
+        <BookingRequirementsPanel
           bookingId={booking.id}
           vehicleId={booking.vehicle_id}
           assignedVehicleId={booking.assigned_vehicle_id}
           bookingStatus={booking.status}
           pickupAt={booking.pickup_at}
           dropAt={booking.drop_at}
+          kycStatus={kyc?.status}
+          aadhaarVerified={kyc?.aadhaar_verified}
+          dlVerified={kyc?.dl_verified}
+          returnTo="/profile"
         />
       </div>
     </article>

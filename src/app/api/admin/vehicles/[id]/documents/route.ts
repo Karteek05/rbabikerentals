@@ -46,15 +46,7 @@ async function uploadFile(vehicleId: string, docType: string, file: File): Promi
       throw new ApiException(500, "storage_error", error.message);
     }
 
-    const { data } = supabase.storage.from(bucket).getPublicUrl(objectPath);
-    if (!data?.publicUrl) {
-      throw new ApiException(
-        500,
-        "storage_error",
-        "Document uploaded but URL could not be generated."
-      );
-    }
-    return data.publicUrl;
+    return `${LOCAL_DOC_PREFIX}${objectPath}`;
   }
 
   const absPath = localDocumentPath(vehicleId, stampedName);

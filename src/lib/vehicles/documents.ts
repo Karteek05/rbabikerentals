@@ -24,6 +24,13 @@ export function isWithinRentalWindow(
   return t >= start && t <= end;
 }
 
+export function isBeforeRentalWindow(
+  booking: Pick<Booking, "pickup_at">,
+  now = new Date()
+) {
+  return now.getTime() < new Date(booking.pickup_at).getTime();
+}
+
 export function isBookingStatusEligibleForVehicleDocs(status: BookingStatus) {
   return CUSTOMER_VEHICLE_DOC_STATUSES.includes(status);
 }
@@ -34,6 +41,16 @@ export function isBookingEligibleForVehicleDocs(
 ) {
   return (
     CUSTOMER_VEHICLE_DOC_STATUSES.includes(booking.status) && isWithinRentalWindow(booking, now)
+  );
+}
+
+export function canShowVehicleDocsSection(
+  booking: Pick<Booking, "status" | "pickup_at" | "drop_at">,
+  now = new Date()
+) {
+  return (
+    isBookingStatusEligibleForVehicleDocs(booking.status) &&
+    (isWithinRentalWindow(booking, now) || isBeforeRentalWindow(booking, now))
   );
 }
 

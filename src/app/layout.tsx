@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import "./globals.css";
-import Navbar from "@/app/components/Navbar";
-import Footer from "@/app/components/Footer";
+import AppChrome from "@/app/components/AppChrome";
 import LocalBusinessJsonLd from "@/app/components/LocalBusinessJsonLd";
 import { DEFAULT_SEO, SITE_NAME, getSiteUrl } from "@/lib/seo/site";
 
@@ -56,10 +55,8 @@ export default function RootLayout({
       <body className="bg-[color:var(--color-paper)] text-[color:var(--color-ink)] antialiased">
         <LocalBusinessJsonLd />
         <Suspense fallback={null}>
-          <Navbar />
+          <AppChrome>{children}</AppChrome>
         </Suspense>
-        <main>{children}</main>
-        <Footer />
       </body>
     </html>
   );

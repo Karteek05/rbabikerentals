@@ -1,7 +1,9 @@
 import { execSync } from "child_process";
-import { copyFileSync, mkdirSync } from "fs";
+import { copyFileSync, mkdirSync, readFileSync } from "fs";
 import path from "path";
 import { loadEnvConfig } from "@next/env";
+import { getSupabaseServiceClient, isSupabaseConfigured } from "@/lib/db/supabase-client";
+import { inferCatalogVehicleId, inferFleetUnitFromChassis, PUBLIC_FLEET } from "@/lib/fleet/catalog";
 import {
   findVehicleByChassis,
   listVehicles,
@@ -70,15 +72,24 @@ async function ensureVehicle(
     return null;
   }
 
+  const fleetUnit = inferFleetUnitFromChassis(chassis);
+
   return upsertVehicle({
     id,
     owner_id: "partner_001",
     city: "bengaluru",
-    category: chassis.startsWith("MD625") ? "bike" : "scooter",
-    brand: chassis.startsWith("MD625") ? "TVS" : "Honda",
-    model: chassis.startsWith("MD625") ? "Raider" : "Fleet unit",
+    category: fleetUnit.category,
+    brand: fleetUnit.brand,
+    model: fleetUnit.model,
     chassis_number: chassis,
-    catalog_vehicle_id: catalogVehicleId ?? null,
+    catalog_vehicle_id:
+      catalogVehicleId ??
+      inferCatalogVehicleId({
+        brand: fleetUnit.brand,
+        model: fleetUnit.model,
+        category: fleetUnit.category
+      }),
+    image_urls: [fleetUnit.image],
     registration_number: null,
     is_active: true,
     deposit_amount: 2000,
@@ -87,6 +98,63 @@ async function ensureVehicle(
     rate_per_week: 1600,
     rate_per_month: 6000
   });
+}
+
+function vehicleDocBucket() {
+  return process.env.SUPABASE_VEHICLE_DOC_BUCKET ?? "vehicle-documents";
+}
+
+async function ensureVehicleDocBucket() {
+  const bucket = vehicleDocBucket();
+  const supabase = getSupabaseServiceClient();
+  const { data: buckets, error: listError } = await supabase.storage.listBuckets();
+  if (listError) {
+    throw listError;
+  }
+  if (buckets?.some((item) => item.name === bucket)) {
+    return bucket;
+  }
+
+  const { error } = await supabase.storage.createBucket(bucket, {
+    public: false,
+    fileSizeLimit: 15 * 1024 * 1024
+  });
+  if (error) {
+    throw error;
+  }
+  console.log(`created storage bucket: ${bucket}`);
+  return bucket;
+}
+
+async function storeDocumentFile(params: {
+  vehicleId: string;
+  docType: string;
+  sourcePath: string;
+  fileName: string;
+}) {
+  const stampedName = `${Date.now()}-${params.docType}-${params.fileName.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+  const relativePath = `${params.vehicleId}/${stampedName}`;
+
+  if (isSupabaseConfigured()) {
+    const bucket = await ensureVehicleDocBucket();
+    const buffer = readFileSync(params.sourcePath);
+    const supabase = getSupabaseServiceClient();
+    const { error } = await supabase.storage.from(bucket).upload(relativePath, buffer, {
+      contentType: "application/pdf",
+      upsert: true
+    });
+    if (error) {
+      throw error;
+    }
+    console.log(`uploaded to supabase://${bucket}/${relativePath}`);
+    return `${LOCAL_DOC_PREFIX}${relativePath}`;
+  }
+
+  const storageDir = path.join(process.cwd(), ".data", "vehicle-documents", params.vehicleId);
+  mkdirSync(storageDir, { recursive: true });
+  const dest = path.join(storageDir, stampedName);
+  copyFileSync(params.sourcePath, dest);
+  return `${LOCAL_DOC_PREFIX}${relativePath}`;
 }
 
 async function importDoc(row: ParsedDoc, createMissing: boolean) {
@@ -101,18 +169,19 @@ async function importDoc(row: ParsedDoc, createMissing: boolean) {
     return;
   }
 
-  const storageDir = path.join(process.cwd(), ".data", "vehicle-documents", vehicle.id);
-  mkdirSync(storageDir, { recursive: true });
-  const stampedName = `${Date.now()}-${row.doc_type}-${row.file.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
-  const dest = path.join(storageDir, stampedName);
-  copyFileSync(row.path, dest);
+  const fileUrl = await storeDocumentFile({
+    vehicleId: vehicle.id,
+    docType: row.doc_type,
+    sourcePath: row.path,
+    fileName: row.file
+  });
 
   const now = new Date().toISOString();
   const doc: VehicleDocument = {
     id: newId("vdoc"),
     vehicle_id: vehicle.id,
     doc_type: row.doc_type,
-    file_url: `${LOCAL_DOC_PREFIX}${vehicle.id}/${stampedName}`,
+    file_url: fileUrl,
     expires_at: row.doc_type === "insurance" ? new Date(Date.now() + 365 * 86400000).toISOString() : null,
     created_at: now,
     updated_at: now

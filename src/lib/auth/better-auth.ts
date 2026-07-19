@@ -60,7 +60,7 @@ export function resolveAuthDatabaseUrl(
   if (isProduction && !dbUrl) {
     throw new Error("SUPABASE_DB_URL or DATABASE_URL is required in production.");
   }
-  if (!isProduction) {
+  if (env.AUTH_USE_MEMORY === "true") {
     return undefined;
   }
   return dbUrl;

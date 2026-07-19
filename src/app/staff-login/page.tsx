@@ -1,55 +1,46 @@
 "use client";
 
-import { Suspense, useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState, useEffect, useCallback } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { authClient } from "@/lib/auth/auth-client";
+import {
+  fetchAccountRole,
+  resolvePostLoginPath,
+  resolveSafeReturnTo
+} from "@/lib/auth/post-login-redirect";
 import Icon from "@/app/components/Icon";
 import PasswordInput from "@/app/components/PasswordInput";
 import { motion } from "framer-motion";
 
 function StaffLoginForm() {
   const router = useRouter();
-  const [mode, setMode] = useState<"login" | "register">("login");
-  const [name, setName] = useState("");
+  const searchParams = useSearchParams();
+  const returnTo = resolveSafeReturnTo(searchParams.get("next"));
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-
-  const [showOtp, setShowOtp] = useState(false);
-  const [otp, setOtp] = useState("");
-
   const { data: session } = authClient.useSession();
 
-  useEffect(() => {
-    if (!session?.user || showOtp) return;
-
-    let cancelled = false;
-
-    async function redirectStaff() {
-      try {
-        const response = await fetch("/api/account/me", {
-          credentials: "include",
-          cache: "no-store"
-        });
-        const json = await response.json();
-        if (cancelled || !response.ok || !json?.ok) return;
-
-        const role = json.data?.user?.role as string | undefined;
-        if (role === "admin") router.push("/admin");
-        else if (role === "partner_investor") router.push("/partner");
-        else router.push("/");
-      } catch {
-        if (!cancelled) router.push("/");
-      }
+  const redirectAuthenticatedUser = useCallback(async () => {
+    const role = await fetchAccountRole();
+    if (role === "admin") {
+      router.push(returnTo ?? "/admin");
+      return;
     }
+    if (role === "partner_investor") {
+      router.push("/partner");
+      return;
+    }
+    setError("This account does not have staff access.");
+  }, [router, returnTo]);
 
-    redirectStaff();
-    return () => {
-      cancelled = true;
-    };
-  }, [session?.user, router, showOtp]);
+  useEffect(() => {
+    if (session?.user) {
+      void redirectAuthenticatedUser();
+    }
+  }, [session?.user, redirectAuthenticatedUser]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,90 +48,41 @@ function StaffLoginForm() {
     setError("");
 
     const normalizedEmail = email.trim().toLowerCase();
-
-    if (mode === "login") {
-      const { error } = await authClient.signIn.email({
-        email: normalizedEmail,
-        password,
-      });
-
-      if (error) {
-        setError(error.message || "Failed to sign in. Please check your credentials.");
-        setLoading(false);
-      }
-    } else {
-      if (!normalizedEmail.endsWith("@rbabikerentals.com")) {
-        setError("Admin registration is restricted to @rbabikerentals.com email addresses.");
-        setLoading(false);
-        return;
-      }
-
-      const { error } = await authClient.signUp.email({
-        email: normalizedEmail,
-        password,
-        name
-      });
-
-      if (error) {
-        setError(error.message || "Failed to register. Please try again.");
-        setLoading(false);
-      } else {
-        const { error: otpError } = await authClient.emailOtp.sendVerificationOtp({
-          email: normalizedEmail,
-          type: "email-verification"
-        });
-        if (otpError) {
-          setError(otpError.message || "Failed to send verification email. Please try logging in.");
-          setLoading(false);
-        } else {
-          setShowOtp(true);
-          setLoading(false);
-        }
-      }
-    }
-  };
-
-  const handleVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError("");
-
-    const { error } = await authClient.emailOtp.verifyEmail({ email, otp });
-    
-    if (error) {
-      setError(error.message || "Invalid or expired OTP. Please try again.");
+    if (!normalizedEmail.endsWith("@rbabikerentals.com")) {
+      setError("Staff access requires an @rbabikerentals.com email address.");
       setLoading(false);
-    } else {
-      const normalizedEmail = email.trim().toLowerCase();
+      return;
+    }
+
+    try {
       const { error: signInError } = await authClient.signIn.email({
         email: normalizedEmail,
         password
       });
+
       if (signInError) {
-        setError(signInError.message || "Email verified, but sign-in failed. Please try logging in.");
-        setLoading(false);
+        setError(signInError.message || "Failed to sign in. Please check your credentials.");
         return;
       }
 
-      const roleRes = await fetch("/api/account/staff-role", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role: "admin" })
-      });
-      const roleJson = await roleRes.json();
-      if (!roleRes.ok || !roleJson.ok) {
-        setError(roleJson?.error?.message ?? "Account verified, but admin role assignment failed.");
-        setLoading(false);
+      const role = await fetchAccountRole();
+      if (role === "admin") {
+        router.push(resolvePostLoginPath({ role, returnTo, fallback: "/admin" }));
         return;
       }
-      router.push("/admin");
+      if (role === "partner_investor") {
+        router.push("/partner");
+        return;
+      }
+      setError("This account does not have staff access.");
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <div className="min-h-screen bg-[#f7f7f7] px-4 py-12">
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
@@ -148,126 +90,51 @@ function StaffLoginForm() {
       >
         <div className="mb-8 text-center">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-brand-dark text-white shadow-[0_8px_16px_rgba(0,0,0,0.1)]">
-            <Icon name={showOtp ? "mail" : "shield"} className="h-8 w-8" />
+            <Icon name="shield" className="h-8 w-8" />
           </div>
-          <h1 className="text-4xl font-black text-brand-dark">
-            {showOtp ? "Verify Email" : "Admin Access"}
-          </h1>
-          <p className="mt-2 text-sm leading-relaxed text-[#526074]">
-            {showOtp 
-              ? `We sent a 6-digit code to ${email}. Please enter it below to verify your admin account.` 
-              : "Secure admin dashboard for RBA operations."}
-          </p>
+          <h1 className="text-4xl font-black text-brand-dark">Staff sign in</h1>
+          <p className="mt-2 text-sm leading-relaxed text-[#526074]">Admin and operations access only.</p>
         </div>
 
         <div className="rounded-2xl border border-brand-dark/10 bg-white p-6 shadow-[rgba(0,0,0,0.08)_0px_8px_24px]">
-          
-          {!showOtp && (
-            <div className="mb-6 flex overflow-hidden border-b border-brand-dark/10">
-              <button
-                onClick={() => { setMode("login"); setError(""); }}
-                className={`flex-1 pb-3 text-sm font-bold transition-colors border-b-2 ${
-                  mode === "login" ? "border-brand-dark text-brand-dark" : "border-transparent text-[#afafaf] hover:text-[#526074]"
-                }`}
-              >
-                Sign In
-              </button>
-              <button
-                onClick={() => { setMode("register"); setError(""); }}
-                className={`flex-1 pb-3 text-sm font-bold transition-colors border-b-2 ${
-                  mode === "register" ? "border-brand-dark text-brand-dark" : "border-transparent text-[#afafaf] hover:text-[#526074]"
-                }`}
-              >
-                Register
-              </button>
-            </div>
-          )}
-
-          {error && (
-            <div className="mb-6 p-3 rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm text-center font-medium">
+          {error ? (
+            <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-3 text-center text-sm font-medium text-red-600">
               {error}
             </div>
-          )}
+          ) : null}
 
-          {!showOtp ? (
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {mode === "register" && (
-                <label className="block">
-                  <span className="mb-1.5 block text-xs font-bold text-[#526074] uppercase tracking-wider">Full Name</span>
-                  <input
-                    className="form-input"
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="John Doe"
-                    required
-                  />
-                </label>
-              )}
-              <label className="block">
-                <span className="mb-1.5 block text-xs font-bold text-[#526074] uppercase tracking-wider">Email</span>
-                <input
-                  className="form-input"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@rbabikerentals.com"
-                  required
-                />
-              </label>
-              <label className="block">
-                <div className="mb-1.5 flex items-center justify-between">
-                  <span className="block text-xs font-bold text-[#526074] uppercase tracking-wider">Password</span>
-                </div>
-                <PasswordInput
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  required
-                  minLength={8}
-                  autoComplete={mode === "register" ? "new-password" : "current-password"}
-                />
-              </label>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-[#526074]">Email</span>
+              <input
+                className="form-input"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="admin@rbabikerentals.com"
+                required
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-[#526074]">Password</span>
+              <PasswordInput
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                required
+                autoComplete="current-password"
+              />
+            </label>
 
-              <button
-                type="submit"
-                disabled={loading}
-                className="btn-primary w-full py-3 mt-2 text-sm font-bold"
-              >
-                {loading ? (mode === "login" ? "Signing in..." : "Registering...") : (mode === "login" ? "Sign in" : "Register")}
-              </button>
-            </form>
-          ) : (
-            <form onSubmit={handleVerifyOtp} className="space-y-4">
-              <label className="block">
-                <span className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-[#526074]">
-                  6-Digit OTP
-                </span>
-                <input
-                  className="form-input text-center text-xl tracking-widest"
-                  type="text"
-                  value={otp}
-                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  placeholder="000000"
-                  required
-                  maxLength={6}
-                />
-              </label>
-
-              <button
-                type="submit"
-                disabled={loading || otp.length !== 6}
-                className="btn-primary mt-4 w-full py-3 text-sm font-bold"
-              >
-                {loading ? "Verifying..." : "Verify & Sign In"}
-              </button>
-            </form>
-          )}
+            <button type="submit" disabled={loading} className="btn-primary mt-2 w-full py-3 text-sm font-bold">
+              {loading ? "Signing in..." : "Sign in"}
+            </button>
+          </form>
 
           <p className="mt-6 text-center text-sm text-[#526074]">
             Fleet partner?{" "}
-            <Link href="/partner-apply" className="font-semibold text-brand-dark underline">
-              Apply as a partner
+            <Link href="/partner-login" className="font-semibold text-brand-dark underline">
+              Partner login
             </Link>
           </p>
         </div>

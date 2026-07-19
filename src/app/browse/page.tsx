@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import Icon, { type IconName } from "../components/Icon";
+import Icon from "../components/Icon";
 import Select from "@/components/ui/Select";
 import { VehicleGridSkeleton } from "@/components/ui/Skeleton";
 import {
@@ -19,12 +19,6 @@ import {
   durationParamToPackageKey
 } from "@/lib/bookings/schedule";
 
-const CATEGORY_ICONS: Record<string, IconName> = {
-  scooter: "scooter",
-  bike: "bike",
-  ev_bike: "ev",
-  cruiser: "bike"
-};
 
 const CATEGORIES = [
   { key: "all", label: "All" },
@@ -54,7 +48,6 @@ function VehicleCard({
 }) {
   const rate = getPackageRate(vehicle, durationKey);
   const durUnit = PACKAGE_PLANS.find((d) => d.rateKey === durationKey)?.unit ?? "week";
-  const icon = CATEGORY_ICONS[vehicle.category] ?? "scooter";
   const availableUnits = availability?.available_units ?? vehicle.stockApprox;
   const totalUnits = availability?.total_units ?? vehicle.stockApprox;
   const isAvailable = availability?.is_available ?? vehicle.is_active;
@@ -73,8 +66,7 @@ function VehicleCard({
               event.currentTarget.src = vehicle.fallbackImage;
             }}
           />
-          <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-white/90 px-3 py-1 text-[11px] font-bold text-[color:var(--color-ink)]">
-            <Icon name={icon} className="h-3.5 w-3.5" />
+          <span className="absolute left-3 top-3 rounded-full bg-white/90 px-3 py-1 text-[11px] font-bold capitalize text-[color:var(--color-ink)]">
             {vehicle.category.replace("_", " ")}
           </span>
           <span className={`absolute right-3 top-3 rounded-full px-3 py-1 text-[11px] font-bold ${isAvailable ? "bg-[color:var(--color-green)] text-white" : "bg-red-600 text-white"}`}>

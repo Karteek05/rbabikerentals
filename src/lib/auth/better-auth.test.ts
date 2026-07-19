@@ -19,15 +19,25 @@ describe("Better Auth configuration", () => {
     ).toBe("postgres://supabase");
   });
 
-  test("allows memory auth only outside production", () => {
+  test("allows memory auth when no database URL is configured", () => {
     expect(resolveAuthDatabaseUrl({ APP_ENV: "development" })).toBeUndefined();
   });
 
-  test("ignores database URLs outside production", () => {
+  test("uses the configured database in development for shared Supabase auth", () => {
     expect(
       resolveAuthDatabaseUrl({
         APP_ENV: "development",
-        SUPABASE_DB_URL: "postgres://stale-local-url"
+        DATABASE_URL: "postgres://supabase"
+      })
+    ).toBe("postgres://supabase");
+  });
+
+  test("can force memory auth in development with AUTH_USE_MEMORY", () => {
+    expect(
+      resolveAuthDatabaseUrl({
+        APP_ENV: "development",
+        DATABASE_URL: "postgres://supabase",
+        AUTH_USE_MEMORY: "true"
       })
     ).toBeUndefined();
   });

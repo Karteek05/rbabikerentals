@@ -16,7 +16,7 @@ import {
 import type { PartnerApplicationStatus, Role, User } from "@/lib/types/domain";
 import type { PartnerApplyRequest } from "@/lib/types/contracts";
 import { ApiException } from "@/lib/utils/errors";
-import { getServerAppBaseUrl } from "@/lib/utils/app-url";
+import { getCustomerFacingBaseUrl, getServerAppBaseUrl } from "@/lib/utils/app-url";
 
 function normalizePhone(value: string | undefined) {
   if (!value) return undefined;
@@ -156,7 +156,7 @@ export async function approvePartnerApplication(
   });
 
   const email = await resolveUserNotificationEmail(updated.id, updated.email);
-  const loginUrl = `${(getServerAppBaseUrl() ?? "http://localhost:3000").replace(/\/$/, "")}/partner-login`;
+  const loginUrl = `${(getCustomerFacingBaseUrl() ?? "http://localhost:3000").replace(/\/$/, "")}/partner-login`;
 
   if (email) {
     await notifyUser({
@@ -205,7 +205,7 @@ export async function rejectPartnerApplication(
   });
 
   const email = await resolveUserNotificationEmail(updated.id, updated.email);
-  const reapplyUrl = `${(getServerAppBaseUrl() ?? "http://localhost:3000").replace(/\/$/, "")}/partner-apply`;
+  const reapplyUrl = `${(getCustomerFacingBaseUrl() ?? "http://localhost:3000").replace(/\/$/, "")}/partner-apply`;
 
   if (email) {
     await notifyUser({

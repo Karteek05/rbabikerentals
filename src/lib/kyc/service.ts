@@ -14,24 +14,9 @@ import { createDigilockerRequest } from "@/lib/integrations/setu-digilocker";
 import { fetchDigilockerRequestStatus } from "@/lib/integrations/setu-digilocker";
 import { assertCanTransition } from "@/lib/bookings/state-machine";
 import { notifyAdmin, notifyUser } from "@/lib/notifications/service";
+import { parseSetuDigilockerStatus, resolveKycCallbackStatus } from "@/lib/kyc/setu-status";
 import { ApiException } from "@/lib/utils/errors";
 import { newId } from "@/lib/utils/ids";
-
-function resolveKycCallbackStatus(input: {
-  status?: string;
-  aadhaarVerified?: boolean;
-  dlVerified?: boolean;
-}) {
-  if (input.status === "failed") {
-    return "failed" as const;
-  }
-  if (input.status === "verified") {
-    return input.aadhaarVerified && input.dlVerified
-      ? ("verified" as const)
-      : ("manual_review" as const);
-  }
-  return "manual_review" as const;
-}
 
 async function getOrCreateKycRecord(userId: string): Promise<KycRecord> {
   try {
@@ -178,6 +163,7 @@ export async function handleDigilockerCallback(input: {
   dlVerified?: boolean;
   cibilScore?: number | null;
   failureReason?: string;
+  consentScopes?: string[];
 }) {
   if (!input.requestId) {
     throw new ApiException(400, "request_id_required", "Missing requestId in callback.");
@@ -188,23 +174,40 @@ export async function handleDigilockerCallback(input: {
     throw new ApiException(404, "kyc_not_found", "No KYC record found for requestId.");
   }
 
-  const status = resolveKycCallbackStatus(input);
+  if (current.status === "verified") {
+    return current;
+  }
+
+  const aadhaarVerified = Boolean(input.aadhaarVerified) || current.aadhaar_verified;
+  const dlVerified = Boolean(input.dlVerified) || current.dl_verified;
+  const status = resolveKycCallbackStatus({
+    status: input.status,
+    aadhaarVerified,
+    dlVerified
+  });
+
+  if (current.status === "failed" && status === "failed") {
+    return current;
+  }
 
   const updated = await upsertKycRecord({
     ...current,
-    status,
-    aadhaar_verified: Boolean(input.aadhaarVerified),
-    dl_verified: Boolean(input.dlVerified),
+    status: status === "in_progress" ? "in_progress" : status,
+    aadhaar_verified: aadhaarVerified,
+    dl_verified: dlVerified,
+    consent_scopes: input.consentScopes?.length
+      ? input.consentScopes
+      : current.consent_scopes,
     cibil_score: input.cibilScore ?? current.cibil_score ?? null,
     needs_manual_review: status === "manual_review",
-    failure_reason: input.failureReason,
+    failure_reason: status === "failed" ? input.failureReason : null,
     updated_at: new Date().toISOString()
   });
 
   const user = await getUserOrThrow(current.user_id);
   await upsertUser({
     ...user,
-    kyc_status: status
+    kyc_status: status === "in_progress" ? "in_progress" : status
   });
 
   if (status === "verified") {
@@ -338,20 +341,16 @@ export async function pollDigilockerStatus(
   actor: { userId: string; role: Role }
 ) {
   await getKycRequestForActor(requestId, actor);
-  const payload = (await fetchDigilockerRequestStatus(requestId)) as {
-    status?: string;
-    aadhaarVerified?: boolean;
-    dlVerified?: boolean;
-    cibilScore?: number;
-    failureReason?: string;
-  };
+  const payload = (await fetchDigilockerRequestStatus(requestId)) as Record<string, unknown>;
+  const parsed = parseSetuDigilockerStatus(payload);
   const status = await handleDigilockerCallback({
     requestId,
-    status: payload.status as "verified" | "failed" | "manual_review" | undefined,
-    aadhaarVerified: payload.aadhaarVerified,
-    dlVerified: payload.dlVerified,
-    cibilScore: payload.cibilScore,
-    failureReason: payload.failureReason
+    status: parsed.status,
+    aadhaarVerified: parsed.aadhaarVerified,
+    dlVerified: parsed.dlVerified,
+    cibilScore: parsed.cibilScore ?? null,
+    failureReason: parsed.failureReason,
+    consentScopes: parsed.consentScopes
   });
 
   return {

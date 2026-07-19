@@ -12,6 +12,7 @@ import type {
   AdminVehicleUpsertRequest
 } from "@/lib/types/contracts";
 import type { Role, Vehicle } from "@/lib/types/domain";
+import { inferCatalogVehicleId } from "@/lib/fleet/catalog";
 import { ApiException } from "@/lib/utils/errors";
 import { newId } from "@/lib/utils/ids";
 
@@ -52,6 +53,24 @@ async function assertPartnerOwner(ownerId: string) {
   }
 }
 
+function resolveCatalogVehicleId(
+  input: {
+    brand?: string;
+    model?: string;
+    category?: string;
+    chassis_number?: string | null;
+    catalog_vehicle_id?: string | null;
+  },
+  current?: string | null
+) {
+  const explicit = input.catalog_vehicle_id?.trim();
+  if (explicit) return explicit;
+  if (input.catalog_vehicle_id === null) return null;
+  if (current?.trim()) return current;
+  if (!input.chassis_number?.trim()) return null;
+  return inferCatalogVehicleId(input);
+}
+
 export async function listVehiclesForAdmin(options?: { includeInactive?: boolean }) {
   const vehicles = await listVehicles();
   const filtered = options?.includeInactive
@@ -87,6 +106,7 @@ export async function createVehicleByAdmin(
     model: input.model.trim(),
     registration_number: input.registration_number?.trim() || null,
     chassis_number: input.chassis_number?.trim() || null,
+    catalog_vehicle_id: resolveCatalogVehicleId(input),
     image_urls: sanitizeImageUrls(input.image_urls),
     is_active: input.is_active ?? true,
     deposit_amount: Math.round(input.deposit_amount),
@@ -148,6 +168,17 @@ export async function updateVehicleByAdmin(
     model: input.model?.trim() || current.model,
     registration_number: input.registration_number !== undefined ? (input.registration_number?.trim() || null) : current.registration_number,
     chassis_number: input.chassis_number !== undefined ? (input.chassis_number?.trim() || null) : current.chassis_number,
+    catalog_vehicle_id: resolveCatalogVehicleId(
+      {
+        brand: input.brand ?? current.brand,
+        model: input.model ?? current.model,
+        category: input.category ?? current.category,
+        chassis_number:
+          input.chassis_number !== undefined ? input.chassis_number : current.chassis_number,
+        catalog_vehicle_id: input.catalog_vehicle_id
+      },
+      current.catalog_vehicle_id
+    ),
     image_urls:
       input.image_urls !== undefined
         ? sanitizeImageUrls(input.image_urls)

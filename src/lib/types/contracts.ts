@@ -194,6 +194,7 @@ export interface AdminVehicleUpsertRequest {
   rate_per_week: number;
   rate_per_month: number;
   image_urls?: string[];
+  catalog_vehicle_id?: string | null;
 }
 
 export interface AdminVehicleUpdateRequest {
@@ -211,6 +212,7 @@ export interface AdminVehicleUpdateRequest {
   rate_per_week?: number;
   rate_per_month?: number;
   image_urls?: string[];
+  catalog_vehicle_id?: string | null;
 }
 
 export interface AdminVehicleImageRequest {

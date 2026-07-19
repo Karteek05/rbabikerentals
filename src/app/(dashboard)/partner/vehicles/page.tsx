@@ -4,7 +4,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import PartnerPageHeader from "@/app/components/partner/PartnerPageHeader";
 import StatusPill from "@/app/components/partner/StatusPill";
 import Icon from "@/app/components/Icon";
-import { getVehicleDisplayName } from "@/lib/fleet/display";
+import { getVehicleDisplayName, resolveVehicleThumbnail } from "@/lib/fleet/display";
 import type { PartnerVehicleRow } from "@/lib/partner/service";
 
 export default function PartnerVehiclesPage() {
@@ -142,14 +142,32 @@ export default function PartnerVehiclesPage() {
                   <Fragment key={vehicle.id}>
                     <tr>
                       <td>
-                        <div className="partner-vehicle-name">
-                          {getVehicleDisplayName(vehicle.id, {
-                            brand: vehicle.brand,
-                            model: vehicle.model
-                          })}
-                        </div>
-                        <div className="text-xs text-muted">
-                          {vehicle.registration_number || vehicle.id}
+                        <div className="flex items-center gap-3">
+                          {(() => {
+                            const thumb = resolveVehicleThumbnail(vehicle);
+                            return (
+                              <img
+                                src={thumb.src}
+                                alt={thumb.alt}
+                                className="ops-vehicle-thumb"
+                                loading="lazy"
+                                onError={(event) => {
+                                  event.currentTarget.src = thumb.fallback;
+                                }}
+                              />
+                            );
+                          })()}
+                          <div>
+                            <div className="partner-vehicle-name">
+                              {getVehicleDisplayName(vehicle.id, {
+                                brand: vehicle.brand,
+                                model: vehicle.model
+                              })}
+                            </div>
+                            <div className="text-xs text-muted">
+                              {vehicle.registration_number || vehicle.id}
+                            </div>
+                          </div>
                         </div>
                       </td>
                       <td className="partner-hide-mobile">{vehicle.station ?? "—"}</td>

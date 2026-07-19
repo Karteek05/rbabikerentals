@@ -42,6 +42,14 @@ export function getServerAppBaseUrl(env: AppUrlEnv = process.env) {
   return isProductionRuntime(env) ? undefined : "http://localhost:3000";
 }
 
+/** Links emailed to customers (payment, partner onboarding). Prefer a phone-reachable URL in dev. */
+export function getCustomerFacingBaseUrl(env: AppUrlEnv = process.env) {
+  const publicUrl = normalizeBaseUrl(env.APP_PUBLIC_BASE_URL);
+  if (publicUrl) return publicUrl;
+
+  return getServerAppBaseUrl(env);
+}
+
 export function getPublicAuthClientBaseUrl(env: AppUrlEnv = process.env) {
   return normalizeBaseUrl(env.NEXT_PUBLIC_BETTER_AUTH_URL || env.NEXT_PUBLIC_APP_BASE_URL);
 }

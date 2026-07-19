@@ -28,8 +28,15 @@ def extract_chassis(text: str) -> str | None:
             value = match.group(1).upper()
             if value.startswith("ME4JK") or value.startswith("MD625"):
                 return value
+
+    loose = re.findall(r"(ME4JK[A-Z0-9]{10,20}|MD625[A-Z0-9]{10,20})", text.upper())
+    unique = sorted(set(loose))
+    if len(unique) == 1:
+        return unique[0]
+
     found = CHASSIS_RE.findall(text.upper())
-    return found[0].upper() if found else None
+    unique_found = sorted(set(found))
+    return unique_found[0].upper() if len(unique_found) == 1 else None
 
 
 def guess_doc_type(name: str, text: str) -> str:

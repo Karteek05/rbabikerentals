@@ -17,10 +17,10 @@ import type { Role } from "@/lib/types/domain";
 import type { ApproveBookingRequest, RejectBookingRequest } from "@/lib/types/contracts";
 import { ApiException } from "@/lib/utils/errors";
 import { newId } from "@/lib/utils/ids";
-import { getServerAppBaseUrl } from "@/lib/utils/app-url";
+import { getCustomerFacingBaseUrl } from "@/lib/utils/app-url";
 
 function getPaymentUrl(bookingId: string) {
-  const baseUrl = getServerAppBaseUrl() ?? "http://localhost:3000";
+  const baseUrl = getCustomerFacingBaseUrl() ?? "http://localhost:3000";
   return `${baseUrl.replace(/\/$/, "")}/my-bookings?pay=${encodeURIComponent(bookingId)}`;
 }
 

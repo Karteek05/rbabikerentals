@@ -2,7 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import CostBreakdown from "../components/CostBreakdown";
+import BookingRequirementsPanel from "@/components/BookingRequirementsPanel";
 import Icon, { type IconName } from "../components/Icon";
+import Link from "next/link";
+import { Download } from "lucide-react";
 import { PUBLIC_FLEET_BY_ID } from "@/lib/fleet/catalog";
 import { formatBookingReference, getVehicleDisplayName } from "@/lib/fleet/display";
 import { formatBookingStatus } from "@/lib/bookings/status-labels";
@@ -10,17 +13,24 @@ import { openRazorpayCheckout } from "@/lib/payments/razorpay-checkout-client";
 import { authClient } from "@/lib/auth/auth-client";
 import { BookingListSkeleton } from "@/components/ui/Skeleton";
 
-import type { PricingQuote } from "@/lib/types/domain";
+import type { KycStatus, PricingQuote } from "@/lib/types/domain";
 
 type Booking = {
   id: string;
   status: string;
   vehicle_id: string;
+  assigned_vehicle_id?: string | null;
   pickup_at: string;
   drop_at: string;
   pickup_zone?: string | null;
   quote: PricingQuote;
   cancel_reason?: string;
+};
+
+type CustomerKyc = {
+  status: KycStatus;
+  aadhaar_verified: boolean;
+  dl_verified: boolean;
 };
 
 type NotificationItem = {
@@ -94,6 +104,7 @@ export default function MyBookingsPage() {
   const [tab, setTab] = useState("all");
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [qrBookingId, setQrBookingId] = useState<string | null>(null);
+  const [kyc, setKyc] = useState<CustomerKyc | null>(null);
 
   const showSuccess = (msg: string) => {
     setSuccessMsg(msg);
@@ -132,6 +143,24 @@ export default function MyBookingsPage() {
     }
   }, []);
 
+  const fetchKyc = useCallback(async (userId: string) => {
+    try {
+      const res = await fetch(`/api/kyc/${userId}`, fetchOptions);
+      const json = await res.json();
+      if (!res.ok || !json.ok || !json.data) {
+        setKyc(null);
+        return;
+      }
+      setKyc({
+        status: json.data.status as KycStatus,
+        aadhaar_verified: Boolean(json.data.aadhaar_verified),
+        dl_verified: Boolean(json.data.dl_verified)
+      });
+    } catch {
+      setKyc(null);
+    }
+  }, []);
+
   useEffect(() => {
     if (sessionPending) return;
     if (!session?.user) {
@@ -143,7 +172,8 @@ export default function MyBookingsPage() {
     }
     fetchBookings();
     fetchNotifications();
-  }, [fetchBookings, fetchNotifications, session?.user?.id, sessionPending]);
+    void fetchKyc(session.user.id);
+  }, [fetchBookings, fetchKyc, fetchNotifications, session?.user?.id, sessionPending]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -475,6 +505,13 @@ export default function MyBookingsPage() {
               const vIcon: IconName = "scooter";
               const vName = getVehicleDisplayName(booking.vehicle_id);
               const vehicle = PUBLIC_FLEET_BY_ID[booking.vehicle_id];
+              const isCompleted = booking.status === "completed";
+              const hasInvoice = ["confirmed", "ongoing", "extended", "completed"].includes(
+                booking.status
+              );
+              const showPaymentSummary = ["payment_pending", "confirmed", "extended", "ongoing"].includes(
+                booking.status
+              );
 
               return (
                 <div key={booking.id} className="card border border-black/5 hover:shadow-card-md transition-shadow">
@@ -570,12 +607,46 @@ export default function MyBookingsPage() {
                       </div>
                     )}
 
-                    {(booking.status === "payment_pending" ||
-                      booking.status === "confirmed" ||
-                      booking.status === "extended" ||
-                      booking.status === "ongoing" ||
-                      booking.status === "completed") && (
+                    <BookingRequirementsPanel
+                      bookingId={booking.id}
+                      vehicleId={booking.vehicle_id}
+                      assignedVehicleId={booking.assigned_vehicle_id}
+                      bookingStatus={booking.status}
+                      pickupAt={booking.pickup_at}
+                      dropAt={booking.drop_at}
+                      kycStatus={kyc?.status}
+                      aadhaarVerified={kyc?.aadhaar_verified}
+                      dlVerified={kyc?.dl_verified}
+                    />
+
+                    {isCompleted ? (
+                      <div className="mt-4 pt-4 border-t border-black/5">
+                        <Link
+                          href={`/bookings/${booking.id}/invoice`}
+                          className="btn-secondary btn-sm inline-flex items-center gap-2"
+                        >
+                          <Download className="h-3.5 w-3.5" />
+                          Download invoice
+                        </Link>
+                      </div>
+                    ) : null}
+
+                    {showPaymentSummary ? (
                       <div className="mt-4">
+                        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                          <p className="text-xs font-bold uppercase tracking-wide text-[color:var(--color-muted)]">
+                            Payment summary
+                          </p>
+                          {hasInvoice && !isCompleted ? (
+                            <Link
+                              href={`/bookings/${booking.id}/invoice`}
+                              className="btn-secondary btn-sm inline-flex items-center gap-2"
+                            >
+                              <Download className="h-3.5 w-3.5" />
+                              Download invoice
+                            </Link>
+                          ) : null}
+                        </div>
                         <CostBreakdown
                           quote={booking.quote}
                           amountPaid={
@@ -585,7 +656,7 @@ export default function MyBookingsPage() {
                           showDeposit
                         />
                       </div>
-                    )}
+                    ) : null}
 
                     {booking.status === "payment_pending" && qrBookingId === booking.id ? (
                       <div className="mt-4 grid gap-4 rounded-lg border border-[color:var(--color-line)] bg-[color:var(--color-paper)] p-4 sm:grid-cols-[180px_minmax(0,1fr)]">

@@ -473,6 +473,69 @@ export function buildUserEmail(params: {
   return null;
 }
 
+export async function sendBookingSubmittedAdminEmail(
+  adminEmail: string,
+  details: {
+    booking_id: string;
+    booking_ref: string;
+    customer_name: string;
+    customer_email?: string | null;
+    customer_phone?: string | null;
+    vehicle_name: string;
+    pickup_at: string;
+    drop_at: string;
+    pickup_zone?: string | null;
+    pickup_address?: string | null;
+    total_payable: number;
+    admin_url: string;
+  }
+) {
+  const pickupTime = new Date(details.pickup_at).toLocaleString("en-IN");
+  const dropTime = new Date(details.drop_at).toLocaleString("en-IN");
+  const amount = formatMoney(details.total_payable);
+  const pickupLocation =
+    [details.pickup_zone, details.pickup_address].filter(Boolean).join(" — ") || "—";
+
+  await sendEmail({
+    to: adminEmail,
+    subject: `New booking request — ${details.vehicle_name} (${details.booking_ref})`,
+    text: paragraph([
+      "A customer submitted a new bike rental request.",
+      "",
+      `Customer: ${details.customer_name}`,
+      `Email: ${details.customer_email ?? "—"}`,
+      `Phone: ${details.customer_phone ?? "—"}`,
+      `Vehicle: ${details.vehicle_name}`,
+      `Booking reference: ${details.booking_ref}`,
+      `Pickup: ${pickupTime}`,
+      `Drop: ${dropTime}`,
+      `Pickup location: ${pickupLocation}`,
+      `Quoted amount: ${amount}`,
+      "",
+      `Review and approve: ${details.admin_url}`,
+      "",
+      "RBA Bike Rentals"
+    ]),
+    html: renderEmailHtml({
+      title: "New booking request",
+      intro: "A customer submitted a bike rental request that needs admin review.",
+      rows: [
+        ["Customer", details.customer_name],
+        ["Email", details.customer_email ?? "—"],
+        ["Phone", details.customer_phone ?? "—"],
+        ["Vehicle", details.vehicle_name],
+        ["Booking reference", details.booking_ref],
+        ["Pickup", pickupTime],
+        ["Drop", dropTime],
+        ["Pickup location", pickupLocation],
+        ["Quoted amount", amount]
+      ],
+      cta: { label: "Review booking", url: details.admin_url },
+      closing: "Approve the booking to open payment for the customer."
+    })
+  });
+}
+
 export async function sendPartnerApplicationSubmittedEmail(
   adminEmail: string,
   details: {

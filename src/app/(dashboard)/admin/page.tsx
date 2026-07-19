@@ -3,9 +3,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Sidebar from "../../components/Sidebar";
 import Icon from "../../components/Icon";
-import { getVehicleDisplayName, formatBookingReference } from "@/lib/fleet/display";
+import { listAssignableUnitsForBooking } from "@/lib/bookings/assignable-units";
+import { PUBLIC_FLEET } from "@/lib/fleet/catalog";
+import {
+  formatBookingReference,
+  getVehicleDisplayName,
+  resolveVehicleThumbnail
+} from "@/lib/fleet/display";
+import { getKycAdminBadge } from "@/lib/kyc/admin-labels";
+import type { KycStatus } from "@/lib/types/domain";
 import { formatBookingStatus } from "@/lib/bookings/status-labels";
-import VehicleTrackingMap, { type TrackingVehicleItem } from "../../components/VehicleTrackingMap";
 import { StatCardsSkeleton, Skeleton } from "@/components/ui/Skeleton";
 
 type Booking = {
@@ -18,6 +25,7 @@ type Booking = {
   cancel_reason?: string;
   pickup_at?: string;
   drop_at?: string;
+  requested_drop_at?: string | null;
   pickup_zone?: string | null;
   quote?: { total_payable?: number };
   created_at?: string;
@@ -27,6 +35,7 @@ type Booking = {
     phone?: string | null;
     pan_number?: string | null;
     date_of_birth?: string | null;
+    kyc_status?: KycStatus | null;
   } | null;
 };
 
@@ -56,6 +65,7 @@ type VehicleForm = {
   model: string;
   registration_number: string;
   chassis_number: string;
+  catalog_vehicle_id: string;
   is_active: boolean;
   deposit_amount: number;
   rate_per_hour: number;
@@ -86,7 +96,6 @@ const navItems = [
   { href: "/admin#partner-applications", icon: "briefcase", label: "Partners" },
   { href: "/admin#fleet", icon: "bike", label: "Fleet Ops" },
   { href: "/admin#bookings", icon: "list", label: "Bookings" },
-  { href: "/admin#tracking", icon: "location", label: "Live Tracking" },
   { href: "/admin#audit", icon: "search", label: "Audit Logs" }
 ] as const;
 
@@ -97,6 +106,7 @@ const emptyVehicleForm: VehicleForm = {
   model: "Activa 110",
   registration_number: "",
   chassis_number: "",
+  catalog_vehicle_id: "",
   is_active: true,
   deposit_amount: 2000,
   rate_per_hour: 0,
@@ -111,6 +121,16 @@ function StatusBadge({ status }: { status: string }) {
       {formatBookingStatus(status)}
     </span>
   );
+}
+
+function KycStatusBadge({ status }: { status?: KycStatus | null }) {
+  const { label, badgeClass } = getKycAdminBadge(status);
+  return <span className={`badge ${badgeClass}`}>{label}</span>;
+}
+
+function truncateFleetId(id: string, max = 14) {
+  if (id.length <= max) return id;
+  return `${id.slice(0, max)}…`;
 }
 
 function formatDate(iso?: string) {
@@ -133,6 +153,7 @@ function mapVehicleToForm(vehicle: VehicleItem): VehicleForm {
     model: vehicle.model,
     registration_number: vehicle.registration_number ?? "",
     chassis_number: vehicle.chassis_number ?? "",
+    catalog_vehicle_id: vehicle.catalog_vehicle_id ?? "",
     is_active: vehicle.is_active,
     deposit_amount: vehicle.deposit_amount,
     rate_per_hour: vehicle.rate_per_hour,
@@ -145,7 +166,6 @@ function mapVehicleToForm(vehicle: VehicleItem): VehicleForm {
 export default function AdminDashboardPage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [vehicles, setVehicles] = useState<VehicleItem[]>([]);
-  const [trackingItems, setTrackingItems] = useState<TrackingVehicleItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState<string | null>(null);
@@ -168,6 +188,8 @@ export default function AdminDashboardPage() {
   const [rejectingUserId, setRejectingUserId] = useState<string | null>(null);
   const [pendingPartnerCount, setPendingPartnerCount] = useState(0);
   const [assignDraft, setAssignDraft] = useState<Record<string, string>>({});
+  const [assignmentEdit, setAssignmentEdit] = useState<Record<string, boolean>>({});
+  const [recentlyAssigned, setRecentlyAssigned] = useState<Set<string>>(() => new Set());
 
   const fetchInit = useMemo(
     () => ({
@@ -199,27 +221,26 @@ export default function AdminDashboardPage() {
     [vehicles]
   );
 
-  function unitsForBooking(catalogVehicleId: string) {
-    return physicalUnits.filter((unit) => unit.catalog_vehicle_id === catalogVehicleId);
+  function unitsForBooking(booking: Booking) {
+    if (!booking.pickup_at || !booking.drop_at) return [];
+    return listAssignableUnitsForBooking(booking, physicalUnits, bookings);
   }
 
   const refreshAll = useCallback(async () => {
     setError(null);
     setLoading("refresh");
     try {
-      const [bookingsRes, trackingRes, vehiclesRes, partnersRes, applicationsRes, pendingAppsRes] =
+      const [bookingsRes, vehiclesRes, partnersRes, applicationsRes, pendingAppsRes] =
         await Promise.all([
         fetch("/api/admin/bookings", { ...fetchInit }),
-        fetch("/api/admin/tracking", { ...fetchInit }),
         fetch("/api/admin/vehicles?include_inactive=true", { ...fetchInit }),
         fetch("/api/admin/partners", { ...fetchInit }),
         fetch(`/api/admin/partners/applications?status=${partnerAppFilter}`, { ...fetchInit }),
         fetch("/api/admin/partners/applications?status=pending", { ...fetchInit })
       ]);
-      const [bookingsJson, trackingJson, vehiclesJson, partnersJson, applicationsJson, pendingAppsJson] =
+      const [bookingsJson, vehiclesJson, partnersJson, applicationsJson, pendingAppsJson] =
         await Promise.all([
         bookingsRes.json(),
-        trackingRes.json(),
         vehiclesRes.json(),
         partnersRes.json(),
         applicationsRes.json(),
@@ -228,10 +249,6 @@ export default function AdminDashboardPage() {
 
       if (!bookingsRes.ok || !bookingsJson.ok) {
         setError(bookingsJson?.error?.message ?? "Failed to load bookings");
-        return;
-      }
-      if (!trackingRes.ok || !trackingJson.ok) {
-        setError(trackingJson?.error?.message ?? "Failed to load tracking data");
         return;
       }
       if (!vehiclesRes.ok || !vehiclesJson.ok) {
@@ -247,7 +264,6 @@ export default function AdminDashboardPage() {
           nextBookings.map((booking) => [booking.id, booking.assigned_vehicle_id ?? ""])
         )
       );
-      setTrackingItems(trackingJson.data.items ?? []);
       setVehicles(nextVehicles);
 
       if (!partnersRes.ok || !partnersJson.ok) {
@@ -392,6 +408,25 @@ export default function AdminDashboardPage() {
         setError(json?.error?.message ?? "Failed to assign bike");
       } else {
         showSuccess(`Physical bike assigned for ${formatBookingReference(bookingId)}.`);
+        if (json.data?.booking) {
+          const updated = json.data.booking as Booking;
+          setBookings((current) =>
+            current.map((booking) => (booking.id === bookingId ? { ...booking, ...updated } : booking))
+          );
+          setAssignDraft((current) => ({
+            ...current,
+            [bookingId]: updated.assigned_vehicle_id ?? ""
+          }));
+        }
+        setAssignmentEdit((current) => ({ ...current, [bookingId]: false }));
+        setRecentlyAssigned((current) => new Set(current).add(bookingId));
+        window.setTimeout(() => {
+          setRecentlyAssigned((current) => {
+            const next = new Set(current);
+            next.delete(bookingId);
+            return next;
+          });
+        }, 5000);
         await refreshAll();
       }
     } finally {
@@ -445,6 +480,7 @@ export default function AdminDashboardPage() {
     try {
       const payload = {
         ...vehicleForm,
+        catalog_vehicle_id: vehicleForm.catalog_vehicle_id.trim() || undefined,
         city: "bengaluru"
       };
       const url = editingVehicleId
@@ -705,10 +741,17 @@ export default function AdminDashboardPage() {
   ];
 
   const sortedVehicles = [...vehicles].sort((a, b) => a.id.localeCompare(b.id));
+  const partnerNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const partner of approvedPartners) {
+      map.set(partner.id, partner.name);
+    }
+    return map;
+  }, [approvedPartners]);
   const initialLoading = loading === "refresh" && bookings.length === 0 && vehicles.length === 0;
 
   return (
-    <div className="dashboard-layout">
+    <div className="dashboard-layout ops-shell">
       <Sidebar role="admin" navItems={[...navItems]} userName="Admin (ops)" />
 
       <div className="dashboard-content">
@@ -718,7 +761,7 @@ export default function AdminDashboardPage() {
               <Icon name="settings" className="w-5 h-5" />
               Admin Dashboard
             </h1>
-            <p>Booking operations, fleet controls, approval review, and platform tracking.</p>
+            <p>Booking operations, fleet controls, and approval review.</p>
           </div>
           <button className="btn btn-secondary" onClick={refreshAll} disabled={!!loading}>
             {loading === "refresh" ? <span className="spinner" /> : <Icon name="refresh" className="w-4 h-4" />} Refresh All
@@ -1019,6 +1062,29 @@ export default function AdminDashboardPage() {
                 </div>
               </div>
 
+              {vehicleForm.chassis_number.trim() ? (
+                <div className="form-group mb-3">
+                  <label className="form-label">Fleet model (for booking assignment)</label>
+                  <select
+                    className="form-input form-select"
+                    value={vehicleForm.catalog_vehicle_id}
+                    onChange={(event) =>
+                      setVehicleForm((prev) => ({
+                        ...prev,
+                        catalog_vehicle_id: event.target.value
+                      }))
+                    }
+                  >
+                    <option value="">Auto-detect from brand/model</option>
+                    {PUBLIC_FLEET.map((catalog) => (
+                      <option key={catalog.id} value={catalog.id}>
+                        {catalog.brand} {catalog.model}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
+
               <div className="form-row mb-3" style={{ gridTemplateColumns: "1fr 1fr" }}>
                 <div className="form-group">
                   <label className="form-label">Deposit (₹)</label>
@@ -1245,7 +1311,7 @@ export default function AdminDashboardPage() {
               )}
             </div>
 
-            <div className="card p-4 lg:col-span-2">
+            <div className="card p-4 lg:col-span-2 admin-fleet-vehicle-list">
               <div className="section-header mb-4">
                 <div>
                   <h2 className="inline-flex items-center gap-2">
@@ -1256,10 +1322,9 @@ export default function AdminDashboardPage() {
                 </div>
               </div>
               <div className="table-container">
-                <table>
+                <table className="admin-fleet-table">
                   <thead>
                     <tr>
-                      <th>ID</th>
                       <th>Vehicle</th>
                       <th>Owner</th>
                       <th>Rates</th>
@@ -1268,66 +1333,115 @@ export default function AdminDashboardPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {sortedVehicles.map((vehicle) => (
-                      <tr key={vehicle.id}>
-                        <td className="td-id">
-                          <div style={{ fontWeight: 700 }}>
-                            {vehicle.brand} {vehicle.model}
-                          </div>
-                          <div className="text-xs text-muted">{vehicle.id}</div>
-                        </td>
-                        <td>
-                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <img
-                              src={vehicle.image_urls?.[0] || "/images/services/activa-6g.svg"}
-                              alt={`${vehicle.brand} ${vehicle.model}`}
-                              style={{
-                                width: 50,
-                                height: 36,
-                                objectFit: "cover",
-                                borderRadius: 8,
-                                border: "1px solid rgba(0,0,0,0.08)"
-                              }}
-                            />
-                            <div>
-                              <div style={{ fontWeight: 700 }}>
-                                {vehicle.brand} {vehicle.model}
-                              </div>
-                              <div className="text-xs text-muted">{vehicle.category}</div>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="td-muted">{vehicle.owner_id}</td>
-                        <td className="text-xs text-muted">
-                          Hr ₹{vehicle.rate_per_hour} · Day ₹{vehicle.rate_per_day} · Wk ₹
-                          {vehicle.rate_per_week} · Mo ₹{vehicle.rate_per_month}
-                        </td>
-                        <td>
-                          <StatusBadge status={vehicle.is_active ? "active" : "cancelled"} />
-                        </td>
-                        <td>
-                          <div className="flex gap-2">
-                            <button className="btn btn-secondary btn-sm" onClick={() => editVehicle(vehicle)}>
-                              Edit
-                            </button>
-                            <button
-                              className="btn btn-secondary btn-sm"
-                              onClick={() => toggleVehicle(vehicle)}
-                              disabled={!!loading}
-                            >
-                              {loading === `toggle-${vehicle.id}` ? <span className="spinner" /> : vehicle.is_active ? "Deactivate" : "Activate"}
-                            </button>
-                            <button
-                              className="btn btn-danger btn-sm"
-                              onClick={() => deleteVehicle(vehicle.id)}
-                              disabled={!!loading}
-                            >
-                              {loading === `delete-${vehicle.id}` ? <span className="spinner" /> : "Delete"}
-                            </button>
-                          </div>
+                    {sortedVehicles.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="admin-fleet-table__empty">
+                          No vehicles in fleet yet.
                         </td>
                       </tr>
-                    ))}
+                    ) : (
+                      sortedVehicles.map((vehicle) => {
+                        const ownerName = partnerNameById.get(vehicle.owner_id);
+                        const thumb = resolveVehicleThumbnail(vehicle);
+                        return (
+                          <tr key={vehicle.id}>
+                            <td className="admin-fleet-table__vehicle">
+                              <div className="admin-fleet-table__vehicle-inner">
+                                <img
+                                  src={thumb.src}
+                                  alt={thumb.alt}
+                                  className="ops-vehicle-thumb"
+                                  loading="lazy"
+                                  onError={(event) => {
+                                    event.currentTarget.src = thumb.fallback;
+                                  }}
+                                />
+                                <div className="admin-fleet-table__vehicle-copy">
+                                  <div className="admin-fleet-table__vehicle-name">
+                                    {getVehicleDisplayName(vehicle.id, {
+                                      brand: vehicle.brand,
+                                      model: vehicle.model
+                                    })}
+                                  </div>
+                                  <div className="admin-fleet-table__vehicle-meta">
+                                    {vehicle.registration_number || truncateFleetId(vehicle.id)}
+                                  </div>
+                                  <div className="admin-fleet-table__vehicle-meta">{vehicle.category}</div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="admin-fleet-table__owner">
+                              <div className="admin-fleet-table__owner-name" title={vehicle.owner_id}>
+                                {ownerName ?? truncateFleetId(vehicle.owner_id, 20)}
+                              </div>
+                              {ownerName ? (
+                                <div className="admin-fleet-table__owner-id" title={vehicle.owner_id}>
+                                  {truncateFleetId(vehicle.owner_id)}
+                                </div>
+                              ) : null}
+                            </td>
+                            <td className="admin-fleet-table__rates">
+                              <dl className="admin-fleet-rates">
+                                <div>
+                                  <dt>Day</dt>
+                                  <dd>₹{vehicle.rate_per_day}</dd>
+                                </div>
+                                <div>
+                                  <dt>Week</dt>
+                                  <dd>₹{vehicle.rate_per_week}</dd>
+                                </div>
+                                <div>
+                                  <dt>Month</dt>
+                                  <dd>₹{vehicle.rate_per_month}</dd>
+                                </div>
+                                {vehicle.rate_per_hour > 0 ? (
+                                  <div>
+                                    <dt>Hour</dt>
+                                    <dd>₹{vehicle.rate_per_hour}</dd>
+                                  </div>
+                                ) : null}
+                              </dl>
+                            </td>
+                            <td className="admin-fleet-table__status">
+                              <StatusBadge status={vehicle.is_active ? "active" : "cancelled"} />
+                            </td>
+                            <td className="admin-fleet-table__actions">
+                              <div className="admin-fleet-table__action-group">
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary btn-sm"
+                                  onClick={() => editVehicle(vehicle)}
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary btn-sm"
+                                  onClick={() => toggleVehicle(vehicle)}
+                                  disabled={!!loading}
+                                >
+                                  {loading === `toggle-${vehicle.id}` ? (
+                                    <span className="spinner" />
+                                  ) : vehicle.is_active ? (
+                                    "Deactivate"
+                                  ) : (
+                                    "Activate"
+                                  )}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-danger btn-sm"
+                                  onClick={() => deleteVehicle(vehicle.id)}
+                                  disabled={!!loading}
+                                >
+                                  {loading === `delete-${vehicle.id}` ? <span className="spinner" /> : "Delete"}
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -1407,49 +1521,144 @@ export default function AdminDashboardPage() {
                         </div>
                         <div className="text-xs text-muted">{booking.user?.email ?? booking.user_id}</div>
                         {booking.user?.phone && <div className="text-xs text-muted">{booking.user.phone}</div>}
+                        <div style={{ marginTop: 6 }}>
+                          <KycStatusBadge status={booking.user?.kyc_status} />
+                        </div>
                       </td>
                       <td className="td-muted">
                         <div style={{ fontWeight: 700 }}>{getVehicleDisplayName(booking.vehicle_id)}</div>
                         <div className="text-xs text-muted">{booking.vehicle_id}</div>
-                        {booking.assigned_vehicle_id ? (
+                        {assignableStatuses.has(booking.status) ? (
+                          booking.assigned_vehicle_id && !assignmentEdit[booking.id] ? (
+                            <div
+                              style={{
+                                marginTop: 8,
+                                padding: "8px 10px",
+                                borderRadius: 8,
+                                border: recentlyAssigned.has(booking.id)
+                                  ? "1px solid #86efac"
+                                  : "1px solid rgba(0,0,0,0.08)",
+                                background: recentlyAssigned.has(booking.id) ? "#f0fdf4" : "#fafafa"
+                              }}
+                            >
+                              <span className="badge badge-verified" style={{ marginBottom: 6 }}>
+                                {recentlyAssigned.has(booking.id) ? "Bike assigned just now" : "Bike assigned"}
+                              </span>
+                              <div className="text-xs" style={{ fontWeight: 700, color: "var(--primary)" }}>
+                                {vehicleById[booking.assigned_vehicle_id]?.chassis_number ??
+                                  booking.assigned_vehicle_id}
+                                {vehicleById[booking.assigned_vehicle_id]?.registration_number
+                                  ? ` (${vehicleById[booking.assigned_vehicle_id]?.registration_number})`
+                                  : ""}
+                              </div>
+                              {booking.assigned_at ? (
+                                <div className="text-xs text-muted" style={{ marginTop: 2 }}>
+                                  Since {formatDate(booking.assigned_at)}
+                                </div>
+                              ) : null}
+                              <button
+                                type="button"
+                                className="btn btn-secondary btn-sm"
+                                style={{ marginTop: 8 }}
+                                onClick={() => {
+                                  setAssignmentEdit((current) => ({ ...current, [booking.id]: true }));
+                                  setAssignDraft((current) => ({
+                                    ...current,
+                                    [booking.id]: booking.assigned_vehicle_id ?? ""
+                                  }));
+                                }}
+                              >
+                                Change bike
+                              </button>
+                            </div>
+                          ) : (
+                            <div style={{ marginTop: 8 }}>
+                              <div className="text-xs text-muted" style={{ marginBottom: 6 }}>
+                                {booking.assigned_vehicle_id
+                                  ? "Pick a different physical unit:"
+                                  : "Link a chassis number to this booking:"}
+                              </div>
+                              {(() => {
+                                const availableUnits = unitsForBooking(booking);
+                                return (
+                                  <>
+                                    <div className="text-xs text-muted" style={{ marginBottom: 6 }}>
+                                      {availableUnits.length} unit
+                                      {availableUnits.length === 1 ? "" : "s"} available for{" "}
+                                      {getVehicleDisplayName(booking.vehicle_id)}
+                                    </div>
+                                    {availableUnits.length === 0 ? (
+                                      <div
+                                        className="text-xs"
+                                        style={{ color: "#92400e", marginBottom: 6 }}
+                                      >
+                                        No free units linked to this model. Edit a physical bike and
+                                        set its fleet model, or wait until overlapping bookings end.
+                                      </div>
+                                    ) : null}
+                                    <div className="flex gap-2" style={{ flexWrap: "wrap" }}>
+                                      <select
+                                        className="form-input"
+                                        style={{ minWidth: 180, fontSize: "0.75rem" }}
+                                        value={assignDraft[booking.id] ?? ""}
+                                        onChange={(event) =>
+                                          setAssignDraft((current) => ({
+                                            ...current,
+                                            [booking.id]: event.target.value
+                                          }))
+                                        }
+                                      >
+                                        <option value="">Select physical bike</option>
+                                        {availableUnits.map((unit) => (
+                                          <option key={unit.id} value={unit.id}>
+                                            {unit.chassis_number}
+                                            {unit.registration_number
+                                              ? ` (${unit.registration_number})`
+                                              : ""}
+                                          </option>
+                                        ))}
+                                      </select>
+                                      <button
+                                        className="btn btn-secondary btn-sm"
+                                        onClick={() => assignBookingUnit(booking.id)}
+                                        disabled={
+                                          loading === `assign-${booking.id}` ||
+                                          availableUnits.length === 0
+                                        }
+                                      >
+                                        {loading === `assign-${booking.id}` ? (
+                                          <span className="spinner" />
+                                        ) : booking.assigned_vehicle_id ? (
+                                          "Update assignment"
+                                        ) : (
+                                          "Assign bike"
+                                        )}
+                                      </button>
+                                      {booking.assigned_vehicle_id ? (
+                                        <button
+                                          type="button"
+                                          className="btn btn-secondary btn-sm"
+                                          onClick={() =>
+                                            setAssignmentEdit((current) => ({
+                                              ...current,
+                                              [booking.id]: false
+                                            }))
+                                          }
+                                        >
+                                          Cancel
+                                        </button>
+                                      ) : null}
+                                    </div>
+                                  </>
+                                );
+                              })()}
+                            </div>
+                          )
+                        ) : booking.assigned_vehicle_id ? (
                           <div className="text-xs" style={{ marginTop: 4, color: "var(--primary)" }}>
                             Assigned:{" "}
                             {vehicleById[booking.assigned_vehicle_id]?.chassis_number ??
                               booking.assigned_vehicle_id}
-                          </div>
-                        ) : null}
-                        {assignableStatuses.has(booking.status) ? (
-                          <div className="flex gap-2" style={{ marginTop: 6, flexWrap: "wrap" }}>
-                            <select
-                              className="form-input"
-                              style={{ minWidth: 180, fontSize: "0.75rem" }}
-                              value={assignDraft[booking.id] ?? ""}
-                              onChange={(event) =>
-                                setAssignDraft((current) => ({
-                                  ...current,
-                                  [booking.id]: event.target.value
-                                }))
-                              }
-                            >
-                              <option value="">Select physical bike</option>
-                              {unitsForBooking(booking.vehicle_id).map((unit) => (
-                                <option key={unit.id} value={unit.id}>
-                                  {unit.chassis_number}
-                                  {unit.registration_number ? ` (${unit.registration_number})` : ""}
-                                </option>
-                              ))}
-                            </select>
-                            <button
-                              className="btn btn-secondary btn-sm"
-                              onClick={() => assignBookingUnit(booking.id)}
-                              disabled={loading === `assign-${booking.id}`}
-                            >
-                              {loading === `assign-${booking.id}` ? (
-                                <span className="spinner" />
-                              ) : (
-                                "Assign"
-                              )}
-                            </button>
                           </div>
                         ) : null}
                       </td>
@@ -1543,14 +1752,6 @@ export default function AdminDashboardPage() {
               </table>
             </div>
           )}
-        </div>
-
-        <div id="tracking" className="mb-6">
-          <VehicleTrackingMap
-            title="Platform Live Tracking"
-            subtitle="Real-time location snapshots for all active tracked vehicles."
-            items={trackingItems}
-          />
         </div>
         </>
         )}

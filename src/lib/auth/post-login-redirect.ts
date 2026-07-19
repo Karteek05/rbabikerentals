@@ -3,7 +3,7 @@ import type { Role } from "@/lib/types/domain";
 export function dashboardPathForRole(role: Role | string | undefined | null) {
   if (role === "admin") return "/admin";
   if (role === "partner_investor") return "/partner";
-  if (role === "customer") return "/customer";
+  if (role === "customer") return "/my-bookings";
   return "/profile";
 }
 

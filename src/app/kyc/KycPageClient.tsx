@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import Icon from "@/app/components/Icon";
@@ -29,8 +29,8 @@ const STATUS_COPY: Record<
     tone: "success"
   },
   manual_review: {
-    title: "Under manual review",
-    body: "We received your documents but need an admin to confirm them before payment opens.",
+    title: "Documents received",
+    body: "DigiLocker consent is recorded. If both Aadhaar and DL were shared, tap Refresh status. Booking approval does not require DigiLocker.",
     tone: "warning"
   },
   failed: {
@@ -67,47 +67,137 @@ export default function KycPageClient() {
   const searchParams = useSearchParams();
   const { data: session, isPending: sessionPending } = authClient.useSession();
   const [userId, setUserId] = useState<string | null>(null);
+  const [requestId, setRequestId] = useState<string | null>(null);
   const [kycStatus, setKycStatus] = useState<KycStatus>("not_started");
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState("");
 
   const returnTo = searchParams.get("return") ?? "/my-bookings";
+  const searchParamsRef = useRef(searchParams);
+  searchParamsRef.current = searchParams;
+  const bootstrappedUserIdRef = useRef<string | null>(null);
+  const cleanedDigilockerReturnRef = useRef(false);
 
-  const loadStatus = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const accountRes = await fetch("/api/account/me", { credentials: "include" });
-      const accountJson = await accountRes.json();
-      const account = readAccountPayload(accountJson);
-      if (!account.authenticated || !account.user) {
-        router.push(`/login?next=${encodeURIComponent("/kyc")}`);
-        return;
+  const syncDigilockerStatus = useCallback(async (activeRequestId: string) => {
+    const res = await fetch(
+      `/api/kyc/digilocker/status/${encodeURIComponent(activeRequestId)}`,
+      {
+        credentials: "include"
       }
-      setUserId(account.user.id);
-      setKycStatus(account.user.kyc_status);
-
-      const kycRes = await fetch(`/api/kyc/${account.user.id}`, { credentials: "include" });
-      const kycJson = await kycRes.json();
-      if (kycRes.ok && kycJson.ok && kycJson.data?.status) {
-        setKycStatus(kycJson.data.status);
-      }
-    } catch {
-      setError("Could not load verification status.");
-    } finally {
-      setLoading(false);
+    );
+    const json = await res.json();
+    if (!res.ok || !json.ok) {
+      throw new Error(json?.error?.message ?? "Could not sync DigiLocker status.");
     }
-  }, [router]);
+    if (json.data?.updated_status) {
+      setKycStatus(json.data.updated_status as KycStatus);
+    }
+    return json.data?.updated_status as KycStatus | undefined;
+  }, []);
+
+  const loadStatus = useCallback(
+    async (options?: { pollSetu?: boolean; showSkeleton?: boolean }) => {
+      const params = searchParamsRef.current;
+      const activeReturnTo = params.get("return") ?? "/my-bookings";
+      const activeDigilockerRequestId =
+        params.get("id") ?? params.get("requestId") ?? params.get("request_id");
+      const showSkeleton = options?.showSkeleton ?? false;
+      if (showSkeleton) {
+        setInitialLoading(true);
+      } else {
+        setRefreshing(true);
+      }
+      setError("");
+      try {
+        const accountRes = await fetch("/api/account/me", { credentials: "include" });
+        const accountJson = await accountRes.json();
+        const account = readAccountPayload(accountJson);
+        if (!account.authenticated || !account.user) {
+          router.push(`/login?next=${encodeURIComponent("/kyc")}`);
+          return;
+        }
+        setUserId(account.user.id);
+        setKycStatus(account.user.kyc_status);
+
+        const kycRes = await fetch(`/api/kyc/${account.user.id}`, { credentials: "include" });
+        const kycJson = await kycRes.json();
+        let nextStatus = account.user.kyc_status as KycStatus;
+        let nextRequestId: string | null = null;
+        if (kycRes.ok && kycJson.ok && kycJson.data) {
+          if (kycJson.data.status) {
+            nextStatus = kycJson.data.status as KycStatus;
+            setKycStatus(nextStatus);
+          }
+          nextRequestId = kycJson.data.request_id ?? null;
+          setRequestId(nextRequestId);
+        }
+
+        const returnedFromDigilocker = Boolean(
+          activeDigilockerRequestId || params.get("success") === "true"
+        );
+        const shouldPoll =
+          options?.pollSetu !== false &&
+          nextStatus !== "verified" &&
+          (returnedFromDigilocker ||
+            nextStatus === "in_progress" ||
+            nextStatus === "manual_review" ||
+            nextStatus === "failed" ||
+            nextStatus === "expired");
+        const pollId = activeDigilockerRequestId ?? nextRequestId;
+        if (shouldPoll && pollId) {
+          try {
+            const synced = await syncDigilockerStatus(pollId);
+            if (synced) {
+              nextStatus = synced;
+            }
+            if (returnedFromDigilocker && !cleanedDigilockerReturnRef.current) {
+              cleanedDigilockerReturnRef.current = true;
+              const cleanPath =
+                activeReturnTo === "/my-bookings"
+                  ? "/kyc"
+                  : `/kyc?return=${encodeURIComponent(activeReturnTo)}`;
+              router.replace(cleanPath);
+            }
+          } catch (pollError) {
+            if (activeDigilockerRequestId || params.get("success") === "true") {
+              setError(
+                pollError instanceof Error
+                  ? pollError.message
+                  : "DigiLocker finished but we could not sync yet. Try Refresh status."
+              );
+            }
+          }
+        }
+      } catch {
+        setError("Could not load verification status.");
+      } finally {
+        setInitialLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [router, syncDigilockerStatus]
+  );
+
+  const sessionUserId = session?.user?.id;
 
   useEffect(() => {
     if (sessionPending) return;
-    if (!session?.user) {
+    if (!sessionUserId) {
+      bootstrappedUserIdRef.current = null;
       router.push(`/login?next=${encodeURIComponent("/kyc")}`);
       return;
     }
-    void loadStatus();
-  }, [session, sessionPending, router, loadStatus]);
+    if (bootstrappedUserIdRef.current === sessionUserId) return;
+    bootstrappedUserIdRef.current = sessionUserId;
+    setUserId(null);
+    setRequestId(null);
+    setKycStatus("not_started");
+    setError("");
+    setInitialLoading(true);
+    void loadStatus({ pollSetu: true, showSkeleton: true });
+  }, [sessionUserId, sessionPending, router, loadStatus]);
 
   async function startVerification() {
     if (!userId) return;
@@ -154,13 +244,16 @@ export default function KycPageClient() {
       </section>
 
       <section className="section-shell py-10">
-        {loading ? (
+        {initialLoading ? (
           <div className="mx-auto max-w-2xl space-y-4">
             <Skeleton className="h-32 w-full rounded-xl" />
             <Skeleton className="h-12 w-full rounded-xl" />
           </div>
         ) : (
           <div className="mx-auto max-w-2xl space-y-6">
+            {refreshing ? (
+              <p className="text-sm text-[color:var(--color-muted)]">Syncing DigiLocker status…</p>
+            ) : null}
             {error ? (
               <div className="error-banner">{error}</div>
             ) : null}
@@ -212,8 +305,13 @@ export default function KycPageClient() {
               <Link href={returnTo} className="btn-secondary">
                 Back to bookings
               </Link>
-              <button type="button" onClick={() => void loadStatus()} className="btn-secondary">
-                Refresh status
+              <button
+                type="button"
+                onClick={() => void loadStatus({ pollSetu: true, showSkeleton: false })}
+                disabled={refreshing}
+                className="btn-secondary disabled:opacity-60"
+              >
+                {refreshing ? "Refreshing…" : "Refresh status"}
               </button>
             </div>
 

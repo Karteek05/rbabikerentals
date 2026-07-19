@@ -48,7 +48,8 @@ export async function createDigilockerRequest() {
 
 export async function fetchDigilockerRequestStatus(requestId: string) {
   const cfg = getSetuConfig();
-  const statusPath = process.env.SETU_DIGILOCKER_STATUS_PATH ?? `/api/digilocker/${requestId}`;
+  const statusPath =
+    process.env.SETU_DIGILOCKER_STATUS_PATH ?? `/api/digilocker/${requestId}/status`;
   const response = await fetch(`${cfg.baseUrl}${statusPath}`, {
     method: "GET",
     headers: {

@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { LogOut } from "lucide-react";
+import { authClient } from "@/lib/auth/auth-client";
 import Icon, { type IconName } from "./Icon";
 
 interface NavItem {
@@ -19,76 +21,67 @@ interface SidebarProps {
 
 export default function Sidebar({ role, navItems, userName }: SidebarProps) {
   const pathname = usePathname();
+  const showSignOut = role === "admin" || role === "partner";
+
+  async function signOut() {
+    await authClient.signOut({
+      fetchOptions: {
+        onSuccess: () => {
+          window.location.href = "/";
+        }
+      }
+    });
+  }
 
   const roleLabels = {
     customer: "Customer",
-    partner: "Partner / Investor",
+    partner: "Partner",
     admin: "Admin"
   };
 
-  const roleIcon: Record<SidebarProps["role"], IconName> = {
-    customer: "scooter",
-    partner: "chart",
-    admin: "settings"
-  };
+  const homeHref = role === "admin" ? "/admin" : role === "partner" ? "/partner" : "/";
 
   return (
-    <aside className="sidebar">
-      <div className="sidebar-logo">
-        <Link href="/" className="inline-flex items-center gap-2 min-w-0">
-          <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[color:var(--color-ink)] text-[color:var(--color-accent)]">
-            <Icon name={roleIcon[role]} className="w-4 h-4" />
-          </span>
-          <span className="min-w-0">
-            <span className="logo-mark block">RBA Ops</span>
-            <span className="logo-sub block">{roleLabels[role]}</span>
-          </span>
+    <aside className="ops-sidebar">
+      <div className="ops-sidebar__brand">
+        <Link href={homeHref} className="ops-sidebar__logo">
+          <span className="ops-sidebar__mark">RBA</span>
+          <span className="ops-sidebar__role">{roleLabels[role]}</span>
         </Link>
       </div>
 
-      <nav className="sidebar-nav">
-        <div className="sidebar-section-label">Navigation</div>
+      <nav className="ops-sidebar__nav" aria-label="Dashboard navigation">
         {navItems.map((item) => {
           const isExactPartner = item.href === "/partner";
           const isActive = isExactPartner
             ? pathname === "/partner"
-            : pathname === item.href ||
-              (item.href !== "/" && pathname.startsWith(item.href));
+            : pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href));
           return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`nav-item${isActive ? " active" : ""}`}
-            >
-              <span className="nav-icon">
-                <Icon name={item.icon} className="w-4 h-4" />
-              </span>
+            <Link key={item.href} href={item.href} className={`ops-sidebar__link${isActive ? " is-active" : ""}`}>
+              <Icon name={item.icon} className="h-4 w-4" />
               <span>{item.label}</span>
-              {item.badge !== undefined && item.badge !== "" && (
-                <span className="nav-badge">{item.badge}</span>
-              )}
+              {item.badge !== undefined && item.badge !== "" ? (
+                <span className="ops-sidebar__badge">{item.badge}</span>
+              ) : null}
             </Link>
           );
         })}
       </nav>
 
-      <div className="sidebar-footer">
-        {userName && (
-          <div className="sidebar-user">
-            <div className="sidebar-user-name">{userName}</div>
-            <div className="sidebar-user-meta">Bengaluru dashboard</div>
-          </div>
-        )}
-        <div className="sidebar-role-badge">
-          <Icon name={roleIcon[role]} className="w-4 h-4" />
-          {roleLabels[role]}
-        </div>
-        <Link
-          href="/"
-          className="sidebar-home-link"
-        >
-          Back to Home
-        </Link>
+      <div className="ops-sidebar__footer">
+        {userName ? <p className="ops-sidebar__user">{userName}</p> : null}
+        <p className="ops-sidebar__meta">Bengaluru operations</p>
+        {role === "customer" ? (
+          <Link href="/" className="ops-sidebar__home">
+            Back to site
+          </Link>
+        ) : null}
+        {showSignOut ? (
+          <button type="button" onClick={signOut} className="ops-sidebar__logout">
+            <LogOut className="h-3.5 w-3.5" aria-hidden />
+            Log out
+          </button>
+        ) : null}
       </div>
     </aside>
   );

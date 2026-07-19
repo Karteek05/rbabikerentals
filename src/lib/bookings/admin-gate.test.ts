@@ -1,9 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { approveBooking } from "@/lib/admin/service";
 import { createBooking } from "@/lib/bookings/service";
 import { store } from "@/lib/data/store";
 
 describe("admin gated booking flow", () => {
+  afterEach(() => {
+    store.notificationJobs = [];
+  });
+
   it("creates verified-user bookings in admin review and opens payment after approval", async () => {
     const baseTime = Date.now();
     const start = new Date(baseTime + 10 * 24 * 60 * 60 * 1000).toISOString();
@@ -35,6 +39,10 @@ describe("admin gated booking flow", () => {
 
     expect(booking.status).toBe("admin_review");
     expect(booking.payment_order).toBeNull();
+
+    expect(store.notificationJobs.map((job) => job.template_key)).toContain(
+      "booking_submitted_admin"
+    );
 
     const approved = await approveBooking(
       booking.id,

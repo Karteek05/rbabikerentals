@@ -1708,3 +1708,364 @@
     scrollbar-width: thin;
   }
 }
+
+@layer components {
+  .ops-loading-screen {
+    display: grid;
+    min-height: 100vh;
+    place-items: center;
+    background: var(--color-paper);
+    padding: var(--space-lg);
+  }
+
+  .ops-loading-card {
+    width: min(100%, 360px);
+    padding: var(--space-lg);
+    border: var(--rule-thin) solid var(--color-line);
+    border-radius: var(--radius-lg);
+    background: var(--color-white);
+  }
+
+  .ops-loading-bar {
+    height: 12px;
+    border-radius: 999px;
+    background: var(--color-paper-2);
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+
+  .ops-loading-bar--short {
+    width: 68%;
+    margin-top: var(--space-sm);
+  }
+
+  .ops-loading-label {
+    margin-top: var(--space-md);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--color-muted);
+  }
+
+  .ops-shell.dashboard-layout {
+    width: min(100% - 24px, 1360px);
+    max-width: none;
+    margin: 0 auto;
+    padding: 20px 0 40px;
+    grid-template-columns: 248px minmax(0, 1fr);
+    gap: 20px;
+    align-items: start;
+  }
+
+  .ops-sidebar {
+    position: sticky;
+    top: 20px;
+    display: flex;
+    flex-direction: column;
+    min-height: calc(100vh - 40px);
+    padding: var(--space-md);
+    border: var(--rule-thin) solid var(--color-line);
+    border-radius: var(--radius-lg);
+    background:
+      linear-gradient(180deg, color-mix(in oklch, var(--color-white) 92%, var(--color-accent) 8%), var(--color-white));
+    box-shadow: 0 18px 48px color-mix(in oklch, var(--color-ink) 6%, transparent);
+  }
+
+  .ops-sidebar__brand {
+    padding-bottom: var(--space-md);
+    border-bottom: var(--rule-thin) solid var(--color-line);
+  }
+
+  .ops-sidebar__logo {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .ops-sidebar__mark {
+    font-size: 1.35rem;
+    font-weight: 900;
+    letter-spacing: -0.03em;
+    color: var(--color-ink);
+  }
+
+  .ops-sidebar__role {
+    font-size: var(--text-xs);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-muted);
+  }
+
+  .ops-sidebar__nav {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 6px;
+    padding: var(--space-md) 0;
+  }
+
+  .ops-sidebar__link {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 11px 12px;
+    border-radius: var(--radius-sm);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--color-copy);
+    transition: background-color 150ms ease, color 150ms ease;
+  }
+
+  .ops-sidebar__link:hover {
+    background: var(--color-paper-2);
+    color: var(--color-ink);
+  }
+
+  .ops-sidebar__link.is-active {
+    background: var(--color-ink);
+    color: var(--color-white);
+  }
+
+  .ops-sidebar__badge {
+    margin-left: auto;
+    border-radius: 999px;
+    background: color-mix(in oklch, var(--color-white) 20%, transparent);
+    padding: 2px 8px;
+    font-size: 10px;
+    font-weight: 700;
+  }
+
+  .ops-sidebar__footer {
+    margin-top: auto;
+    padding-top: var(--space-md);
+    border-top: var(--rule-thin) solid var(--color-line);
+  }
+
+  .ops-sidebar__user {
+    font-size: var(--text-sm);
+    font-weight: 700;
+    color: var(--color-ink);
+  }
+
+  .ops-sidebar__meta {
+    margin-top: 4px;
+    font-size: var(--text-xs);
+    color: var(--color-muted);
+  }
+
+  .ops-sidebar__home {
+    display: inline-flex;
+    margin-top: var(--space-sm);
+    font-size: var(--text-xs);
+    font-weight: 700;
+    color: var(--color-copy);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  .ops-sidebar__logout {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: var(--space-sm);
+    padding: 6px 10px;
+    border: var(--rule-thin) solid var(--color-line);
+    border-radius: var(--radius-sm);
+    font-size: var(--text-xs);
+    font-weight: 700;
+    color: var(--color-copy);
+    background: var(--color-paper);
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease;
+  }
+
+  .ops-sidebar__logout:hover {
+    background: var(--color-paper-2);
+    color: var(--color-ink);
+  }
+
+  .admin-fleet-vehicle-list .table-container {
+    max-height: min(520px, 58vh);
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
+
+  .admin-fleet-vehicle-list .table-container table {
+    min-width: 0;
+    table-layout: fixed;
+  }
+
+  .admin-fleet-vehicle-list .table-container thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.06);
+  }
+
+  .admin-fleet-table th:nth-child(1) {
+    width: 34%;
+  }
+
+  .admin-fleet-table th:nth-child(2) {
+    width: 16%;
+  }
+
+  .admin-fleet-table th:nth-child(3) {
+    width: 20%;
+  }
+
+  .admin-fleet-table th:nth-child(4) {
+    width: 10%;
+  }
+
+  .admin-fleet-table th:nth-child(5) {
+    width: 20%;
+  }
+
+  .admin-fleet-table__vehicle-inner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .admin-fleet-table__vehicle-copy {
+    min-width: 0;
+  }
+
+  .admin-fleet-table__vehicle-name {
+    font-weight: 700;
+    color: var(--color-ink);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .admin-fleet-table__vehicle-meta {
+    margin-top: 2px;
+    font-size: 0.72rem;
+    color: var(--color-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .admin-fleet-table__owner-name {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--color-ink);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .admin-fleet-table__owner-id {
+    margin-top: 2px;
+    font-size: 0.68rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    color: var(--color-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .admin-fleet-rates {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px 12px;
+    margin: 0;
+    font-size: 0.72rem;
+  }
+
+  .admin-fleet-rates > div {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .admin-fleet-rates dt {
+    color: var(--color-muted);
+    font-weight: 600;
+  }
+
+  .admin-fleet-rates dd {
+    margin: 0;
+    font-weight: 700;
+    color: var(--color-ink);
+    white-space: nowrap;
+  }
+
+  .admin-fleet-table__status {
+    vertical-align: middle;
+  }
+
+  .admin-fleet-table__actions {
+    vertical-align: middle;
+  }
+
+  .admin-fleet-table__action-group {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .admin-fleet-table__action-group .btn-sm {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .admin-fleet-table__empty {
+    padding: var(--space-xl) var(--space-md) !important;
+    text-align: center;
+    color: var(--color-muted);
+  }
+
+  .pdf-view-only canvas,
+  .pdf-view-only img {
+    user-select: none;
+    -webkit-user-drag: none;
+  }
+
+  @media print {
+    .booking-invoice-toolbar {
+      display: none !important;
+    }
+
+    .booking-invoice-shell {
+      background: #fff !important;
+    }
+
+    .booking-invoice-card {
+      border: 0 !important;
+      box-shadow: none !important;
+    }
+  }
+
+  .ops-vehicle-thumb {
+    width: 52px;
+    height: 40px;
+    border-radius: var(--radius-sm);
+    object-fit: cover;
+    border: var(--rule-thin) solid var(--color-line);
+    background: var(--color-paper-2);
+  }
+
+  @media (max-width: 960px) {
+    .ops-shell.dashboard-layout {
+      grid-template-columns: 1fr;
+    }
+
+    .ops-sidebar {
+      position: static;
+      min-height: auto;
+    }
+
+    .ops-sidebar__nav {
+      flex-direction: row;
+      flex-wrap: wrap;
+    }
+  }
+}

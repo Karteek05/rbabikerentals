@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 300" role="img" aria-labelledby="title desc">
+  <title id="title">TVS Raider style bike illustration</title>
+  <desc id="desc">Red and black commuter motorcycle side profile with two wheels.</desc>
+  <defs>
+    <linearGradient id="tankRed" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#e63b2e"/>
+      <stop offset="100%" stop-color="#9f1f18"/>
+    </linearGradient>
+    <linearGradient id="frameDark" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#3a3a3a"/>
+      <stop offset="100%" stop-color="#141414"/>
+    </linearGradient>
+  </defs>
+  <rect width="480" height="300" fill="#ffffff"/>
+  <ellipse cx="242" cy="246" rx="156" ry="18" fill="#000000" opacity="0.12"/>
+
+  <circle cx="128" cy="214" r="40" fill="#1d1d1d"/>
+  <circle cx="128" cy="214" r="18" fill="#757575"/>
+  <circle cx="352" cy="214" r="40" fill="#1d1d1d"/>
+  <circle cx="352" cy="214" r="18" fill="#757575"/>
+
+  <path d="M118 206h44l18-34h34l12 34z" fill="url(#frameDark)"/>
+  <path d="M168 172h118c18 0 32 14 32 32v6H168z" fill="url(#tankRed)"/>
+  <path d="M286 168h58c14 0 26 11 26 25v17h-84z" fill="#1f1f1f"/>
+  <path d="M198 128h72l-18 44h-54z" fill="#101010"/>
+  <path d="M286 128h34l28 44h-62z" fill="#2a2a2a"/>
+  <rect x="318" y="96" width="10" height="52" rx="5" fill="#1d1d1d"/>
+  <circle cx="323" cy="92" r="9" fill="#333333"/>
+  <path d="M92 188h36l-8 28H84z" fill="#2b2b2b"/>
+  <path d="M360 188h44l-10 28h-34z" fill="#2b2b2b"/>
+  <rect x="214" y="154" width="28" height="10" rx="5" fill="#ffc857"/>
+  <path d="M150 206h202" stroke="#2a2a2a" stroke-width="6" stroke-linecap="round"/>
+
+  <text x="240" y="284" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" fill="#9f1f18">RAIDER</text>
+</svg>
