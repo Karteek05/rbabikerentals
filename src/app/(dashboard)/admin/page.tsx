@@ -11,13 +11,13 @@ import {
   resolveVehicleThumbnail
 } from "@/lib/fleet/display";
 import { getKycAdminBadge } from "@/lib/kyc/admin-labels";
-import type { KycStatus } from "@/lib/types/domain";
+import type { KycStatus, BookingStatus } from "@/lib/types/domain";
 import { formatBookingStatus } from "@/lib/bookings/status-labels";
 import { StatCardsSkeleton, Skeleton } from "@/components/ui/Skeleton";
 
 type Booking = {
   id: string;
-  status: string;
+  status: BookingStatus;
   user_id: string;
   vehicle_id: string;
   assigned_vehicle_id?: string | null;
