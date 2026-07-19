@@ -471,7 +471,8 @@ export default function CustomerDashboardPage() {
                 </thead>
                 <tbody>
                   {filteredBookings.map((booking) => (
-                    <tr key={booking.id}>
+                    <Fragment key={booking.id}>
+                      <tr>
                       <td className="td-id">{booking.id}</td>
                       <td className="td-muted">{booking.vehicle_id}</td>
                       <td className="td-muted">{formatDate(booking.pickup_at)}</td>
