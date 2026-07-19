@@ -223,7 +223,11 @@ export default function AdminDashboardPage() {
 
   function unitsForBooking(booking: Booking) {
     if (!booking.pickup_at || !booking.drop_at) return [];
-    return listAssignableUnitsForBooking(booking, physicalUnits, bookings);
+    return listAssignableUnitsForBooking(
+      booking as any,
+      physicalUnits as any,
+      bookings as any
+    );
   }
 
   const refreshAll = useCallback(async () => {
