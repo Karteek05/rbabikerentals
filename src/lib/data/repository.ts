@@ -1233,7 +1233,7 @@ export async function listVehicleDocumentsExpiringBefore(
   isoTime: string
 ): Promise<VehicleDocument[]> {
   if (getDataMode() === "memory") {
-    return store.vehicleDocuments.filter((item) => item.expires_at <= isoTime);
+    return store.vehicleDocuments.filter((item) => item.expires_at && item.expires_at <= isoTime);
   }
   const supabase = getSupabaseServiceClient();
   const { data, error } = await supabase
