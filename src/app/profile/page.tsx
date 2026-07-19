@@ -168,7 +168,7 @@ export default function ProfilePage() {
 
     async function loadKyc() {
       try {
-        const response = await fetch(`/api/kyc/${account.user!.id}`, fetchOptions);
+        const response = await fetch(`/api/kyc/${account!.user!.id}`, fetchOptions);
         const json = await response.json();
         if (!response.ok || !json.ok || !json.data) {
           if (!cancelled) setKyc(null);
