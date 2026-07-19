@@ -4,6 +4,8 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import Icon, { type IconName } from "../components/Icon";
+import Select from "@/components/ui/Select";
+import { VehicleGridSkeleton } from "@/components/ui/Skeleton";
 import {
   GST_INCLUSIVE_COPY,
   PACKAGE_PLANS,
@@ -124,6 +126,16 @@ function BrowsePageContent() {
   const [availabilityMap, setAvailabilityMap] = useState<
     Record<string, { available_units: number; total_units: number; is_available: boolean }>
   >({});
+  const [availabilityLoading, setAvailabilityLoading] = useState(true);
+
+  const sortOptions = useMemo(
+    () => [
+      { value: "price_asc", label: "Price: Low to High" },
+      { value: "price_desc", label: "Price: High to Low" },
+      { value: "model", label: "Model Name" }
+    ],
+    []
+  );
 
   useEffect(() => {
     setDuration(durationParamToPackageKey(searchParams.get("duration")));
@@ -131,6 +143,7 @@ function BrowsePageContent() {
 
   useEffect(() => {
     const query = searchParams.toString();
+    setAvailabilityLoading(true);
     fetch(`/api/fleet/availability?${query}`, { credentials: "include" })
       .then((res) => res.json())
       .then((json) => {
@@ -145,7 +158,8 @@ function BrowsePageContent() {
         }
         setAvailabilityMap(next);
       })
-      .catch(() => setAvailabilityMap({}));
+      .catch(() => setAvailabilityMap({}))
+      .finally(() => setAvailabilityLoading(false));
   }, [searchParams]);
 
   const currentDurUnit = PACKAGE_PLANS.find((d) => d.rateKey === duration)?.unit ?? "week";
@@ -228,15 +242,12 @@ function BrowsePageContent() {
                   className="field-control pl-9"
                 />
               </div>
-              <select
-                className="field-control"
+              <Select
                 value={sortBy}
-                onChange={(event) => setSortBy(event.target.value as "price_asc" | "price_desc" | "model")}
-              >
-                <option value="price_asc">Price: Low to High</option>
-                <option value="price_desc">Price: High to Low</option>
-                <option value="model">Model Name</option>
-              </select>
+                onChange={(value) => setSortBy(value as "price_asc" | "price_desc" | "model")}
+                options={sortOptions}
+                aria-label="Sort vehicles"
+              />
             </div>
           </div>
 
@@ -277,6 +288,8 @@ function BrowsePageContent() {
               Clear Filters
             </button>
           </div>
+        ) : availabilityLoading ? (
+          <VehicleGridSkeleton count={filtered.length || 3} />
         ) : (
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {filtered.map((vehicle) => (
@@ -297,7 +310,7 @@ function BrowsePageContent() {
 
 export default function BrowsePage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-[color:var(--color-paper)]" />}>
+    <Suspense fallback={<VehicleGridSkeleton count={6} />}>
       <BrowsePageContent />
     </Suspense>
   );

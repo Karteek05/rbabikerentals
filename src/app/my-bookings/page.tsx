@@ -8,6 +8,7 @@ import { formatBookingReference, getVehicleDisplayName } from "@/lib/fleet/displ
 import { formatBookingStatus } from "@/lib/bookings/status-labels";
 import { openRazorpayCheckout } from "@/lib/payments/razorpay-checkout-client";
 import { authClient } from "@/lib/auth/auth-client";
+import { BookingListSkeleton } from "@/components/ui/Skeleton";
 
 import type { PricingQuote } from "@/lib/types/domain";
 
@@ -449,13 +450,7 @@ export default function MyBookingsPage() {
         </div>
 
         {loading ? (
-          <div className="py-24 text-center">
-            <svg className="animate-spin w-8 h-8 mx-auto mb-4 text-uber-body-gray" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
-            <p className="text-uber-body-gray">Loading bookings...</p>
-          </div>
+          <BookingListSkeleton count={3} />
         ) : filtered.length === 0 ? (
           <div className="py-24 text-center">
             <div className="w-16 h-16 rounded-full bg-black/5 flex items-center justify-center mx-auto mb-4">
@@ -539,7 +534,11 @@ export default function MyBookingsPage() {
                       {(isActionable || booking.status === "payment_pending" || booking.status === "admin_review" || booking.status === "pending_kyc") && (
                         <button
                           onClick={() => {
-                            if (booking.status === "admin_review" || booking.status === "pending_kyc") {
+                            if (booking.status === "pending_kyc") {
+                              window.location.href = "/kyc?return=/my-bookings";
+                              return;
+                            }
+                            if (booking.status === "admin_review") {
                               alert("Please wait. Your booking is still being reviewed by the admin. You will be able to pay once it is approved.");
                               return;
                             }
@@ -548,7 +547,9 @@ export default function MyBookingsPage() {
                           disabled={booking.status === "payment_pending" ? actPay : actExtend}
                           className="btn-primary text-sm py-2 px-5 disabled:opacity-50"
                         >
-                          {booking.status === "payment_pending"
+                          {booking.status === "pending_kyc"
+                            ? "Verify identity"
+                            : booking.status === "payment_pending"
                             ? actPay
                               ? "Opening..."
                               : "Pay Now"

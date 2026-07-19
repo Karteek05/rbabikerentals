@@ -6,12 +6,15 @@ import Icon from "../../components/Icon";
 import { getVehicleDisplayName, formatBookingReference } from "@/lib/fleet/display";
 import { formatBookingStatus } from "@/lib/bookings/status-labels";
 import VehicleTrackingMap, { type TrackingVehicleItem } from "../../components/VehicleTrackingMap";
+import { StatCardsSkeleton, Skeleton } from "@/components/ui/Skeleton";
 
 type Booking = {
   id: string;
   status: string;
   user_id: string;
   vehicle_id: string;
+  assigned_vehicle_id?: string | null;
+  assigned_at?: string | null;
   cancel_reason?: string;
   pickup_at?: string;
   drop_at?: string;
@@ -36,6 +39,7 @@ type VehicleItem = {
   model: string;
   registration_number?: string;
   chassis_number?: string;
+  catalog_vehicle_id?: string | null;
   image_urls?: string[];
   is_active: boolean;
   deposit_amount: number;
@@ -163,6 +167,7 @@ export default function AdminDashboardPage() {
   const [rejectReason, setRejectReason] = useState("");
   const [rejectingUserId, setRejectingUserId] = useState<string | null>(null);
   const [pendingPartnerCount, setPendingPartnerCount] = useState(0);
+  const [assignDraft, setAssignDraft] = useState<Record<string, string>>({});
 
   const fetchInit = useMemo(
     () => ({
@@ -183,6 +188,20 @@ export default function AdminDashboardPage() {
     () => vehicles.find((vehicle) => vehicle.id === editingVehicleId) ?? null,
     [vehicles, editingVehicleId]
   );
+
+  const physicalUnits = useMemo(
+    () => vehicles.filter((vehicle) => vehicle.chassis_number?.trim() && vehicle.is_active),
+    [vehicles]
+  );
+
+  const vehicleById = useMemo(
+    () => Object.fromEntries(vehicles.map((vehicle) => [vehicle.id, vehicle])),
+    [vehicles]
+  );
+
+  function unitsForBooking(catalogVehicleId: string) {
+    return physicalUnits.filter((unit) => unit.catalog_vehicle_id === catalogVehicleId);
+  }
 
   const refreshAll = useCallback(async () => {
     setError(null);
@@ -221,7 +240,13 @@ export default function AdminDashboardPage() {
       }
 
       const nextVehicles = (vehiclesJson.data.vehicles as VehicleItem[]) ?? [];
-      setBookings(bookingsJson.data.bookings);
+      const nextBookings = bookingsJson.data.bookings as Booking[];
+      setBookings(nextBookings);
+      setAssignDraft(
+        Object.fromEntries(
+          nextBookings.map((booking) => [booking.id, booking.assigned_vehicle_id ?? ""])
+        )
+      );
       setTrackingItems(trackingJson.data.items ?? []);
       setVehicles(nextVehicles);
 
@@ -341,6 +366,32 @@ export default function AdminDashboardPage() {
         setError(json?.error?.message ?? "Failed to approve booking");
       } else {
         showSuccess(`Booking ${bookingId} approved for payment.`);
+        await refreshAll();
+      }
+    } finally {
+      setLoading(null);
+    }
+  }
+
+  async function assignBookingUnit(bookingId: string) {
+    const assignedVehicleId = assignDraft[bookingId];
+    if (!assignedVehicleId) {
+      setError("Select a physical bike before assigning.");
+      return;
+    }
+    setError(null);
+    setLoading(`assign-${bookingId}`);
+    try {
+      const res = await fetch(`/api/admin/bookings/${bookingId}/assign`, {
+        method: "POST",
+        ...fetchInit,
+        body: JSON.stringify({ assigned_vehicle_id: assignedVehicleId })
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) {
+        setError(json?.error?.message ?? "Failed to assign bike");
+      } else {
+        showSuccess(`Physical bike assigned for ${formatBookingReference(bookingId)}.`);
         await refreshAll();
       }
     } finally {
@@ -632,6 +683,7 @@ export default function AdminDashboardPage() {
   const filteredBookings =
     bookingFilter === "all" ? bookings : bookings.filter((booking) => booking.status === bookingFilter);
   const approvableStatuses = new Set(["pending_kyc", "admin_review"]);
+  const assignableStatuses = new Set(["confirmed", "ongoing", "extension_requested", "extended"]);
 
   const totalRevenue = bookings
     .filter((booking) =>
@@ -653,6 +705,7 @@ export default function AdminDashboardPage() {
   ];
 
   const sortedVehicles = [...vehicles].sort((a, b) => a.id.localeCompare(b.id));
+  const initialLoading = loading === "refresh" && bookings.length === 0 && vehicles.length === 0;
 
   return (
     <div className="dashboard-layout">
@@ -685,6 +738,14 @@ export default function AdminDashboardPage() {
           </div>
         )}
 
+        {initialLoading ? (
+          <>
+            <StatCardsSkeleton />
+            <Skeleton className="mb-6 h-72 w-full rounded-xl" />
+            <Skeleton className="h-96 w-full rounded-xl" />
+          </>
+        ) : (
+        <>
         <div className="stats-grid">
           <div className="stat-card">
             <div className="stat-label">Total Bookings</div>
@@ -1350,6 +1411,47 @@ export default function AdminDashboardPage() {
                       <td className="td-muted">
                         <div style={{ fontWeight: 700 }}>{getVehicleDisplayName(booking.vehicle_id)}</div>
                         <div className="text-xs text-muted">{booking.vehicle_id}</div>
+                        {booking.assigned_vehicle_id ? (
+                          <div className="text-xs" style={{ marginTop: 4, color: "var(--primary)" }}>
+                            Assigned:{" "}
+                            {vehicleById[booking.assigned_vehicle_id]?.chassis_number ??
+                              booking.assigned_vehicle_id}
+                          </div>
+                        ) : null}
+                        {assignableStatuses.has(booking.status) ? (
+                          <div className="flex gap-2" style={{ marginTop: 6, flexWrap: "wrap" }}>
+                            <select
+                              className="form-input"
+                              style={{ minWidth: 180, fontSize: "0.75rem" }}
+                              value={assignDraft[booking.id] ?? ""}
+                              onChange={(event) =>
+                                setAssignDraft((current) => ({
+                                  ...current,
+                                  [booking.id]: event.target.value
+                                }))
+                              }
+                            >
+                              <option value="">Select physical bike</option>
+                              {unitsForBooking(booking.vehicle_id).map((unit) => (
+                                <option key={unit.id} value={unit.id}>
+                                  {unit.chassis_number}
+                                  {unit.registration_number ? ` (${unit.registration_number})` : ""}
+                                </option>
+                              ))}
+                            </select>
+                            <button
+                              className="btn btn-secondary btn-sm"
+                              onClick={() => assignBookingUnit(booking.id)}
+                              disabled={loading === `assign-${booking.id}`}
+                            >
+                              {loading === `assign-${booking.id}` ? (
+                                <span className="spinner" />
+                              ) : (
+                                "Assign"
+                              )}
+                            </button>
+                          </div>
+                        ) : null}
                       </td>
                       <td className="td-muted">
                         <div>{formatDate(booking.pickup_at)}</div>
@@ -1450,6 +1552,8 @@ export default function AdminDashboardPage() {
             items={trackingItems}
           />
         </div>
+        </>
+        )}
       </div>
     </div>
   );

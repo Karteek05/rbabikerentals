@@ -7,6 +7,7 @@ import { isGoogleAuthEnabled, startGoogleSignIn } from "@/lib/auth/google-sign-i
 import { resolvePostLoginPath, resolveSafeReturnTo } from "@/lib/auth/post-login-redirect";
 import Link from "next/link";
 import Icon from "@/app/components/Icon";
+import PasswordInput from "@/app/components/PasswordInput";
 import { motion } from "framer-motion";
 
 function SignUpForm() {
@@ -158,28 +159,26 @@ function SignUpForm() {
                   <span className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-[#526074]">
                     Password
                   </span>
-                  <input
-                    className="form-input"
-                    type="password"
+                  <PasswordInput
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
                     required
                     minLength={8}
+                    autoComplete="new-password"
                   />
                 </label>
                 <label className="block">
                   <span className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-[#526074]">
                     Confirm Password
                   </span>
-                  <input
-                    className="form-input"
-                    type="password"
+                  <PasswordInput
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="••••••••"
                     required
                     minLength={8}
+                    autoComplete="new-password"
                   />
                 </label>
 

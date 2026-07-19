@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Icon from "../Icon";
+import DatePicker from "@/components/ui/DatePicker";
 
 type PartnerFilterDrawerProps = {
   open: boolean;
@@ -31,25 +32,23 @@ export default function PartnerFilterDrawer({
       <aside
         className="partner-filter-drawer"
         onClick={(event) => event.stopPropagation()}
-        aria-label="Data filter"
+        aria-label="Week filter"
       >
         <div className="partner-filter-header">
           <button type="button" className="partner-icon-btn" onClick={onClose} aria-label="Close filter">
             <Icon name="close" className="w-4 h-4" />
           </button>
-          <h2>Data Filter</h2>
+          <h2>Week</h2>
         </div>
 
         <div className="partner-filter-body">
           <label className="form-label" htmlFor="partner-week-start">
             Week start date
           </label>
-          <input
-            id="partner-week-start"
-            type="date"
-            className="form-input"
+          <DatePicker
             value={draftWeekStart}
-            onChange={(event) => setDraftWeekStart(event.target.value)}
+            onChange={setDraftWeekStart}
+            aria-label="Week start date"
           />
         </div>
 

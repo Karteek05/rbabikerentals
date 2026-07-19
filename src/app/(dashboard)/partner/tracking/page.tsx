@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import PartnerPageHeader from "@/app/components/partner/PartnerPageHeader";
 import Icon from "@/app/components/Icon";
-import VehicleTrackingMap, { type TrackingVehicleItem } from "@/app/components/VehicleTrackingMap";import { getVehicleDisplayName } from "@/lib/fleet/display";
+import VehicleTrackingMap, { type TrackingVehicleItem } from "@/app/components/VehicleTrackingMap";
+import { getVehicleDisplayName } from "@/lib/fleet/display";
 import type { PartnerVehicleRow } from "@/lib/partner/service";
 
 export default function PartnerTrackingPage() {

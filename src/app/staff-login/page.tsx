@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { authClient } from "@/lib/auth/auth-client";
 import Icon from "@/app/components/Icon";
+import PasswordInput from "@/app/components/PasswordInput";
 import { motion } from "framer-motion";
 
 function StaffLoginForm() {
@@ -218,14 +219,13 @@ function StaffLoginForm() {
                 <div className="mb-1.5 flex items-center justify-between">
                   <span className="block text-xs font-bold text-[#526074] uppercase tracking-wider">Password</span>
                 </div>
-                <input
-                  className="form-input"
-                  type="password"
+                <PasswordInput
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   required
                   minLength={8}
+                  autoComplete={mode === "register" ? "new-password" : "current-password"}
                 />
               </label>
 

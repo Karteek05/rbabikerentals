@@ -11,6 +11,7 @@ import {
 } from "@/lib/auth/post-login-redirect";
 import Link from "next/link";
 import Icon from "@/app/components/Icon";
+import PasswordInput from "@/app/components/PasswordInput";
 import { motion } from "framer-motion";
 
 function LoginForm() {
@@ -107,6 +108,7 @@ function LoginForm() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
                 required
+                autoComplete="email"
               />
             </label>
             <label className="block">
@@ -114,13 +116,12 @@ function LoginForm() {
                 <span className="block text-xs font-bold text-[#526074] uppercase tracking-wider">Password</span>
                 <Link href="/forgot-password" className="text-[10px] font-bold text-brand-dark hover:underline">Forgot?</Link>
               </div>
-              <input
-                className="form-input"
-                type="password"
+              <PasswordInput
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
                 required
+                autoComplete="current-password"
               />
             </label>
 

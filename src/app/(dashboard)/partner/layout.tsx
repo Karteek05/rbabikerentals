@@ -35,9 +35,7 @@ export default function PartnerLayout({ children }: { children: React.ReactNode 
       />
       <div className="dashboard-content partner-content">
         {children}
-        <footer className="partner-footer">
-          © RBA Bike Rentals · All rights reserved · Version 0.1.0
-        </footer>
+        <footer className="partner-footer">© RBA Bike Rentals</footer>
       </div>
     </div>
   );

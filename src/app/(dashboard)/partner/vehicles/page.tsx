@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import PartnerPageHeader from "@/app/components/partner/PartnerPageHeader";
 import StatusPill from "@/app/components/partner/StatusPill";
 import Icon from "@/app/components/Icon";
@@ -13,8 +13,10 @@ export default function PartnerVehiclesPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [documents, setDocuments] = useState<any[]>([]);
-  const [loadingDocs, setLoadingDocs] = useState(false);
+  const [documentsByVehicleId, setDocumentsByVehicleId] = useState<Record<string, any[]>>({});
+  const [docErrorByVehicleId, setDocErrorByVehicleId] = useState<Record<string, string>>({});
+  const [loadingDocsId, setLoadingDocsId] = useState<string | null>(null);
+  const docFetchSeq = useRef<Record<string, number>>({});
 
   const loadVehicles = useCallback(async () => {
     setLoading(true);
@@ -42,22 +44,70 @@ export default function PartnerVehiclesPage() {
     const q = search.trim().toLowerCase();
     if (!q) return vehicles;
     return vehicles.filter((vehicle) => {
-      const label = `${vehicle.id} ${vehicle.brand} ${vehicle.model}`.toLowerCase();
+      const label = `${vehicle.id} ${vehicle.brand} ${vehicle.model} ${vehicle.registration_number ?? ""}`.toLowerCase();
       return label.includes(q);
     });
   }, [search, vehicles]);
+
+  function toggleVehicle(vehicle: PartnerVehicleRow) {
+    if (expandedId === vehicle.id) {
+      setExpandedId(null);
+      return;
+    }
+    setExpandedId(vehicle.id);
+    setLoadingDocsId(vehicle.id);
+    setDocErrorByVehicleId((current) => ({ ...current, [vehicle.id]: "" }));
+    const seq = (docFetchSeq.current[vehicle.id] ?? 0) + 1;
+    docFetchSeq.current[vehicle.id] = seq;
+    fetch(`/api/vehicles/${vehicle.id}/documents`, { credentials: "include" })
+      .then((res) => res.json())
+      .then((json) => {
+        if (docFetchSeq.current[vehicle.id] !== seq) return;
+        if (json.ok) {
+          setDocumentsByVehicleId((current) => ({
+            ...current,
+            [vehicle.id]: json.data.documents || []
+          }));
+          setDocErrorByVehicleId((current) => ({ ...current, [vehicle.id]: "" }));
+        } else {
+          setDocumentsByVehicleId((current) => ({
+            ...current,
+            [vehicle.id]: []
+          }));
+          setDocErrorByVehicleId((current) => ({
+            ...current,
+            [vehicle.id]: json?.error?.message ?? "Failed to load documents"
+          }));
+        }
+      })
+      .catch(() => {
+        if (docFetchSeq.current[vehicle.id] !== seq) return;
+        setDocumentsByVehicleId((current) => ({
+          ...current,
+          [vehicle.id]: []
+        }));
+        setDocErrorByVehicleId((current) => ({
+          ...current,
+          [vehicle.id]: "Failed to load documents"
+        }));
+      })
+      .finally(() => {
+        setLoadingDocsId((current) => (current === vehicle.id ? null : current));
+      });
+  }
 
   return (
     <>
       <PartnerPageHeader
         title="Vehicles"
+        subtitle={`${vehicles.length} in your fleet`}
         actions={
           <div className="partner-search-wrap">
             <Icon name="search" className="w-4 h-4" />
             <input
               type="search"
               className="form-input partner-search-input"
-              placeholder="Search by vehicle id, brand, or model"
+              placeholder="Search vehicle, brand, reg no."
               value={search}
               onChange={(event) => setSearch(event.target.value)}
             />
@@ -74,17 +124,16 @@ export default function PartnerVehiclesPage() {
             <thead>
               <tr>
                 <th>Vehicle</th>
-                <th>Partner</th>
-                <th>Station</th>
-                <th>Position</th>
+                <th className="partner-hide-mobile">Station</th>
+                <th>Status</th>
                 <th>Active</th>
-                <th>Action</th>
+                <th aria-label="Details" />
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="partner-empty-cell">
+                  <td colSpan={5} className="partner-empty-cell">
                     {loading ? "Loading…" : search ? "No vehicles found" : "Your fleet is being set up by the RBA team."}
                   </td>
                 </tr>
@@ -93,81 +142,105 @@ export default function PartnerVehiclesPage() {
                   <Fragment key={vehicle.id}>
                     <tr>
                       <td>
-                        <div style={{ fontWeight: 700 }}>
+                        <div className="partner-vehicle-name">
                           {getVehicleDisplayName(vehicle.id, {
                             brand: vehicle.brand,
                             model: vehicle.model
                           })}
                         </div>
-                        <div className="text-xs text-muted">{vehicle.id}</div>
+                        <div className="text-xs text-muted">
+                          {vehicle.registration_number || vehicle.id}
+                        </div>
                       </td>
-                      <td>{vehicle.partner_name}</td>
-                      <td>{vehicle.station ?? "—"}</td>
+                      <td className="partner-hide-mobile">{vehicle.station ?? "—"}</td>
                       <td>
                         <StatusPill status={vehicle.position} />
                       </td>
                       <td>
                         <span className={`badge badge-${vehicle.is_active ? "active" : "inactive"}`}>
-                          {vehicle.is_active ? "yes" : "no"}
+                          {vehicle.is_active ? "Yes" : "No"}
                         </span>
                       </td>
                       <td>
                         <button
                           type="button"
-                          className="partner-icon-btn"
-                          aria-label="View details"
-                          onClick={() => {
-                            if (expandedId === vehicle.id) {
-                              setExpandedId(null);
-                            } else {
-                              setExpandedId(vehicle.id);
-                              setLoadingDocs(true);
-                              fetch(`/api/vehicles/${vehicle.id}/documents`, { credentials: "include" })
-                                .then(res => res.json())
-                                .then(json => {
-                                  if (json.ok) setDocuments(json.data.documents || []);
-                                  setLoadingDocs(false);
-                                })
-                                .catch(() => setLoadingDocs(false));
-                            }
-                          }}
+                          className={`partner-icon-btn${expandedId === vehicle.id ? " is-expanded" : ""}`}
+                          aria-label={expandedId === vehicle.id ? "Hide details" : "Show details"}
+                          aria-expanded={expandedId === vehicle.id}
+                          onClick={() => toggleVehicle(vehicle)}
                         >
-                          <Icon name="chevron-right" className="w-4 h-4" />
+                          <Icon name="chevron-right" className="w-4 h-4 partner-chevron" />
                         </button>
                       </td>
                     </tr>
                     {expandedId === vehicle.id ? (
                       <tr className="partner-expand-row">
-                        <td colSpan={6}>
-                          <div className="partner-expand-content" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                            <div>
-                              <div style={{ fontWeight: 600, marginBottom: '0.5rem' }}>Vehicle Details</div>
-                              <div className="text-sm mb-1">Category: {vehicle.category}</div>
-                              <div className="text-sm mb-1">Brand: {vehicle.brand}</div>
-                              <div className="text-sm mb-1">Model: {vehicle.model}</div>
-                              <div className="text-sm mb-1">Reg No: {vehicle.registration_number || "—"}</div>
-                              <div className="text-sm mb-1">Chassis No: {vehicle.chassis_number || "—"}</div>
+                        <td colSpan={5}>
+                          <div className="partner-expand-grid">
+                            <div className="partner-expand-section">
+                              <h3 className="partner-expand-title">Details</h3>
+                              <dl className="partner-detail-list">
+                                <div>
+                                  <dt>Category</dt>
+                                  <dd>{vehicle.category}</dd>
+                                </div>
+                                <div>
+                                  <dt>Brand / model</dt>
+                                  <dd>
+                                    {vehicle.brand} {vehicle.model}
+                                  </dd>
+                                </div>
+                                <div>
+                                  <dt>Registration</dt>
+                                  <dd>{vehicle.registration_number || "—"}</dd>
+                                </div>
+                                <div>
+                                  <dt>Chassis</dt>
+                                  <dd>{vehicle.chassis_number || "—"}</dd>
+                                </div>
+                              </dl>
                             </div>
-                            <div>
-                              <div style={{ fontWeight: 600, marginBottom: '0.5rem' }}>Vehicle Documents</div>
-                              {loadingDocs ? (
-                                <div className="text-sm text-muted">Loading documents...</div>
-                              ) : documents.length === 0 ? (
-                                <div className="text-sm text-muted">No documents available.</div>
+                            <div className="partner-expand-section">
+                              <h3 className="partner-expand-title">Documents</h3>
+                            {loadingDocsId === vehicle.id ? (
+                                <div className="text-sm text-muted">Loading documents…</div>
                               ) : (
-                                <div className="grid gap-2">
-                                  {documents.map((doc: any) => (
-                                    <div key={doc.id} className="card p-2 flex-between" style={{ padding: '8px' }}>
+                                <>
+                                  {docErrorByVehicleId[vehicle.id] ? (
+                                    <div className="text-sm text-danger mb-2">
+                                      {docErrorByVehicleId[vehicle.id]}
+                                    </div>
+                                  ) : null}
+                                  {(documentsByVehicleId[vehicle.id] ?? []).length === 0 ? (
+                                    docErrorByVehicleId[vehicle.id] ? null : (
+                                      <div className="text-sm text-muted">No documents uploaded yet.</div>
+                                    )
+                                  ) : (
+                                <ul className="partner-doc-list">
+                                  {(documentsByVehicleId[vehicle.id] ?? []).map((doc: any) => (
+                                    <li key={doc.id} className="partner-doc-item">
                                       <div>
-                                        <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{doc.doc_type.toUpperCase()}</div>
-                                        <div className="text-xs text-muted">Expires: {doc.expires_at ? new Date(doc.expires_at).toLocaleDateString() : "N/A"}</div>
+                                        <div className="partner-doc-type">{doc.doc_type.toUpperCase()}</div>
+                                        <div className="text-xs text-muted">
+                                          Expires{" "}
+                                          {doc.expires_at
+                                            ? new Date(doc.expires_at).toLocaleDateString("en-IN")
+                                            : "—"}
+                                        </div>
                                       </div>
-                                      <a href={doc.file_url} target="_blank" rel="noopener noreferrer" className="btn btn-secondary btn-sm" style={{ padding: '2px 8px', fontSize: '0.75rem' }}>
+                                      <a
+                                        href={doc.file_url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="btn btn-secondary btn-sm"
+                                      >
                                         View
                                       </a>
-                                    </div>
+                                    </li>
                                   ))}
-                                </div>
+                                </ul>
+                              )}
+                                </>
                               )}
                             </div>
                           </div>

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { authClient } from "@/lib/auth/auth-client";
 import Link from "next/link";
 import Icon from "@/app/components/Icon";
+import PasswordInput from "@/app/components/PasswordInput";
 import { motion } from "framer-motion";
 
 function ResetPasswordForm() {
@@ -99,27 +100,25 @@ function ResetPasswordForm() {
             <form onSubmit={handleSubmit} className="space-y-4">
               <label className="block">
                 <span className="mb-1.5 block text-xs font-bold text-[#526074] uppercase tracking-wider">New Password</span>
-                <input
-                  className="form-input"
-                  type="password"
+                <PasswordInput
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   required
                   minLength={8}
+                  autoComplete="new-password"
                 />
               </label>
 
               <label className="block">
                 <span className="mb-1.5 block text-xs font-bold text-[#526074] uppercase tracking-wider">Confirm Password</span>
-                <input
-                  className="form-input"
-                  type="password"
+                <PasswordInput
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="••••••••"
                   required
                   minLength={8}
+                  autoComplete="new-password"
                 />
               </label>
 

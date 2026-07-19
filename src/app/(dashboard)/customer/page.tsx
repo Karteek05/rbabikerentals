@@ -5,6 +5,7 @@ import CostBreakdown from "../../components/CostBreakdown";
 import Sidebar from "../../components/Sidebar";
 import Icon, { type IconName } from "../../components/Icon";
 import { formatBookingStatus } from "@/lib/bookings/status-labels";
+import VehicleDocsPanel from "@/components/VehicleDocsPanel";
 
 type Booking = {
   id: string;
@@ -72,10 +73,6 @@ export default function CustomerDashboardPage() {
   const [durationValue, setDurationValue] = useState(1);
   const [extraHelmet, setExtraHelmet] = useState(0);
   const [coupon, setCoupon] = useState("WELCOME5");
-
-  const [expandedBookingId, setExpandedBookingId] = useState<string | null>(null);
-  const [documents, setDocuments] = useState<any[]>([]);
-  const [loadingDocs, setLoadingDocs] = useState(false);
 
   const fetchInit = useMemo(
     () => ({
@@ -501,57 +498,18 @@ export default function CustomerDashboardPage() {
                               {loading === `cancel-${booking.id}` ? <span className="spinner" /> : <Icon name="close" className="w-4 h-4" />} Cancel
                             </button>
                           )}
-                          {["confirmed", "ongoing", "extended", "completed"].includes(booking.status) && (
-                            <button
-                              className="btn btn-secondary btn-sm"
-                              onClick={() => {
-                                if (expandedBookingId === booking.id) {
-                                  setExpandedBookingId(null);
-                                } else {
-                                  setExpandedBookingId(booking.id);
-                                  setLoadingDocs(true);
-                                  fetch(`/api/vehicles/${booking.vehicle_id}/documents`, { credentials: "include" })
-                                    .then(res => res.json())
-                                    .then(json => {
-                                      if (json.ok) setDocuments(json.data.documents || []);
-                                      setLoadingDocs(false);
-                                    })
-                                    .catch(() => setLoadingDocs(false));
-                                }
-                              }}
-                            >
-                              Docs
-                            </button>
-                          )}
+                          <VehicleDocsPanel
+                            bookingId={booking.id}
+                            vehicleId={booking.vehicle_id}
+                            assignedVehicleId={(booking as { assigned_vehicle_id?: string }).assigned_vehicle_id}
+                            bookingStatus={booking.status}
+                            pickupAt={booking.pickup_at}
+                            dropAt={booking.drop_at}
+                            compact
+                          />
                         </div>
                       </td>
                     </tr>
-                    {expandedBookingId === booking.id && (
-                      <tr style={{ background: "rgba(0,0,0,0.02)" }}>
-                        <td colSpan={7}>
-                          <div style={{ padding: "1rem" }}>
-                            <div style={{ fontWeight: 600, marginBottom: "0.5rem" }}>Vehicle Documents</div>
-                            {loadingDocs ? (
-                              <div className="text-sm text-muted">Loading documents...</div>
-                            ) : documents.length === 0 ? (
-                              <div className="text-sm text-muted">No documents available for this vehicle.</div>
-                            ) : (
-                              <div className="flex gap-4 flex-wrap">
-                                {documents.map((doc: any) => (
-                                  <div key={doc.id} className="card p-3" style={{ minWidth: 200 }}>
-                                    <div style={{ fontWeight: 600, fontSize: "0.85rem", marginBottom: 4 }}>{doc.doc_type.toUpperCase()}</div>
-                                    <div className="text-xs text-muted mb-2">Expires: {doc.expires_at ? new Date(doc.expires_at).toLocaleDateString() : "N/A"}</div>
-                                    <a href={doc.file_url} target="_blank" rel="noopener noreferrer" className="btn btn-primary btn-sm w-full" style={{ textAlign: "center" }}>
-                                      View Document
-                                    </a>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    )}
                   </Fragment>
                 ))}
                 </tbody>

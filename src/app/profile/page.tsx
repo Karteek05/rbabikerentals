@@ -22,6 +22,7 @@ import { formatBookingStatus } from "@/lib/bookings/status-labels";
 import { isGoogleAuthEnabled, startGoogleSignIn } from "@/lib/auth/google-sign-in";
 import { COMPANY } from "@/lib/legal/company";
 import type { Booking, User } from "@/lib/types/domain";
+import VehicleDocsPanel from "@/components/VehicleDocsPanel";
 import {
   readAccountPayload,
   readBookingsPayload,
@@ -367,6 +368,23 @@ export default function ProfilePage() {
             </div>
           </div>
 
+          {user.kyc_status !== "verified" ? (
+            <div className="mt-6 flex flex-col gap-3 rounded-[var(--radius-md)] border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-3">
+                <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-amber-800" />
+                <div>
+                  <p className="font-bold text-amber-900">Identity verification required</p>
+                  <p className="mt-1 text-sm text-amber-900/80">
+                    Complete DigiLocker verification so admin can review your booking.
+                  </p>
+                </div>
+              </div>
+              <Link href="/kyc?return=/profile" className="btn-primary shrink-0 text-sm">
+                Verify now
+              </Link>
+            </div>
+          ) : null}
+
           <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <div className="rounded-[var(--radius-md)] border border-[color:var(--color-line)] bg-[color:var(--color-paper)] p-4">
               <p className="text-xs font-bold uppercase tracking-wide text-[color:var(--color-muted)]">Confirmed rides</p>
@@ -671,6 +689,16 @@ function RideCard({ booking }: { booking: Booking }) {
         <p className="text-xl font-black text-[color:var(--color-ink)]">
           {currency.format(Number(booking.quote?.total_payable ?? 0))}
         </p>
+      </div>
+      <div className="sm:col-span-2">
+        <VehicleDocsPanel
+          bookingId={booking.id}
+          vehicleId={booking.vehicle_id}
+          assignedVehicleId={booking.assigned_vehicle_id}
+          bookingStatus={booking.status}
+          pickupAt={booking.pickup_at}
+          dropAt={booking.drop_at}
+        />
       </div>
     </article>
   );

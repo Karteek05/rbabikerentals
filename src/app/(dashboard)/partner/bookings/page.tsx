@@ -1,17 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import PartnerPageHeader from "@/app/components/partner/PartnerPageHeader";
 import PartnerFilterDrawer from "@/app/components/partner/PartnerFilterDrawer";
-import Icon from "@/app/components/Icon";import { formatBookingReference, getVehicleDisplayName } from "@/lib/fleet/display";
+import Icon from "@/app/components/Icon";
+import { formatBookingReference, getVehicleDisplayName } from "@/lib/fleet/display";
 import { formatBookingStatus } from "@/lib/bookings/status-labels";
 import {
   PARTNER_BOOKING_TABS,
   formatDateRangeLabel,
   getDefaultWeekStart,
   getWeekRangeFromStart
-} from "@/app/components/partner/partner-nav";import type { PartnerBookingRow, PartnerBookingTab } from "@/lib/partner/service";
+} from "@/app/components/partner/partner-nav";
+import type { PartnerBookingRow, PartnerBookingTab } from "@/lib/partner/service";
 
 function formatDate(iso: string) {
   try {
@@ -28,6 +30,7 @@ export default function PartnerBookingsPage() {
   const status = (searchParams.get("status") as PartnerBookingTab) ?? "all";
   const [bookings, setBookings] = useState<PartnerBookingRow[]>([]);
   const [search, setSearch] = useState("");
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -53,6 +56,7 @@ export default function PartnerBookingsPage() {
       }
       setBookings(json.data.items ?? []);
       setPage(1);
+      setExpandedId(null);
     } catch (err) {
       setError(String(err));
     } finally {
@@ -76,7 +80,17 @@ export default function PartnerBookingsPage() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return bookings;
-    return bookings.filter((booking) => booking.id.toLowerCase().includes(q));
+    return bookings.filter((booking) => {
+      const haystack = [
+        booking.id,
+        booking.customer_name,
+        booking.customer_phone,
+        booking.vehicle_id
+      ]
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(q);
+    });
   }, [bookings, search]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
@@ -86,7 +100,7 @@ export default function PartnerBookingsPage() {
     <>
       <PartnerPageHeader
         title="Bookings"
-        subtitle={`On This Week · ${formatDateRangeLabel(range.from, range.to)}`}
+        subtitle={formatDateRangeLabel(range.from, range.to)}
         onFilterClick={() => setFilterOpen(true)}
         actions={
           <div className="partner-search-wrap">
@@ -94,9 +108,12 @@ export default function PartnerBookingsPage() {
             <input
               type="search"
               className="form-input partner-search-input"
-              placeholder="Search by booking id"
+              placeholder="Search booking, customer, vehicle"
               value={search}
-              onChange={(event) => setSearch(event.target.value)}
+              onChange={(event) => {
+                setSearch(event.target.value);
+                setPage(1);
+              }}
             />
           </div>
         }
@@ -122,52 +139,86 @@ export default function PartnerBookingsPage() {
           <table>
             <thead>
               <tr>
-                <th>Booking Id</th>
+                <th>Booking</th>
                 <th>Customer</th>
-                <th>Booking Date</th>
-                <th>Pickup</th>
-                <th>Drop</th>
+                <th className="partner-hide-mobile">Booked</th>
+                <th className="partner-hide-mobile">Pickup</th>
                 <th>Vehicle</th>
                 <th>Status</th>
-                <th>Payment</th>
-                <th>Action</th>
+                <th className="partner-hide-mobile">Payment</th>
+                <th aria-label="Details" />
               </tr>
             </thead>
             <tbody>
               {pageItems.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="partner-empty-cell">
-                    {loading ? "Loading…" : "No bookings found"}
+                  <td colSpan={8} className="partner-empty-cell">
+                    {loading ? "Loading…" : "No bookings in this week"}
                   </td>
                 </tr>
               ) : (
                 pageItems.map((booking) => (
-                  <tr key={booking.id}>
-                    <td className="td-id">{formatBookingReference(booking.id)}</td>
-                    <td>
-                      <div>{booking.customer_name}</div>
-                      <div className="text-xs text-muted">{booking.customer_phone}</div>
-                    </td>
-                    <td>{formatDate(booking.created_at)}</td>
-                    <td>{formatDate(booking.pickup_at)}</td>
-                    <td>{formatDate(booking.drop_at)}</td>
-                    <td>{getVehicleDisplayName(booking.vehicle_id)}</td>
-                    <td>
-                      <span className={`badge badge-${booking.status}`}>
-                        {formatBookingStatus(booking.status)}
-                      </span>
-                    </td>
-                    <td>
-                      <span className={`badge badge-${booking.payment_status}`}>
-                        {booking.payment_status}
-                      </span>
-                    </td>
-                    <td>
-                      <button type="button" className="partner-icon-btn" aria-label="View booking">
-                        <Icon name="chevron-right" className="w-4 h-4" />
-                      </button>
-                    </td>
-                  </tr>
+                  <Fragment key={booking.id}>
+                    <tr>
+                      <td className="td-id">{formatBookingReference(booking.id)}</td>
+                      <td>
+                        <div>{booking.customer_name}</div>
+                        <div className="text-xs text-muted">{booking.customer_phone}</div>
+                      </td>
+                      <td className="partner-hide-mobile">{formatDate(booking.created_at)}</td>
+                      <td className="partner-hide-mobile">{formatDate(booking.pickup_at)}</td>
+                      <td>{getVehicleDisplayName(booking.vehicle_id)}</td>
+                      <td>
+                        <span className={`badge badge-${booking.status}`}>
+                          {formatBookingStatus(booking.status)}
+                        </span>
+                      </td>
+                      <td className="partner-hide-mobile">
+                        <span className={`badge badge-${booking.payment_status}`}>
+                          {booking.payment_status}
+                        </span>
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          className={`partner-icon-btn${expandedId === booking.id ? " is-expanded" : ""}`}
+                          aria-label={expandedId === booking.id ? "Hide details" : "Show details"}
+                          aria-expanded={expandedId === booking.id}
+                          onClick={() =>
+                            setExpandedId((current) => (current === booking.id ? null : booking.id))
+                          }
+                        >
+                          <Icon name="chevron-right" className="w-4 h-4 partner-chevron" />
+                        </button>
+                      </td>
+                    </tr>
+                    {expandedId === booking.id ? (
+                      <tr className="partner-expand-row">
+                        <td colSpan={8}>
+                          <div className="partner-expand-grid">
+                            <div>
+                              <div className="partner-detail-label">Drop-off</div>
+                              <div className="partner-detail-value">{formatDate(booking.drop_at)}</div>
+                            </div>
+                            <div>
+                              <div className="partner-detail-label">Pickup zone</div>
+                              <div className="partner-detail-value">{booking.pickup_zone ?? "—"}</div>
+                            </div>
+                            <div>
+                              <div className="partner-detail-label">Amount</div>
+                              <div className="partner-detail-value">
+                                ₹{booking.total_payable.toLocaleString("en-IN")}
+                              </div>
+                            </div>
+                            <div>
+                              <div className="partner-detail-label">Vehicle ID</div>
+                              <div className="partner-detail-value">{booking.vehicle_id}</div>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : null}
+                  </Fragment>
                 ))
               )}
             </tbody>

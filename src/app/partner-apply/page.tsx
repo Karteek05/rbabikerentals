@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { authClient } from "@/lib/auth/auth-client";
 import Icon from "@/app/components/Icon";
+import PasswordInput from "@/app/components/PasswordInput";
 import { motion } from "framer-motion";
 
 type ApplicationState = {
@@ -271,13 +272,12 @@ function PartnerApplyForm() {
               </label>
               <label className="block">
                 <span className="form-label">Password</span>
-                <input
-                  className="form-input"
-                  type="password"
+                <PasswordInput
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   minLength={8}
                   required
+                  autoComplete="new-password"
                 />
               </label>
               <label className="block">

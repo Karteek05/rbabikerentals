@@ -4,6 +4,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
 import Icon, { type IconName } from "./components/Icon";
+import DatePicker from "@/components/ui/DatePicker";
+import Select from "@/components/ui/Select";
+import { fromDateTimeParts, toDateTimeIso, toDateValue } from "@/lib/datetime/booking-schedule-ui";
 import {
   GST_INCLUSIVE_COPY,
   PACKAGE_PLANS,
@@ -99,23 +102,6 @@ const TIME_OPTIONS = Array.from({ length: 36 }, (_, index) => {
   };
 });
 
-function toDateValue(date: Date) {
-  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
-  return local.toISOString().slice(0, 10);
-}
-
-function parseDateValue(value: string) {
-  const [year, month, day] = value.split("-").map(Number);
-  if (!year || !month || !day) return null;
-  return new Date(year, month - 1, day, 0, 0, 0, 0);
-}
-
-function fromDateTimeParts(dateValue: string, timeValue: string) {
-  const [year, month, day] = dateValue.split("-").map(Number);
-  const [hours, minutes] = timeValue.split(":").map(Number);
-  return new Date(year, month - 1, day, hours, minutes, 0, 0);
-}
-
 function nearestTimeSlot(date: Date) {
   const totalMinutes = date.getHours() * 60 + date.getMinutes();
   let closest = TIME_OPTIONS[0].value;
@@ -132,36 +118,6 @@ function nearestTimeSlot(date: Date) {
   return closest;
 }
 
-function startOfDay(date: Date) {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
-}
-
-function addMonths(date: Date, value: number) {
-  return new Date(date.getFullYear(), date.getMonth() + value, 1);
-}
-
-function isSameDay(left: Date, right: Date) {
-  return (
-    left.getFullYear() === right.getFullYear() &&
-    left.getMonth() === right.getMonth() &&
-    left.getDate() === right.getDate()
-  );
-}
-
-function buildCalendarCells(viewMonth: Date) {
-  const monthStart = new Date(viewMonth.getFullYear(), viewMonth.getMonth(), 1);
-  const gridStart = new Date(monthStart);
-  gridStart.setDate(monthStart.getDate() - monthStart.getDay());
-  return Array.from({ length: 42 }, (_, offset) => {
-    const date = new Date(gridStart);
-    date.setDate(gridStart.getDate() + offset);
-    return {
-      date,
-      inCurrentMonth: date.getMonth() === viewMonth.getMonth()
-    };
-  });
-}
-
 function buildInitialSchedule() {
   const now = new Date();
   const pickup = new Date(now.getTime() + 60 * 60 * 1000);
@@ -172,10 +128,6 @@ function buildInitialSchedule() {
     dropDate: toDateValue(drop),
     dropTime: nearestTimeSlot(drop)
   };
-}
-
-function toDateTimeIso(dateValue: string, timeValue: string) {
-  return fromDateTimeParts(dateValue, timeValue).toISOString();
 }
 
 function hoursForDuration(duration: "weekly" | "fortnight" | "monthly") {
@@ -191,17 +143,6 @@ function hoursForDuration(duration: "weekly" | "fortnight" | "monthly") {
   }
 }
 
-function formatDateLabel(dateValue: string) {
-  const date = parseDateValue(dateValue);
-  if (!date) return "Select date";
-  return date.toLocaleDateString("en-IN", {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-    year: "numeric"
-  });
-}
-
 function formatDateTimeLabel(dateValue: string, timeValue: string) {
   const date = fromDateTimeParts(dateValue, timeValue);
   return (
@@ -210,107 +151,6 @@ function formatDateTimeLabel(dateValue: string, timeValue: string) {
       day: "numeric",
       month: "short"
     }) + ` ${timeValue}`
-  );
-}
-
-function CalendarDatePicker({
-  value,
-  onChange,
-  minDate
-}: {
-  value: string;
-  onChange: (next: string) => void;
-  minDate?: string;
-}) {
-  const selectedDate = parseDateValue(value) ?? new Date();
-  const min = minDate ? parseDateValue(minDate) : null;
-  const [open, setOpen] = useState(false);
-  const [viewMonth, setViewMonth] = useState(
-    () => new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1)
-  );
-
-  useEffect(() => {
-    const picked = parseDateValue(value);
-    if (!picked) return;
-    setViewMonth(new Date(picked.getFullYear(), picked.getMonth(), 1));
-  }, [value]);
-
-  const cells = useMemo(() => buildCalendarCells(viewMonth), [viewMonth]);
-  const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
-  return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((state) => !state)}
-        className="field-control flex items-center justify-between"
-      >
-        <span className="text-left">{formatDateLabel(value)}</span>
-        <Icon name="calendar" className="h-4 w-4 text-[color:var(--color-muted)]" />
-      </button>
-
-      {open && (
-        <div className="absolute z-30 mt-2 w-[320px] max-w-[calc(100vw-4rem)] rounded-lg border border-[color:var(--color-line)] bg-white p-3 shadow-[0_18px_44px_color-mix(in_oklch,var(--color-ink)_18%,transparent)]">
-          <div className="mb-3 flex items-center justify-between">
-            <button
-              type="button"
-              onClick={() => setViewMonth((month) => addMonths(month, -1))}
-              className="nav-focus h-8 w-8 rounded-md border border-[color:var(--color-line)] text-[color:var(--color-ink)] hover:bg-[color:var(--color-paper-2)]"
-              aria-label="Previous month"
-            >
-              {"<"}
-            </button>
-            <div className="text-sm font-bold">
-              {viewMonth.toLocaleDateString("en-IN", { month: "long", year: "numeric" })}
-            </div>
-            <button
-              type="button"
-              onClick={() => setViewMonth((month) => addMonths(month, 1))}
-              className="nav-focus h-8 w-8 rounded-md border border-[color:var(--color-line)] text-[color:var(--color-ink)] hover:bg-[color:var(--color-paper-2)]"
-              aria-label="Next month"
-            >
-              {">"}
-            </button>
-          </div>
-
-          <div className="mb-1 grid grid-cols-7 gap-1">
-            {weekDays.map((day) => (
-              <div key={day} className="py-1 text-center text-[11px] font-semibold text-[color:var(--color-muted)]">
-                {day}
-              </div>
-            ))}
-          </div>
-
-          <div className="grid grid-cols-7 gap-1">
-            {cells.map((cell) => {
-              const dateValue = toDateValue(cell.date);
-              const disabled = !!min && startOfDay(cell.date).getTime() < startOfDay(min).getTime();
-              const selected = isSameDay(cell.date, selectedDate);
-              return (
-                <button
-                  key={dateValue}
-                  type="button"
-                  disabled={disabled}
-                  onClick={() => {
-                    onChange(dateValue);
-                    setOpen(false);
-                  }}
-                  className={`h-9 rounded-md text-sm transition-colors ${
-                    selected
-                      ? "bg-[color:var(--color-ink)] text-white"
-                      : cell.inCurrentMonth
-                        ? "text-[color:var(--color-ink)] hover:bg-[color:var(--color-paper-2)]"
-                        : "text-[color:var(--color-muted)] hover:bg-[color:var(--color-paper-2)]"
-                  } ${disabled ? "cursor-not-allowed opacity-35 hover:bg-transparent" : ""}`}
-                >
-                  {cell.date.getDate()}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-    </div>
   );
 }
 
@@ -630,27 +470,25 @@ export default function HomePage() {
                 <div>
                   <label className="mb-1.5 block text-xs font-bold text-[color:var(--color-muted)]">Pickup date and time</label>
                   <div className="grid w-full grid-cols-1 gap-2 rounded-lg border border-[color:var(--color-line)] bg-white p-2.5 sm:grid-cols-[1fr_138px]">
-                    <CalendarDatePicker value={pickupDate} onChange={setPickupDate} minDate={toDateValue(new Date())} />
-                    <select value={pickupTime} onChange={(e) => setPickupTime(e.target.value)} className="field-control">
-                      {TIME_OPTIONS.map((option) => (
-                        <option key={`pickup-time-${option.value}`} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
+                    <DatePicker value={pickupDate} onChange={setPickupDate} minDate={toDateValue(new Date())} aria-label="Pickup date" />
+                    <Select
+                      value={pickupTime}
+                      onChange={setPickupTime}
+                      options={TIME_OPTIONS}
+                      aria-label="Pickup time"
+                    />
                   </div>
                 </div>
                 <div>
                   <label className="mb-1.5 block text-xs font-bold text-[color:var(--color-muted)]">Drop date and time</label>
                   <div className="grid w-full grid-cols-1 gap-2 rounded-lg border border-[color:var(--color-line)] bg-white p-2.5 sm:grid-cols-[1fr_138px]">
-                    <CalendarDatePicker value={dropDate} onChange={setDropDate} minDate={pickupDate} />
-                    <select value={dropTime} onChange={(e) => setDropTime(e.target.value)} className="field-control">
-                      {TIME_OPTIONS.map((option) => (
-                        <option key={`drop-time-${option.value}`} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
+                    <DatePicker value={dropDate} onChange={setDropDate} minDate={pickupDate} aria-label="Drop date" />
+                    <Select
+                      value={dropTime}
+                      onChange={setDropTime}
+                      options={TIME_OPTIONS}
+                      aria-label="Drop time"
+                    />
                   </div>
                 </div>
               </div>

@@ -9,6 +9,7 @@ import {
   resolveSafeReturnTo
 } from "@/lib/auth/post-login-redirect";
 import Icon from "@/app/components/Icon";
+import PasswordInput from "@/app/components/PasswordInput";
 import { motion } from "framer-motion";
 
 function AdminLoginForm() {
@@ -111,13 +112,12 @@ function AdminLoginForm() {
               <div className="mb-1.5 flex items-center justify-between">
                 <span className="block text-xs font-bold text-[#526074] uppercase tracking-wider">Password</span>
               </div>
-              <input
-                className="form-input"
-                type="password"
+              <PasswordInput
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
                 required
+                autoComplete="current-password"
               />
             </label>
 

@@ -27,7 +27,7 @@ export default function PartnerPageHeader({
         {onFilterClick ? (
           <button type="button" className="btn btn-secondary partner-filter-btn" onClick={onFilterClick}>
             <Icon name="filter" className="w-4 h-4" />
-            Data Filter
+            Week
           </button>
         ) : null}
       </div>

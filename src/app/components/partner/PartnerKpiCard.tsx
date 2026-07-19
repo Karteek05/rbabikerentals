@@ -16,7 +16,6 @@ export default function PartnerKpiCard({ icon, label, value, hint }: PartnerKpiC
       <div className="partner-kpi-value">{value}</div>
       <div className="partner-kpi-label">{label}</div>
       {hint ? <div className="partner-kpi-hint">{hint}</div> : null}
-      <div className="partner-kpi-sparkline" aria-hidden />
     </article>
   );
 }

@@ -9,6 +9,7 @@ import {
   resolveSafeReturnTo
 } from "@/lib/auth/post-login-redirect";
 import Icon from "@/app/components/Icon";
+import PasswordInput from "@/app/components/PasswordInput";
 import { motion } from "framer-motion";
 
 function PartnerLoginForm() {
@@ -133,13 +134,12 @@ function PartnerLoginForm() {
               <span className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-[#526074]">
                 Password
               </span>
-              <input
-                className="form-input"
-                type="password"
+              <PasswordInput
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
                 required
+                autoComplete="current-password"
               />
             </label>
 

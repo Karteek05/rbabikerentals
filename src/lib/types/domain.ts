@@ -68,6 +68,7 @@ export interface Vehicle {
   model: string;
   registration_number?: string | null;
   chassis_number?: string | null;
+  catalog_vehicle_id?: string | null;
   image_urls?: string[];
   is_active: boolean;
   deposit_amount: number;
@@ -91,6 +92,8 @@ export interface Booking {
   id: string;
   user_id: string;
   vehicle_id: string;
+  assigned_vehicle_id?: string | null;
+  assigned_at?: string | null;
   city: "bengaluru";
   status: BookingStatus;
   pickup_at: string;

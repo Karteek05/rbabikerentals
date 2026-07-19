@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import Icon from "@/app/components/Icon";
+import PasswordInput from "@/app/components/PasswordInput";
 import { authClient } from "@/lib/auth/auth-client";
 import { isGoogleAuthEnabled, startGoogleSignIn } from "@/lib/auth/google-sign-in";
 
@@ -93,7 +94,7 @@ export default function LoginPromptModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="login-prompt-title"
-        className="relative z-10 w-full max-w-md rounded-2xl border border-black/10 bg-white p-6 shadow-[0_24px_60px_rgba(0,0,0,0.22)]"
+        className="relative z-10 w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl border border-black/10 bg-white p-6 shadow-[0_24px_60px_rgba(0,0,0,0.22)]"
       >
         <button
           type="button"
@@ -126,26 +127,26 @@ export default function LoginPromptModal({
               Email
             </span>
             <input
-              className="w-full rounded-lg border border-black/20 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-black"
+              className="form-input"
               type="email"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               placeholder="you@example.com"
               required
               autoFocus
+              autoComplete="email"
             />
           </label>
           <label className="block">
             <span className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-uber-body-gray">
               Password
             </span>
-            <input
-              className="w-full rounded-lg border border-black/20 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-black"
-              type="password"
+            <PasswordInput
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               placeholder="••••••••"
               required
+              autoComplete="current-password"
             />
           </label>
           <button

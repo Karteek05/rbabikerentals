@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth/auth-client";
 import { loginPathForDashboard } from "@/lib/auth/post-login-redirect";
+import { DashboardAuthSkeleton } from "@/components/ui/Skeleton";
 import type { PartnerApplicationStatus, Role } from "@/lib/types/domain";
 
 function requiredRoleForPath(pathname: string): Role | null {
@@ -106,11 +107,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, [session, isPending, router, pathname]);
 
   if (!authorized) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-[#f7f7f7]">
-        <div className="text-sm font-medium uppercase tracking-wider text-[#afafaf]">Loading...</div>
-      </div>
-    );
+    return <DashboardAuthSkeleton />;
   }
 
   return <>{children}</>;

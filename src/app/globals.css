@@ -181,10 +181,36 @@
 
   .form-input {
     @apply w-full rounded-lg border border-brand-dark/15 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black;
+    min-height: 44px;
+  }
+
+  .password-field {
+    @apply relative;
+  }
+
+  .password-field__input {
+    padding-right: 2.75rem;
+  }
+
+  .password-field__toggle {
+    @apply absolute right-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-md text-brand-body-gray transition-colors;
+  }
+
+  .password-field__toggle:hover {
+    @apply bg-brand-hover-gray text-brand-dark;
+  }
+
+  .password-field__toggle:focus-visible {
+    @apply outline-none ring-2 ring-black ring-offset-1;
   }
 
   .form-select {
     @apply pr-8;
+  }
+
+  .skeleton {
+    @apply animate-pulse;
+    background: var(--color-paper-2);
   }
 
   .btn {
@@ -832,6 +858,22 @@
     box-shadow: 0 0 0 3px color-mix(in oklch, var(--color-accent) 36%, transparent);
   }
 
+  .form-input:focus-visible,
+  .btn:focus-visible,
+  a:focus-visible {
+    outline: 2px solid var(--color-ink);
+    outline-offset: 2px;
+  }
+
+  .password-field__toggle {
+    color: var(--color-muted);
+  }
+
+  .password-field__toggle:hover {
+    background: var(--color-paper-2);
+    color: var(--color-ink);
+  }
+
   .btn {
     min-height: 38px;
     border-radius: var(--radius-sm);
@@ -1057,14 +1099,10 @@
     justify-content: space-between;
     gap: var(--space-md);
     margin-bottom: var(--space-md);
-    padding: var(--space-lg);
+    padding: var(--space-md) var(--space-lg);
     border: var(--rule-thin) solid var(--color-line);
-    border-radius: var(--radius-lg);
-    background: linear-gradient(
-      135deg,
-      color-mix(in oklch, var(--color-white) 96%, var(--color-accent) 4%),
-      var(--color-white)
-    );
+    border-radius: var(--radius-md);
+    background: var(--color-white);
   }
 
   .partner-page-actions {
@@ -1152,20 +1190,6 @@
     margin-top: var(--space-2xs);
     color: var(--color-copy);
     font-size: var(--text-xs);
-  }
-
-  .partner-kpi-sparkline {
-    position: absolute;
-    right: 0;
-    bottom: 0;
-    width: 56px;
-    height: 24px;
-    opacity: 0.35;
-    background: linear-gradient(
-      90deg,
-      transparent,
-      color-mix(in oklch, var(--color-accent) 45%, transparent)
-    );
   }
 
   .partner-analytics-grid {
@@ -1437,6 +1461,98 @@
     background: var(--color-paper-2);
   }
 
+  .partner-icon-btn.is-expanded .partner-chevron {
+    transform: rotate(90deg);
+  }
+
+  .partner-chevron {
+    transition: transform var(--dur-fast) var(--ease-out);
+  }
+
+  .partner-vehicle-name {
+    font-weight: 700;
+    color: var(--color-ink);
+  }
+
+  .partner-expand-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: var(--space-md);
+  }
+
+  .partner-expand-section {
+    min-width: 0;
+  }
+
+  .partner-expand-title {
+    margin-bottom: var(--space-sm);
+    font-size: var(--text-sm);
+    font-weight: 700;
+    color: var(--color-ink);
+  }
+
+  .partner-detail-list {
+    display: grid;
+    gap: var(--space-sm);
+  }
+
+  .partner-detail-list dt {
+    font-size: var(--text-xs);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--color-muted);
+  }
+
+  .partner-detail-list dd {
+    margin: 0;
+    font-size: var(--text-sm);
+    color: var(--color-ink);
+  }
+
+  .partner-detail-label {
+    font-size: var(--text-xs);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--color-muted);
+  }
+
+  .partner-detail-value {
+    margin-top: var(--space-2xs);
+    font-size: var(--text-sm);
+    color: var(--color-ink);
+  }
+
+  .partner-doc-list {
+    display: grid;
+    gap: var(--space-xs);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .partner-doc-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-sm);
+    padding: var(--space-sm);
+    border: var(--rule-thin) solid var(--color-line);
+    border-radius: var(--radius-sm);
+    background: var(--color-paper-2);
+  }
+
+  .partner-doc-type {
+    font-size: var(--text-xs);
+    font-weight: 700;
+    color: var(--color-ink);
+  }
+
+  .partner-hide-mobile {
+    display: table-cell;
+  }
+
   .partner-expand-row td {
     background: var(--color-paper);
     border-top: 0 !important;
@@ -1545,6 +1661,10 @@
     grid-template-columns: 1fr;
   }
 
+  .partner-hide-mobile {
+    display: none;
+  }
+
   .partner-donut-wrap {
     grid-template-columns: 1fr;
     justify-items: center;
@@ -1567,5 +1687,24 @@
 
   .partner-tab {
     white-space: nowrap;
+  }
+}
+
+/* Mobile form UX — 16px inputs prevent iOS zoom; 44px touch targets */
+@media (max-width: 720px) {
+  .form-input,
+  .form-select,
+  select.input {
+    font-size: 16px;
+    min-height: 44px;
+  }
+
+  .btn:not(.btn-sm) {
+    min-height: 44px;
+  }
+
+  .table-container {
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
   }
 }

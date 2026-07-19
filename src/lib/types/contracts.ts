@@ -90,6 +90,10 @@ export interface ApproveBookingRequest {
   note?: string;
 }
 
+export interface AssignBookingVehicleRequest {
+  assigned_vehicle_id: string;
+}
+
 export interface KycStartRequest {
   user_id: string;
 }

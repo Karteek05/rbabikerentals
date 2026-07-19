@@ -22,3 +22,5 @@ homepage-*.png
 # typescript cache
 *.tsbuildinfo
 .vercel
+.data/
+new/

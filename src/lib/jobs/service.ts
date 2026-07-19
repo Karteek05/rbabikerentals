@@ -8,7 +8,10 @@ import { newId } from "@/lib/utils/ids";
 
 export async function runDocumentExpiryReminderJob() {
   const reminderCutoff = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-  const docs = await listVehicleDocumentsExpiringBefore(reminderCutoff);
+  const docs = (await listVehicleDocumentsExpiringBefore(reminderCutoff)).filter((doc) => {
+    if (!doc.expires_at) return false;
+    return new Date(doc.expires_at).getTime() >= Date.now();
+  });
   let queuedNotifications = 0;
 
   for (const doc of docs) {

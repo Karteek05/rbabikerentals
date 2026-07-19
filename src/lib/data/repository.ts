@@ -529,6 +529,14 @@ export async function listVehicles(): Promise<Vehicle[]> {
   return ((data ?? []) as Vehicle[]).map(withVehicleDefaults);
 }
 
+export async function findVehicleByChassis(chassisNumber: string): Promise<Vehicle | null> {
+  const normalized = chassisNumber.trim().toUpperCase();
+  const vehicles = await listVehicles();
+  return (
+    vehicles.find((vehicle) => vehicle.chassis_number?.trim().toUpperCase() === normalized) ?? null
+  );
+}
+
 export async function upsertVehicle(vehicle: Vehicle): Promise<Vehicle> {
   const normalized = withVehicleDefaults(vehicle);
   if (getDataMode() === "memory") {
@@ -812,23 +820,61 @@ export async function listVehicleDocuments(vehicleId: string): Promise<VehicleDo
   return (data ?? []) as VehicleDocument[];
 }
 
+export async function getVehicleDocumentOrThrow(
+  vehicleId: string,
+  docId: string
+): Promise<VehicleDocument> {
+  const docs = await listVehicleDocuments(vehicleId);
+  const doc = docs.find((item) => item.id === docId);
+  if (!doc) {
+    throw new ApiException(404, "document_not_found", "Vehicle document does not exist.");
+  }
+  return doc;
+}
+
+export async function findVehicleDocumentByType(
+  vehicleId: string,
+  docType: VehicleDocument["doc_type"]
+): Promise<VehicleDocument | null> {
+  const docs = await listVehicleDocuments(vehicleId);
+  return docs.find((item) => item.doc_type === docType) ?? null;
+}
+
 export async function upsertVehicleDocument(doc: VehicleDocument): Promise<VehicleDocument> {
   if (getDataMode() === "memory") {
-    const existingIndex = store.vehicleDocuments.findIndex((item) => item.id === doc.id);
+    const existingIndex = store.vehicleDocuments.findIndex(
+      (item) => item.vehicle_id === doc.vehicle_id && item.doc_type === doc.doc_type
+    );
     if (existingIndex >= 0) {
-      store.vehicleDocuments[existingIndex] = doc;
-    } else {
-      store.vehicleDocuments.push(doc);
+      store.vehicleDocuments[existingIndex] = {
+        ...doc,
+        id: store.vehicleDocuments[existingIndex].id,
+        created_at: store.vehicleDocuments[existingIndex].created_at
+      };
+      return store.vehicleDocuments[existingIndex];
     }
+    store.vehicleDocuments.push(doc);
     return doc;
   }
 
   const supabase = getSupabaseServiceClient();
-  const { data, error } = await supabase
-    .from("vehicle_documents")
-    .upsert(doc, { onConflict: "id" })
-    .select("*")
-    .single();
+  const existing = await findVehicleDocumentByType(doc.vehicle_id, doc.doc_type);
+  if (existing) {
+    const { data, error } = await supabase
+      .from("vehicle_documents")
+      .update({
+        file_url: doc.file_url,
+        expires_at: doc.expires_at ?? null,
+        updated_at: doc.updated_at
+      })
+      .eq("id", existing.id)
+      .select("*")
+      .single();
+    if (error) throw new ApiException(500, "db_error", error.message);
+    return data as VehicleDocument;
+  }
+
+  const { data, error } = await supabase.from("vehicle_documents").insert(doc).select("*").single();
   if (error) throw new ApiException(500, "db_error", error.message);
   return data as VehicleDocument;
 }

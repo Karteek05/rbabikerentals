@@ -156,6 +156,7 @@ create table if not exists vehicles (
 alter table if exists vehicles add column if not exists image_urls text[] not null default '{}';
 alter table if exists vehicles add column if not exists registration_number text;
 alter table if exists vehicles add column if not exists chassis_number text;
+alter table if exists vehicles add column if not exists catalog_vehicle_id text references vehicles(id);
 
 create table if not exists bookings (
   id text primary key,
@@ -184,6 +185,8 @@ alter table if exists bookings add column if not exists pickup_address text;
 alter table if exists bookings add column if not exists pickup_latitude double precision;
 alter table if exists bookings add column if not exists pickup_longitude double precision;
 alter table if exists bookings add column if not exists requested_drop_at timestamptz;
+alter table if exists bookings add column if not exists assigned_vehicle_id text references vehicles(id);
+alter table if exists bookings add column if not exists assigned_at timestamptz;
 
 create index if not exists idx_bookings_vehicle_window on bookings(vehicle_id, pickup_at, drop_at);
 create index if not exists idx_bookings_status on bookings(status);
@@ -267,6 +270,18 @@ create table if not exists vehicle_documents (
 alter table if exists vehicle_documents alter column expires_at drop not null;
 
 create index if not exists idx_vehicle_documents_expiry on vehicle_documents(expires_at);
+
+delete from vehicle_documents d1
+using vehicle_documents d2
+where d1.vehicle_id = d2.vehicle_id
+  and d1.doc_type = d2.doc_type
+  and (
+    d1.updated_at < d2.updated_at
+    or (d1.updated_at = d2.updated_at and d1.id > d2.id)
+  );
+
+create unique index if not exists idx_vehicle_documents_vehicle_doc_type
+  on vehicle_documents(vehicle_id, doc_type);
 
 create table if not exists payment_orders (
   id text primary key,

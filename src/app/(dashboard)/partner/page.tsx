@@ -14,6 +14,7 @@ import {
   getWeekRangeFromStart
 } from "../../components/partner/partner-nav";
 import type { PartnerBookingTab } from "@/lib/partner/service";
+import { PartnerDashboardSkeleton } from "@/components/ui/Skeleton";
 
 type DashboardSummary = {
   total_vehicles: number;
@@ -28,7 +29,10 @@ export default function PartnerDashboardPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const weekStart = searchParams.get("week") ?? getDefaultWeekStart();
-  const bookingTab = (searchParams.get("tab") as PartnerBookingTab) ?? "all";
+  const bookingStatus =
+    (searchParams.get("status") as PartnerBookingTab) ??
+    (searchParams.get("tab") as PartnerBookingTab) ??
+    "all";
 
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -42,7 +46,7 @@ export default function PartnerDashboardPage() {
     setError(null);
     try {
       const params = new URLSearchParams({ from: range.from, to: range.to });
-      if (bookingTab !== "all") params.set("status", bookingTab);
+      if (bookingStatus !== "all") params.set("status", bookingStatus);
       const res = await fetch(`/api/partner/dashboard?${params}`, { credentials: "include" });
       const json = await res.json();
       if (!res.ok || !json.ok) {
@@ -55,7 +59,7 @@ export default function PartnerDashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [range.from, range.to, bookingTab]);
+  }, [range.from, range.to, bookingStatus]);
 
   useEffect(() => {
     loadDashboard();
@@ -74,59 +78,63 @@ export default function PartnerDashboardPage() {
     <>
       <PartnerPageHeader
         title="Dashboard"
-        subtitle={`On This Week · ${formatDateRangeLabel(range.from, range.to)}`}
+        subtitle={formatDateRangeLabel(range.from, range.to)}
         onFilterClick={() => setFilterOpen(true)}
       />
 
       {error ? <div className="error-banner mb-4">{error}</div> : null}
-      {loading && !summary ? <div className="text-sm text-muted mb-4">Loading dashboard…</div> : null}
-
-      <div className="partner-kpi-grid">
-        <PartnerKpiCard icon="bike" label="Total Vehicles" value={summary?.total_vehicles ?? 0} />
-        <PartnerKpiCard icon="calendar" label="Total Bookings" value={summary?.total_bookings ?? 0} />
-        <PartnerKpiCard
-          icon="money"
-          label="Total Revenue"
-          value={`₹${(summary?.total_revenue ?? 0).toLocaleString("en-IN")}`}
-        />
-        <PartnerKpiCard icon="location" label="Active Rides" value={summary?.active_rides ?? 0} />
-      </div>
-
-      <div className="partner-analytics-grid">
-        <section className="card partner-panel">
-          <h2 className="partner-panel-title">Vehicle Status</h2>
-          {summary ? (
-            <StatusDonut breakdown={summary.status_breakdown} />
-          ) : (
-            <div className="partner-donut-empty">
-              <p>—</p>
-            </div>
-          )}
-        </section>
-
-        <section className="card partner-panel">
-          <div className="partner-panel-head">
-            <h2 className="partner-panel-title">Bookings</h2>
-            <div className="partner-tab-row">
-              {PARTNER_BOOKING_TABS.map((tab) => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  className={`partner-tab${bookingTab === tab.id ? " active" : ""}`}
-                  onClick={() => updateParams({ tab: tab.id === "all" ? null : tab.id })}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
+      {loading && !summary ? (
+        <PartnerDashboardSkeleton />
+      ) : (
+        <>
+          <div className="partner-kpi-grid">
+            <PartnerKpiCard icon="bike" label="Total Vehicles" value={summary?.total_vehicles ?? 0} />
+            <PartnerKpiCard icon="calendar" label="Total Bookings" value={summary?.total_bookings ?? 0} />
+            <PartnerKpiCard
+              icon="money"
+              label="Total Revenue"
+              value={`₹${(summary?.total_revenue ?? 0).toLocaleString("en-IN")}`}
+            />
+            <PartnerKpiCard icon="location" label="Active Rides" value={summary?.active_rides ?? 0} />
           </div>
-          {summary ? (
-            <BookingsWeekChart points={summary.bookings_by_weekday} />
-          ) : (
-            <div className="partner-week-chart partner-week-chart-empty">No booking trend yet</div>
-          )}
-        </section>
-      </div>
+
+          <div className="partner-analytics-grid">
+            <section className="card partner-panel">
+              <h2 className="partner-panel-title">Vehicle Status</h2>
+              {summary ? (
+                <StatusDonut breakdown={summary.status_breakdown} />
+              ) : (
+                <div className="partner-donut-empty">
+                  <p>—</p>
+                </div>
+              )}
+            </section>
+
+            <section className="card partner-panel">
+              <div className="partner-panel-head">
+                <h2 className="partner-panel-title">Bookings</h2>
+                <div className="partner-tab-row">
+                  {PARTNER_BOOKING_TABS.map((tab) => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      className={`partner-tab${bookingStatus === tab.id ? " active" : ""}`}
+                      onClick={() => updateParams({ status: tab.id === "all" ? null : tab.id })}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {summary ? (
+                <BookingsWeekChart points={summary.bookings_by_weekday} />
+              ) : (
+                <div className="partner-week-chart partner-week-chart-empty">No booking trend yet</div>
+              )}
+            </section>
+          </div>
+        </>
+      )}
 
       <PartnerFilterDrawer
         open={filterOpen}

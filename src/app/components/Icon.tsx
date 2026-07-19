@@ -27,6 +27,7 @@ import {
   Calendar,
   Briefcase,
   ChevronRight,
+  ChevronDown,
   type LucideIcon,
   type LucideProps,
   UserPlus
@@ -62,7 +63,8 @@ export type IconName =
   | "briefcase"
   | "user-plus"
   | "filter"
-  | "chevron-right";
+  | "chevron-right"
+  | "chevronDown";
 
 interface IconProps extends LucideProps {
   name: IconName;
@@ -99,6 +101,7 @@ const iconMap: Record<IconName, LucideIcon> = {
   "user-plus": UserPlus,
   filter: Filter,
   "chevron-right": ChevronRight,
+  chevronDown: ChevronDown,
 };
 
 export default function Icon({ name, className, ...props }: IconProps) {
