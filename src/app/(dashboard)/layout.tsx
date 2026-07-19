@@ -131,7 +131,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         }
 
         const access: VerifiedAccess = {
-          userId: sessionUserId,
+          userId: sessionUserId!,
           role: user.role,
           partnerApplicationStatus: user.partner_application_status ?? null
         };
