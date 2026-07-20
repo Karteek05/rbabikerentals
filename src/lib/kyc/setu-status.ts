@@ -87,7 +87,7 @@ export function parseSetuDigilockerStatus(payload: Record<string, unknown>) {
     payload.consent_scope,
     payload.consent_scopes
   ];
-  const scopes = scopeSources.reduce((acc, source) => {
+  const scopes = scopeSources.reduce<Set<string>>((acc, source) => {
     if (typeof source === "string") {
       parseConsentScopes(source).forEach((item) => acc.add(item));
     } else if (Array.isArray(source)) {
