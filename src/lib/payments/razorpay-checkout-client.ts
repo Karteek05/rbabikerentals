@@ -66,7 +66,6 @@ export async function openRazorpayCheckout(options: RazorpayCheckoutOptions) {
     key: options.keyId,
     name: options.name ?? "RBA Bike Rentals",
     description: options.description,
-    prefill: options.prefill,
     handler: (response: RazorpayCheckoutSuccess) => {
       options.onSuccess?.(response);
     },
@@ -83,11 +82,17 @@ export async function openRazorpayCheckout(options: RazorpayCheckoutOptions) {
   };
 
   if (options.orderId) {
-    // Amount and currency come from the server-created order.
     checkoutOptions.order_id = options.orderId;
-  } else {
-    checkoutOptions.amount = options.amount;
-    checkoutOptions.currency = options.currency;
+  }
+  checkoutOptions.amount = options.amount;
+  checkoutOptions.currency = options.currency || "INR";
+
+  const prefill: Record<string, string> = {};
+  if (options.prefill?.name) prefill.name = options.prefill.name;
+  if (options.prefill?.email) prefill.email = options.prefill.email;
+  if (options.prefill?.contact) prefill.contact = options.prefill.contact;
+  if (Object.keys(prefill).length > 0) {
+    checkoutOptions.prefill = prefill;
   }
 
   const checkout = new window.Razorpay(checkoutOptions);
