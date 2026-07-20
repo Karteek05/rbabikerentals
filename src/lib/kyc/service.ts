@@ -200,7 +200,7 @@ export async function handleDigilockerCallback(input: {
       : current.consent_scopes,
     cibil_score: input.cibilScore ?? current.cibil_score ?? null,
     needs_manual_review: status === "manual_review",
-    failure_reason: status === "failed" ? input.failureReason : null,
+    failure_reason: status === "failed" ? (input.failureReason ?? undefined) : undefined,
     updated_at: new Date().toISOString()
   });
 
