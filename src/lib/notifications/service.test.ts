@@ -31,7 +31,7 @@ describe("notification email templates", () => {
       }
     });
 
-    expect(email?.subject).toBe("Your RBA booking is approved");
+    expect(email?.subject).toBe("Your RBA booking is ready for payment");
     expect(email?.text).toContain("Complete payment");
     expect(email?.text).toContain("https://rbabikerentals.vercel.app/my-bookings?pay=booking_123");
     expect(email?.html).toContain("Complete payment");

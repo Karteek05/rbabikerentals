@@ -16,6 +16,7 @@ import {
   insertPaymentOrder,
   insertVehicleBlock,
   listBookings,
+  listOpenDamageIncidents,
   listVehicleBlocks,
   updateBooking,
   updatePaymentOrderByProviderId
@@ -117,7 +118,7 @@ export async function createBooking(
     user_id: input.user_id,
     vehicle_id: input.vehicle_id,
     city: "bengaluru",
-    status: "admin_review",
+    status: "payment_pending",
     pickup_at: input.pickup_at,
     drop_at: input.drop_at,
     pickup_zone: input.pickup_zone,
@@ -510,11 +511,22 @@ export async function reportDamageIncident(input: {
   photoUrls: string[];
 }) {
   const booking = await getBookingOrThrow(input.bookingId);
-  if (
-    input.actorRole === "customer" &&
-    booking.user_id !== input.actorId
-  ) {
+  if (input.actorRole === "customer" && booking.user_id !== input.actorId) {
     throw new ApiException(403, "forbidden", "Customer can report only own booking incident.");
+  }
+  if (input.actorRole === "customer" && !["confirmed", "ongoing", "extended"].includes(booking.status)) {
+    throw new ApiException(409, "invalid_state", "Damage can be reported only for an active or completed ride.");
+  }
+  const description = input.description.trim();
+  if (description.length < 5 || description.length > 2000) {
+    throw new ApiException(400, "invalid_description", "Damage description must be between 5 and 2000 characters.");
+  }
+  if (!Array.isArray(input.photoUrls) || input.photoUrls.length > 5 || input.photoUrls.some((url) => !/^https?:\/\//i.test(url))) {
+    throw new ApiException(400, "invalid_photos", "Provide up to 5 valid image URLs.");
+  }
+  const priorIncidents = await listOpenDamageIncidents();
+  if (priorIncidents.some((item) => item.booking_id === booking.id && item.reported_by === input.actorId)) {
+    throw new ApiException(409, "damage_already_reported", "Damage was already reported for this booking.");
   }
 
   const incident = await insertDamageIncident({
@@ -522,8 +534,8 @@ export async function reportDamageIncident(input: {
     booking_id: booking.id,
     vehicle_id: booking.vehicle_id,
     reported_by: input.actorId,
-    description: input.description,
-    photo_urls: input.photoUrls,
+    description,
+    photo_urls: input.photoUrls.map((url) => url.trim()),
     created_at: new Date().toISOString()
   });
 

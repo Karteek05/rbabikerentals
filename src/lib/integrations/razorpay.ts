@@ -46,8 +46,9 @@ export async function createRazorpayOrder(params: {
   });
 
   if (!response.ok) {
-    const text = await response.text();
-    throw new ApiException(502, "razorpay_order_create_failed", text);
+    await response.text();
+    console.error("Razorpay order creation failed", response.status);
+    throw new ApiException(502, "razorpay_order_create_failed", "Payment provider is temporarily unavailable.");
   }
 
   const order = (await response.json()) as {
@@ -73,6 +74,7 @@ export async function createRazorpayRefund(params: {
   paymentId: string;
   amountInPaise: number;
   notes?: Record<string, string>;
+  idempotencyKey?: string;
 }): Promise<{
   provider: "razorpay";
   refund_id: string;
@@ -98,7 +100,10 @@ export async function createRazorpayRefund(params: {
       method: "POST",
       headers: {
         Authorization: `Basic ${authHeader}`,
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        ...(params.idempotencyKey
+          ? { "X-Razorpay-Idempotency-Key": params.idempotencyKey }
+          : {})
       },
       body: JSON.stringify({
         amount: params.amountInPaise,
@@ -112,8 +117,9 @@ export async function createRazorpayRefund(params: {
   );
 
   if (!response.ok) {
-    const text = await response.text();
-    throw new ApiException(502, "razorpay_refund_create_failed", text);
+    await response.text();
+    console.error("Razorpay refund creation failed", response.status);
+    throw new ApiException(502, "razorpay_refund_create_failed", "Refund provider is temporarily unavailable.");
   }
 
   const refund = (await response.json()) as {
@@ -184,8 +190,9 @@ export async function fetchRazorpayOrder(orderId: string) {
   });
 
   if (!response.ok) {
-    const text = await response.text();
-    throw new ApiException(502, "razorpay_order_fetch_failed", text);
+    await response.text();
+    console.error("Razorpay order fetch failed", response.status);
+    throw new ApiException(502, "razorpay_order_fetch_failed", "Payment provider is temporarily unavailable.");
   }
 
   return (await response.json()) as {
@@ -204,8 +211,9 @@ export async function fetchCapturedPaymentForOrder(orderId: string) {
   });
 
   if (!response.ok) {
-    const text = await response.text();
-    throw new ApiException(502, "razorpay_order_payments_fetch_failed", text);
+    await response.text();
+    console.error("Razorpay payment lookup failed", response.status);
+    throw new ApiException(502, "razorpay_order_payments_fetch_failed", "Payment provider is temporarily unavailable.");
   }
 
   const data = (await response.json()) as {
@@ -262,8 +270,9 @@ export async function createRazorpayPaymentLink(params: {
   });
 
   if (!response.ok) {
-    const text = await response.text();
-    throw new ApiException(502, "razorpay_payment_link_failed", text);
+    await response.text();
+    console.error("Razorpay payment-link creation failed", response.status);
+    throw new ApiException(502, "razorpay_payment_link_failed", "Payment provider is temporarily unavailable.");
   }
 
   const data = await response.json();

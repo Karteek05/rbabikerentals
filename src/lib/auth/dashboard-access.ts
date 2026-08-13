@@ -29,10 +29,12 @@ const roleDefaults: Record<
 };
 
 function getSecret() {
+  const isProduction =
+    process.env.APP_ENV === "production" || process.env.NODE_ENV === "production";
   return (
     process.env.DASHBOARD_ACCESS_SECRET ||
     process.env.BETTER_AUTH_SECRET ||
-    (process.env.APP_ENV !== "production" ? "rba-dashboard-dev-secret-change-before-prod" : "")
+    (!isProduction ? "rba-dashboard-dev-secret-change-before-prod" : "")
   );
 }
 
@@ -99,7 +101,7 @@ export function dashboardRoleFromParam(value: unknown): DashboardAccessRole | nu
 export function getDashboardPassword(role: DashboardAccessRole) {
   const configured = process.env[roleDefaults[role].env];
   if (configured) return configured;
-  if (process.env.APP_ENV === "production") return "";
+  if (process.env.APP_ENV === "production" || process.env.NODE_ENV === "production") return "";
   return role === "admin" ? "admin123" : "partner123";
 }
 
@@ -112,7 +114,7 @@ export async function verifyDashboardPassword(role: DashboardAccessRole, passwor
     if (constantTimeEqual(candidateHash, configuredHash.trim().toLowerCase())) {
       return true;
     }
-    if (process.env.APP_ENV !== "production") {
+    if (process.env.APP_ENV !== "production" && process.env.NODE_ENV !== "production") {
       return constantTimeEqual(candidateHash, await sha256Hex(devFallback));
     }
     return false;
@@ -122,7 +124,7 @@ export async function verifyDashboardPassword(role: DashboardAccessRole, passwor
   if (!configuredPassword) return false;
   const expectedHash = await sha256Hex(configuredPassword);
   if (constantTimeEqual(candidateHash, expectedHash)) return true;
-  if (process.env.APP_ENV !== "production") {
+  if (process.env.APP_ENV !== "production" && process.env.NODE_ENV !== "production") {
     return constantTimeEqual(candidateHash, await sha256Hex(devFallback));
   }
   return false;

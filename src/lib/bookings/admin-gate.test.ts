@@ -3,12 +3,12 @@ import { approveBooking } from "@/lib/admin/service";
 import { createBooking } from "@/lib/bookings/service";
 import { store } from "@/lib/data/store";
 
-describe("admin gated booking flow", () => {
+describe("direct payment booking flow", () => {
   afterEach(() => {
     store.notificationJobs = [];
   });
 
-  it("creates verified-user bookings in admin review and opens payment after approval", async () => {
+  it("creates payment-ready bookings immediately", async () => {
     const baseTime = Date.now();
     const start = new Date(baseTime + 10 * 24 * 60 * 60 * 1000).toISOString();
     const end = new Date(baseTime + 11 * 24 * 60 * 60 * 1000).toISOString();
@@ -37,20 +37,13 @@ describe("admin gated booking flow", () => {
       { userId: "cust_001", role: "customer" }
     );
 
-    expect(booking.status).toBe("admin_review");
+    expect(booking.status).toBe("payment_pending");
     expect(booking.payment_order).toBeNull();
 
     expect(store.notificationJobs.map((job) => job.template_key)).toContain(
       "booking_submitted_admin"
     );
 
-    const approved = await approveBooking(
-      booking.id,
-      { note: "test approval" },
-      { userId: "admin_001", role: "admin" }
-    );
-
-    expect(approved.status).toBe("payment_pending");
   });
 
   it("allows admin to approve a booking that is still pending KYC", async () => {

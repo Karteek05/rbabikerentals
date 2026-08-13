@@ -305,6 +305,42 @@ create unique index if not exists idx_payment_orders_booking_created
 on payment_orders(booking_id)
 where status = 'created'::payment_status_type;
 
+create table if not exists api_rate_limits (
+  key text primary key,
+  window_started_at timestamptz not null,
+  request_count integer not null default 0,
+  updated_at timestamptz not null default now()
+);
+
+create or replace function consume_api_rate_limit(p_key text, p_limit integer, p_window_seconds integer)
+returns table(allowed boolean, remaining integer, retry_after_seconds integer)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  current_row api_rate_limits%rowtype;
+  now_value timestamptz := clock_timestamp();
+  reset_at timestamptz;
+begin
+  if p_limit <= 0 or p_window_seconds <= 0 then
+    return query select false, 0, p_window_seconds;
+    return;
+  end if;
+  insert into api_rate_limits(key, window_started_at, request_count, updated_at)
+  values (p_key, now_value, 1, now_value)
+  on conflict (key) do update set
+    window_started_at = case when api_rate_limits.window_started_at + make_interval(secs => p_window_seconds) <= now_value then now_value else api_rate_limits.window_started_at end,
+    request_count = case when api_rate_limits.window_started_at + make_interval(secs => p_window_seconds) <= now_value then 1 else api_rate_limits.request_count + 1 end,
+    updated_at = now_value;
+  select * into current_row from api_rate_limits where key = p_key;
+  reset_at := current_row.window_started_at + make_interval(secs => p_window_seconds);
+  return query select current_row.request_count <= p_limit, greatest(0, p_limit - current_row.request_count), greatest(1, ceil(extract(epoch from (reset_at - now_value)))::integer);
+end;
+$$;
+
+grant execute on function consume_api_rate_limit(text, integer, integer) to service_role;
+
 create table if not exists payment_events (
   id text primary key,
   provider text not null default 'razorpay',

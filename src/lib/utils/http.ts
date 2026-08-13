@@ -24,7 +24,7 @@ export function fromError(error: unknown) {
   if (error instanceof ApiException) {
     if (error.status >= 500) {
       console.error(error);
-      return fail(error.status, error.code, error.message);
+      return fail(500, "internal_error", "Unexpected server error.");
     }
     return fail(error.status, error.code, error.message);
   }

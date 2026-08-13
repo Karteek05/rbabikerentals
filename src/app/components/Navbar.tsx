@@ -5,7 +5,6 @@ import { useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 import { LogOut, Menu, X } from "lucide-react";
 import { authClient } from "@/lib/auth/auth-client";
-import { dashboardPathForRole } from "@/lib/auth/post-login-redirect";
 import type { Role } from "@/lib/types/domain";
 
 const CUSTOMER_LINKS = [
@@ -95,7 +94,6 @@ export default function Navbar() {
   }
 
   const role = account?.user?.role;
-  const dashboardHref = dashboardPathForRole(role);
   const displayName = session?.user?.name || session?.user?.email || "Customer";
   const initial = displayName.trim().charAt(0).toUpperCase() || "C";
   const authMode =

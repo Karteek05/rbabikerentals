@@ -1191,6 +1191,35 @@ export async function updatePaymentOrderById(
   return (data as PaymentOrder | null) ?? null;
 }
 
+export async function updatePaymentOrderRefundIfUnchanged(
+  paymentOrderId: string,
+  expectedRefundedAmount: number,
+  patch: Partial<PaymentOrder>
+): Promise<PaymentOrder | null> {
+  if (getDataMode() === "memory") {
+    const idx = store.paymentOrders.findIndex((item) =>
+      item.id === paymentOrderId && (item.refunded_amount ?? 0) === expectedRefundedAmount
+    );
+    if (idx < 0) return null;
+    store.paymentOrders[idx] = { ...store.paymentOrders[idx], ...patch };
+    return store.paymentOrders[idx];
+  }
+
+  const supabase = getSupabaseServiceClient();
+  const amountFilter = expectedRefundedAmount === 0
+    ? `refunded_amount.eq.0,refunded_amount.is.null`
+    : `refunded_amount.eq.${expectedRefundedAmount}`;
+  const { data, error } = await supabase
+    .from("payment_orders")
+    .update(patch)
+    .eq("id", paymentOrderId)
+    .or(amountFilter)
+    .select("*")
+    .maybeSingle();
+  if (error) throw new ApiException(500, "db_error", error.message);
+  return (data as PaymentOrder | null) ?? null;
+}
+
 export async function hasProcessedPaymentEvent(providerEventId: string): Promise<boolean> {
   if (getDataMode() === "memory") {
     return store.paymentEvents.some((item) => item.provider_event_id === providerEventId);

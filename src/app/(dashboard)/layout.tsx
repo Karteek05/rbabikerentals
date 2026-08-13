@@ -76,7 +76,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const { data: session, isPending } = authClient.useSession();
   const [gate, setGate] = useState<"loading" | "ready" | "denied">("loading");
   const verifiedAccessRef = useRef<VerifiedAccess | null>(null);
-  const sessionUserId = session?.user?.id ?? null;
+  const sessionUserId = session?.user?.id ?? "";
 
   useEffect(() => {
     if (isPending) return;
