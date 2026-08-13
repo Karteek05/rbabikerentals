@@ -1,5 +1,8 @@
 import { Pool } from "pg";
 import nodemailer from "nodemailer";
+import { loadEnvConfig } from "@next/env";
+
+loadEnvConfig(process.cwd());
 
 const REQUIRED_TABLES = [
   "user",
@@ -90,6 +93,7 @@ async function main() {
 
   console.log("\nDatabase");
   console.log(`  DATABASE_URL: ${envStatus("DATABASE_URL")}`);
+  console.log(`  SUPABASE_DB_URL: ${envStatus("SUPABASE_DB_URL")}`);
   console.log(`  SUPABASE_URL: ${envStatus("SUPABASE_URL")}`);
 
   console.log("\nPayments");
@@ -105,13 +109,16 @@ async function main() {
   console.log(`  EMAIL_FROM: ${process.env.EMAIL_FROM ?? "missing"}`);
   console.log(`  ADMIN_EMAIL: ${process.env.ADMIN_EMAIL ?? "missing"}`);
 
-  const databaseUrl = process.env.DATABASE_URL;
+  const databaseUrl = process.env.SUPABASE_DB_URL ?? process.env.DATABASE_URL;
   if (!databaseUrl) {
-    console.error("\nDATABASE_URL is required to inspect tables.");
+    console.error("\nSUPABASE_DB_URL or DATABASE_URL is required to inspect tables.");
     process.exit(1);
   }
 
-  const pool = new Pool({ connectionString: databaseUrl });
+  const pool = new Pool({
+    connectionString: databaseUrl,
+    ssl: databaseUrl.includes("supabase") ? { rejectUnauthorized: false } : undefined
+  });
 
   try {
     const version = await pool.query("select version()");

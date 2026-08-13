@@ -95,7 +95,7 @@ export const PUBLIC_FLEET: PublicFleetVehicle[] = [
     stockApprox: 2,
     engine: "125 cc",
     fuel: "Petrol",
-    image: "/images/services/raider.svg",
+    image: "https://www.tvsmotor.com/tvs-raider/-/media/Brand-Pages-Webp/Raider/Color-New-images/Split-Seat/OneDrive_1_21-3-2025/Black-Webp/1.webp",
     fallbackImage: "/images/services/raider.svg",
     imageAlt: "TVS Raider bike illustration",
     deposit_amount: 2000,

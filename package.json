@@ -13,7 +13,7 @@
     "migrate": "tsx --env-file=.env scripts/migrate.ts",
     "seed": "tsx --env-file=.env scripts/seed.ts",
     "bootstrap:admin": "tsx --env-file=.env scripts/bootstrap-admin.ts",
-    "check-db": "tsx --env-file=.env scripts/check-db.ts",
+    "check-db": "tsx scripts/check-db.ts",
     "import:vehicle-docs": "tsx --env-file=.env scripts/import-vehicle-docs.ts",
     "import:vehicle-docs:match": "tsx --env-file=.env scripts/import-vehicle-docs.ts --match-only",
     "link:fleet-catalog": "tsx --env-file=.env scripts/link-fleet-catalog.ts",
