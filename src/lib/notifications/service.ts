@@ -145,14 +145,14 @@ export async function sendBookingConfirmationEmail(email: string, bookingDetails
       `Pickup: ${pickupTime}`,
       `Drop: ${dropTime}`,
       "",
-      "Our team will review availability and send payment details once approved.",
+      "Your booking is ready for payment now. Complete checkout from My Bookings to confirm your ride.",
       "",
       "Regards,",
       "RBA Bike Rentals"
     ]),
     html: renderEmailHtml({
       title: "Booking request received",
-      intro: "We received your booking request and will review availability before opening payment.",
+      intro: "Your booking is ready for payment. Complete checkout from My Bookings to confirm your ride.",
       rows: [
         ["Vehicle", vehicleName],
         ["Booking reference", bookingRef],
@@ -160,7 +160,7 @@ export async function sendBookingConfirmationEmail(email: string, bookingDetails
         ["Pickup", pickupTime],
         ["Drop", dropTime]
       ],
-      closing: "You will receive another email once the booking is approved for payment."
+      closing: "Complete payment from My Bookings to confirm your ride."
     })
   });
 }
@@ -174,9 +174,9 @@ export async function sendBookingApprovedEmail(email: string, bookingDetails: an
 
   await sendEmail({
     to: email,
-    subject: `Booking approved - ${vehicleName}`,
+    subject: `Payment ready - ${vehicleName}`,
     text: paragraph([
-      "Great news! Your RBA booking has been approved.",
+      "Your RBA booking is ready for payment.",
       "",
       `Vehicle: ${vehicleName}`,
       `Booking reference: ${bookingRef}`,
@@ -188,8 +188,8 @@ export async function sendBookingApprovedEmail(email: string, bookingDetails: an
       "RBA Bike Rentals"
     ]),
     html: renderEmailHtml({
-      title: "Booking approved",
-      intro: "Your booking has been approved. Complete payment to confirm your scooter.",
+      title: "Payment ready",
+      intro: "Complete payment to confirm your scooter booking.",
       rows: [
         ["Vehicle", vehicleName],
         ["Booking reference", bookingRef]
@@ -327,9 +327,9 @@ export function buildUserEmail(params: {
     const vehicleId = String(params.payload.vehicle_id ?? "");
     const vehicleName = getVehicleDisplayName(vehicleId);
     const text = paragraph([
-      "Your RBA booking is approved.",
+      "Your RBA booking is ready for payment.",
       "",
-      "The admin team has reviewed your request and opened payment for the booking.",
+      "Your booking is ready for payment. Complete checkout to confirm your ride.",
       "",
       `Booking ID: ${bookingId}`,
       `Vehicle: ${vehicleName}`,
@@ -343,11 +343,11 @@ export function buildUserEmail(params: {
     ]);
 
     return {
-      subject: "Your RBA booking is approved",
+      subject: "Your RBA booking is ready for payment",
       text,
       html: renderEmailHtml({
-        title: "Booking approved",
-        intro: "The admin team has reviewed your request and opened payment for the booking.",
+        title: "Payment ready",
+        intro: "Your booking is ready for payment. Complete checkout to confirm your ride.",
         rows: [
           ["Booking ID", bookingId],
           ["Vehicle", vehicleName],
@@ -369,7 +369,7 @@ export function buildUserEmail(params: {
       `Booking ID: ${bookingId}`,
       `Vehicle: ${vehicleName}`,
       "",
-      "The team will review availability and send the next update once the booking is ready for payment.",
+      "Your booking is ready for payment now. Complete checkout from My Bookings to confirm your ride.",
       "",
       "Regards,",
       "RBA Bike Rentals"
@@ -380,12 +380,12 @@ export function buildUserEmail(params: {
       text,
       html: renderEmailHtml({
         title: "Booking request received",
-        intro: "We received your booking request and will review availability before opening payment.",
+        intro: "Your booking is ready for payment. Complete checkout to confirm your ride.",
         rows: [
           ["Booking ID", bookingId],
           ["Vehicle", vehicleName]
         ],
-        closing: "You will receive another email once the booking is ready for payment."
+        closing: "Complete checkout from My Bookings to confirm your ride."
       })
     };
   }
@@ -512,7 +512,7 @@ export async function sendBookingSubmittedAdminEmail(
       `Pickup location: ${pickupLocation}`,
       `Quoted amount: ${amount}`,
       "",
-      `Review and approve: ${details.admin_url}`,
+      `Review booking details: ${details.admin_url}`,
       "",
       "RBA Bike Rentals"
     ]),
@@ -531,7 +531,7 @@ export async function sendBookingSubmittedAdminEmail(
         ["Quoted amount", amount]
       ],
       cta: { label: "Review booking", url: details.admin_url },
-      closing: "Approve the booking to open payment for the customer."
+      closing: "The customer can complete payment from My Bookings."
     })
   });
 }

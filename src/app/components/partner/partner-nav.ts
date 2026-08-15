@@ -29,7 +29,6 @@ function formatLocalDate(date: Date) {
 
 export function getWeekRangeFromStart(weekStart: string) {
   const [year, month, day] = weekStart.split("-").map(Number);
-  const start = new Date(year, month - 1, day);
   const end = new Date(year, month - 1, day);
   end.setDate(end.getDate() + 6);
   return { from: weekStart, to: formatLocalDate(end) };

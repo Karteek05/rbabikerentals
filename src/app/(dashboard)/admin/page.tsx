@@ -11,7 +11,7 @@ import {
   resolveVehicleThumbnail
 } from "@/lib/fleet/display";
 import { getKycAdminBadge } from "@/lib/kyc/admin-labels";
-import type { KycStatus, BookingStatus } from "@/lib/types/domain";
+import type { BookingStatus, KycStatus, PricingQuote } from "@/lib/types/domain";
 import { formatBookingStatus } from "@/lib/bookings/status-labels";
 import { StatCardsSkeleton, Skeleton } from "@/components/ui/Skeleton";
 
@@ -20,15 +20,19 @@ type Booking = {
   status: BookingStatus;
   user_id: string;
   vehicle_id: string;
+  city: "bengaluru";
+  km_limit_bucket: "day" | "week" | "month";
+  km_limit_value: number;
   assigned_vehicle_id?: string | null;
   assigned_at?: string | null;
   cancel_reason?: string;
-  pickup_at?: string;
-  drop_at?: string;
+  pickup_at: string;
+  drop_at: string;
   requested_drop_at?: string | null;
   pickup_zone?: string | null;
-  quote?: { total_payable?: number };
-  created_at?: string;
+  quote: PricingQuote;
+  created_at: string;
+  updated_at: string;
   user?: {
     name?: string | null;
     email?: string | null;

@@ -2,7 +2,7 @@ import type { BookingStatus } from "@/lib/types/domain";
 import { ApiException } from "@/lib/utils/errors";
 
 const transitions: Record<BookingStatus, BookingStatus[]> = {
-  draft: ["pending_kyc", "admin_review"],
+  draft: ["pending_kyc", "admin_review", "payment_pending"],
   pending_kyc: ["admin_review", "payment_pending", "cancelled"],
   admin_review: ["payment_pending", "cancelled"],
   payment_pending: ["confirmed", "cancelled"],

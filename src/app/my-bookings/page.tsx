@@ -403,7 +403,7 @@ export default function MyBookingsPage() {
   const TABS = [
     { key: "all", label: "All" },
     { key: "pending_kyc", label: "Pending review" },
-    { key: "admin_review", label: "Review" },
+    { key: "admin_review", label: "Legacy review" },
     { key: "payment_pending", label: "Pay" },
     { key: "confirmed", label: "Confirmed" },
     { key: "ongoing", label: "Ongoing" },
@@ -576,7 +576,7 @@ export default function MyBookingsPage() {
                               return;
                             }
                             if (booking.status === "admin_review") {
-                              alert("Please wait. Your booking is still being reviewed by the admin. You will be able to pay once it is approved.");
+                              alert("This older booking needs support assistance before payment.");
                               return;
                             }
                             booking.status === "payment_pending" ? handlePay(booking) : handleExtend(booking);
@@ -673,7 +673,7 @@ export default function MyBookingsPage() {
                           </div>
                           <h4 className="text-lg font-black text-[color:var(--color-ink)]">Scan to pay ₹{booking.quote.total_payable.toLocaleString()}</h4>
                           <p className="mt-1 text-sm leading-relaxed text-[color:var(--color-copy)]">
-                            Use this QR only after the admin has approved the booking. Keep the booking ID in the payment note.
+                            Use this QR to complete payment. Keep the booking ID in the payment note.
                           </p>
                           <div className="mt-3 grid gap-2 text-sm">
                             <div className="flex items-center justify-between gap-3 rounded-md bg-white px-3 py-2">

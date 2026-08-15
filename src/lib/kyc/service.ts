@@ -44,14 +44,14 @@ async function moveVerifiedBookingsToAdminReview(userId: string, trigger: string
     pendingBookings.map(async (booking) => {
       assertCanTransition(booking.status, "admin_review", trigger);
       const updated = await updateBooking(booking.id, {
-        status: "admin_review",
+        status: "payment_pending",
         updated_at: new Date().toISOString()
       });
       await Promise.all([
         notifyUser({
           userId,
           email: user.email,
-          templateKey: "kyc_verified_booking_under_review",
+          templateKey: "booking_submitted",
           payload: {
             booking_id: updated.id,
             vehicle_id: updated.vehicle_id
@@ -75,24 +75,16 @@ export async function startDigilockerKyc(userId: string) {
   const user = await getUserOrThrow(userId);
   const kyc = await getOrCreateKycRecord(userId);
 
-  let providerResponse: {
+  const providerResponse = (await createDigilockerRequest()) as {
     id?: string;
     requestId?: string;
     referenceId?: string;
     url?: string;
     status?: string;
-  } | null = null;
+  };
 
-  try {
-    providerResponse = (await createDigilockerRequest()) as {
-      id?: string;
-      requestId?: string;
-      referenceId?: string;
-      url?: string;
-      status?: string;
-    };
-  } catch {
-    providerResponse = null;
+  if (!providerResponse.requestId && !providerResponse.id) {
+    throw new ApiException(502, "setu_invalid_response", "DigiLocker provider returned an invalid response.");
   }
 
   const requestId =
@@ -200,7 +192,7 @@ export async function handleDigilockerCallback(input: {
       : current.consent_scopes,
     cibil_score: input.cibilScore ?? current.cibil_score ?? null,
     needs_manual_review: status === "manual_review",
-    failure_reason: status === "failed" ? (input.failureReason ?? undefined) : undefined,
+    failure_reason: status === "failed" ? input.failureReason ?? undefined : undefined,
     updated_at: new Date().toISOString()
   });
 
