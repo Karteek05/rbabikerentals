@@ -9,6 +9,7 @@ export async function startGoogleSignIn(callbackURL: string) {
   });
 
   if (error) {
+    console.error("Google sign-in error:", error);
     const message = error.message?.trim();
     if (message) return { ok: false as const, error: message };
     return {

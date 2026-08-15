@@ -28,9 +28,12 @@ function getVercelBaseUrl(env: AppUrlEnv) {
 
 export function getServerAppBaseUrl(env: AppUrlEnv = process.env) {
   const betterAuthUrl = normalizeBaseUrl(env.BETTER_AUTH_URL);
-  if (betterAuthUrl) return betterAuthUrl;
-
   const vercelUrl = getVercelBaseUrl(env);
+
+  if (betterAuthUrl && !(vercelUrl && isLocalBaseUrl(betterAuthUrl))) {
+    return betterAuthUrl;
+  }
+
   const appBaseUrl = normalizeBaseUrl(env.APP_BASE_URL);
 
   if (appBaseUrl && !(vercelUrl && isLocalBaseUrl(appBaseUrl))) {
