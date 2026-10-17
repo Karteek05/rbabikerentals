@@ -332,7 +332,10 @@ export async function getPartnerRevenue(userId: string) {
   }));
 
   const vehicleMap = new Map<string, { booking_count: number; revenue: number }>();
-  for (const booking of activeBookings) {
+  for (const booking of bookings) {
+    if (!ACTIVE_BOOKING_STATUSES.has(booking.status) && !PAID_REVENUE_STATUSES.has(booking.status)) {
+      continue;
+    }
     const entry = vehicleMap.get(booking.vehicle_id) ?? {
       booking_count: 0,
       revenue: 0
@@ -358,11 +361,17 @@ export async function getPartnerRevenue(userId: string) {
   const grossRevenue = sumRevenue(paidBookings);
   const pendingRevenue = sumRevenue(pendingBookings);
   const completedRevenue = sumRevenue(completedBookings);
-  const vehicleWise = Array.from(vehicleMap.entries()).map(([vehicle_id, value]) => ({
-    vehicle_id,
-    booking_count: value.booking_count,
-    revenue: value.revenue
-  }));
+  const vehicleById = new Map(vehicles.map((vehicle) => [vehicle.id, vehicle]));
+  const vehicleWise = Array.from(vehicleMap.entries()).map(([vehicle_id, value]) => {
+    const vehicle = vehicleById.get(vehicle_id);
+    return {
+      vehicle_id,
+      vehicle_label: vehicle ? `${vehicle.brand} ${vehicle.model}` : vehicle_id,
+      registration_number: vehicle?.registration_number ?? null,
+      booking_count: value.booking_count,
+      revenue: value.revenue
+    };
+  });
 
   return {
     totals: {

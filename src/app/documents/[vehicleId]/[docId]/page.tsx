@@ -28,10 +28,7 @@ export default function VehicleDocumentViewPage() {
 
     async function loadDocument() {
       try {
-        const res = await fetch(src, {
-          credentials: "include",
-          headers: { "X-RBA-Document-Viewer": "1" }
-        });
+        const res = await fetch(src, { credentials: "include" });
         if (!res.ok) {
           const json = await res.json().catch(() => null);
           throw new Error(json?.error?.message ?? "Could not load document.");
@@ -64,7 +61,10 @@ export default function VehicleDocumentViewPage() {
           <ArrowLeft className="h-4 w-4" />
           Back
         </Link>
-        <p className="text-sm font-semibold text-[color:var(--color-copy)]">View only</p>
+        <p className="text-sm font-semibold text-[color:var(--color-copy)]">Vehicle document</p>
+        <a href={`${src}?download=1`} className="btn-primary btn-sm">
+          Download
+        </a>
       </header>
 
       {loading ? (

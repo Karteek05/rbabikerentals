@@ -17,6 +17,11 @@ function contentTypeForFileName(fileName: string) {
   if (ext === ".webp") return "image/webp";
   return "application/octet-stream";
 }
+function safeDownloadFileName(fileName: string) {
+  const sanitized = path.basename(fileName).replace(/[^a-zA-Z0-9._-]/g, "_");
+  return sanitized || "vehicle-document";
+}
+
 
 function resolvePathUnderRoot(root: string, relativePath: string) {
   const absRoot = path.resolve(root);
@@ -27,44 +32,41 @@ function resolvePathUnderRoot(root: string, relativePath: string) {
   return absPath;
 }
 
-async function readLocalDocument(absPath: string, inlineOnly = false) {
+async function readLocalDocument(absPath: string, download = false) {
   const buffer = await readFile(absPath);
   const fileName = path.basename(absPath);
-  return documentResponse(buffer, fileName, inlineOnly);
+  return documentResponse(buffer, fileName, download);
 }
 
-function documentResponse(buffer: ArrayBuffer | Buffer, fileName: string, inlineOnly = false) {
+function documentResponse(buffer: ArrayBuffer | Buffer, fileName: string, download = false) {
+  const safeName = safeDownloadFileName(fileName);
   const headers: Record<string, string> = {
-    "content-type": contentTypeForFileName(fileName),
+    "content-type": contentTypeForFileName(safeName),
     "cache-control": "private, no-store",
-    "x-content-type-options": "nosniff"
+    "x-content-type-options": "nosniff",
+    "content-disposition": download ? `attachment; filename="${safeName}"` : "inline"
   };
-  if (inlineOnly) {
-    headers["content-disposition"] = "inline";
-  } else {
-    headers["content-disposition"] = `inline; filename="${fileName}"`;
-  }
   return new Response(buffer, { headers });
 }
 
-async function readRemoteDocument(url: string, inlineOnly = false) {
+async function readRemoteDocument(url: string, download = false) {
   const response = await fetch(url);
   if (!response.ok) {
     throw new ApiException(404, "document_not_found", "Document file is unavailable.");
   }
-  const fileName = new URL(url).pathname.split("/").pop() ?? "document.pdf";
+  const fileName = safeDownloadFileName(new URL(url).pathname.split("/").pop() ?? "document.pdf");
   const buffer = await response.arrayBuffer();
   const contentType = response.headers.get("content-type") ?? contentTypeForFileName(fileName);
   const headers: Record<string, string> = {
     "content-type": contentType,
     "cache-control": "private, no-store",
     "x-content-type-options": "nosniff",
-    "content-disposition": inlineOnly ? "inline" : `inline; filename="${fileName}"`
+    "content-disposition": download ? `attachment; filename="${fileName}"` : "inline"
   };
   return new Response(buffer, { headers });
 }
 
-async function readStoredDocument(relativePath: string, inlineOnly = false) {
+async function readStoredDocument(relativePath: string, download = false) {
   const fileName = path.basename(relativePath);
 
   if (isSupabaseConfigured()) {
@@ -73,28 +75,17 @@ async function readStoredDocument(relativePath: string, inlineOnly = false) {
     const { data, error } = await supabase.storage.from(bucket).download(relativePath);
     if (!error && data) {
       const buffer = Buffer.from(await data.arrayBuffer());
-      return documentResponse(buffer, fileName, inlineOnly);
+      return documentResponse(buffer, fileName, download);
     }
   }
 
   const storageRoot = path.join(process.cwd(), ".data", "vehicle-documents");
   const absPath = resolvePathUnderRoot(storageRoot, relativePath);
   try {
-    return await readLocalDocument(absPath, inlineOnly);
+    return await readLocalDocument(absPath, download);
   } catch {
     throw new ApiException(404, "document_not_found", "Document file is unavailable on this server.");
   }
-}
-
-function assertCustomerInlineFetch(request: Request) {
-  if (request.headers.get("x-rba-document-viewer") === "1") {
-    return;
-  }
-  throw new ApiException(
-    403,
-    "view_only",
-    "Open this document from the in-app viewer instead of downloading it directly."
-  );
 }
 
 export async function GET(
@@ -108,25 +99,22 @@ export async function GET(
     await assertVehicleDocumentAccess(actor, vehicle);
 
     const doc = await getVehicleDocumentOrThrow(id, docId);
-    const inlineOnly = actor.role === "customer";
-    if (inlineOnly) {
-      assertCustomerInlineFetch(request);
-    }
+    const download = new URL(request.url).searchParams.get("download") === "1";
     if (doc.file_url.startsWith("http://") || doc.file_url.startsWith("https://")) {
-      return readRemoteDocument(doc.file_url, inlineOnly);
+      return readRemoteDocument(doc.file_url, download);
     }
 
     if (!doc.file_url.startsWith(LOCAL_DOC_PREFIX)) {
       if (doc.file_url.startsWith("/uploads/")) {
         const legacyRoot = path.join(process.cwd(), "public", "uploads");
         const legacyPath = resolvePathUnderRoot(legacyRoot, doc.file_url.slice("/uploads/".length));
-        return readLocalDocument(legacyPath, inlineOnly);
+        return readLocalDocument(legacyPath, download);
       }
       throw new ApiException(404, "document_not_found", "Document file is unavailable.");
     }
 
     const relativePath = doc.file_url.slice(LOCAL_DOC_PREFIX.length);
-    return readStoredDocument(relativePath, inlineOnly);
+    return readStoredDocument(relativePath, download);
   } catch (error) {
     return fromError(error);
   }

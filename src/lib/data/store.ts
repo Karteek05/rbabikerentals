@@ -10,6 +10,7 @@ import type {
   Vehicle,
   VehicleLiveLocation,
   VehicleDocument,
+  VehicleDocumentCleanup,
   VehicleBlockWindow
 } from "@/lib/types/domain";
 
@@ -88,6 +89,7 @@ export const store: {
   paymentOrders: PaymentOrder[];
   paymentEvents: PaymentEvent[];
   vehicleDocuments: VehicleDocument[];
+  vehicleDocumentCleanup: VehicleDocumentCleanup[];
   notificationJobs: NotificationJob[];
 } = {
   users: [
@@ -186,5 +188,6 @@ export const store: {
   paymentOrders: [],
   paymentEvents: [],
   vehicleDocuments: [],
+  vehicleDocumentCleanup: [],
   notificationJobs: []
 };

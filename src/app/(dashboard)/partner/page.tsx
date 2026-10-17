@@ -25,8 +25,26 @@ type DashboardSummary = {
   bookings_by_weekday: Array<{ day: string; count: number }>;
 };
 
+type RevenueAnalytics = {
+  totals: {
+    booking_count: number;
+    gross_revenue: number;
+    pending_revenue: number;
+    completed_revenue: number;
+  };
+  vehicle_wise: Array<{
+    vehicle_id: string;
+    vehicle_label: string;
+    registration_number: string | null;
+    booking_count: number;
+    revenue: number;
+  }>;
+  period_wise: { monthly: Array<{ month: string; revenue: number }> };
+};
+
 export default function PartnerDashboardPage() {
   const router = useRouter();
+  const [revenue, setRevenue] = useState<RevenueAnalytics | null>(null);
   const searchParams = useSearchParams();
   const weekStart = searchParams.get("week") ?? getDefaultWeekStart();
   const bookingStatus =
@@ -47,13 +65,22 @@ export default function PartnerDashboardPage() {
     try {
       const params = new URLSearchParams({ from: range.from, to: range.to });
       if (bookingStatus !== "all") params.set("status", bookingStatus);
-      const res = await fetch(`/api/partner/dashboard?${params}`, { credentials: "include" });
-      const json = await res.json();
+      const [res, revenueRes] = await Promise.all([
+        fetch(`/api/partner/dashboard?${params}`, { credentials: "include" }),
+        fetch("/api/partner/revenue", { credentials: "include" })
+      ]);
+      const [json, revenueJson] = await Promise.all([res.json(), revenueRes.json()]);
       if (!res.ok || !json.ok) {
         setError(json?.error?.message ?? "Failed to load dashboard");
         return;
       }
       setSummary(json.data);
+      if (!revenueRes.ok || !revenueJson.ok) {
+        setRevenue(null);
+        setError(revenueJson?.error?.message ?? "Failed to load investor revenue analytics");
+        return;
+      }
+      setRevenue(revenueJson.data);
     } catch (err) {
       setError(String(err));
     } finally {
@@ -77,8 +104,8 @@ export default function PartnerDashboardPage() {
   return (
     <>
       <PartnerPageHeader
-        title="Dashboard"
-        subtitle={formatDateRangeLabel(range.from, range.to)}
+        title="Investor Dashboard"
+        subtitle={`${formatDateRangeLabel(range.from, range.to)} · Gross booking analytics`}
         onFilterClick={() => setFilterOpen(true)}
       />
 
@@ -92,7 +119,7 @@ export default function PartnerDashboardPage() {
             <PartnerKpiCard icon="calendar" label="Total Bookings" value={summary?.total_bookings ?? 0} />
             <PartnerKpiCard
               icon="money"
-              label="Total Revenue"
+              label="Gross Paid Booking Value"
               value={`₹${(summary?.total_revenue ?? 0).toLocaleString("en-IN")}`}
             />
             <PartnerKpiCard icon="location" label="Active Rides" value={summary?.active_rides ?? 0} />
@@ -133,6 +160,74 @@ export default function PartnerDashboardPage() {
               )}
             </section>
           </div>
+            <div className="partner-analytics-grid mt-4">
+              <section className="card partner-panel">
+                <h2 className="partner-panel-title">Vehicle performance</h2>
+                <p className="mb-3 text-xs text-muted">
+                  Values are gross booking totals, not investor payouts or profit.
+                </p>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead>
+                      <tr>
+                        <th className="py-2">Vehicle</th>
+                        <th className="py-2">Bookings</th>
+                        <th className="py-2 text-right">Paid value</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(revenue?.vehicle_wise ?? []).map((vehicle) => (
+                        <tr key={vehicle.vehicle_id} className="border-t border-[color:var(--color-line)]">
+                          <td className="py-2 font-medium">
+                            {vehicle.vehicle_label}
+                            {vehicle.registration_number ? (
+                              <span className="block text-xs font-normal text-muted">
+                                {vehicle.registration_number}
+                              </span>
+                            ) : null}
+                          </td>
+                          <td className="py-2">{vehicle.booking_count}</td>
+                          <td className="py-2 text-right">₹{vehicle.revenue.toLocaleString("en-IN")}</td>
+                        </tr>
+                      ))}
+                      {!revenue?.vehicle_wise.length ? (
+                        <tr>
+                          <td colSpan={3} className="py-3 text-center text-muted">No vehicle revenue yet.</td>
+                        </tr>
+                      ) : null}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+              <section className="card partner-panel">
+                <h2 className="partner-panel-title">Revenue summary</h2>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <p className="text-xs text-muted">All-time gross paid value</p>
+                    <p className="text-lg font-bold">₹{(revenue?.totals.gross_revenue ?? 0).toLocaleString("en-IN")}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted">Pending bookings</p>
+                    <p className="text-lg font-bold">₹{(revenue?.totals.pending_revenue ?? 0).toLocaleString("en-IN")}</p>
+                  </div>
+                </div>
+                <h3 className="mt-4 text-sm font-semibold">Monthly paid booking value</h3>
+                <ul className="mt-2 divide-y divide-[color:var(--color-line)]">
+                  {(revenue?.period_wise.monthly ?? []).slice().reverse().map((period) => (
+                    <li key={period.month} className="flex justify-between gap-3 py-2 text-sm">
+                      <span>{new Date(`${period.month}-01T00:00:00`).toLocaleDateString("en-IN", {
+                        month: "long",
+                        year: "numeric"
+                      })}</span>
+                      <span className="font-semibold">₹{period.revenue.toLocaleString("en-IN")}</span>
+                    </li>
+                  ))}
+                  {!revenue?.period_wise.monthly.length ? (
+                    <li className="py-3 text-sm text-muted">No paid bookings yet.</li>
+                  ) : null}
+                </ul>
+              </section>
+            </div>
         </>
       )}
 

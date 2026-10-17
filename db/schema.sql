@@ -157,6 +157,7 @@ alter table if exists vehicles add column if not exists image_urls text[] not nu
 alter table if exists vehicles add column if not exists registration_number text;
 alter table if exists vehicles add column if not exists chassis_number text;
 alter table if exists vehicles add column if not exists catalog_vehicle_id text references vehicles(id);
+create index if not exists idx_vehicles_owner_id on vehicles(owner_id);
 
 create table if not exists bookings (
   id text primary key,
@@ -283,6 +284,16 @@ where d1.vehicle_id = d2.vehicle_id
 create unique index if not exists idx_vehicle_documents_vehicle_doc_type
   on vehicle_documents(vehicle_id, doc_type);
 
+create table if not exists vehicle_document_cleanup (
+  id text primary key,
+  file_url text not null unique,
+  attempts integer not null default 0,
+  last_error text,
+  created_at timestamptz not null default now()
+);
+create index if not exists idx_vehicle_document_cleanup_created_at
+  on vehicle_document_cleanup(created_at);
+
 create table if not exists payment_orders (
   id text primary key,
   booking_id text not null references bookings(id),
@@ -381,6 +392,7 @@ alter table vehicle_block_windows enable row level security;
 alter table vehicle_live_locations enable row level security;
 alter table damage_incidents enable row level security;
 alter table vehicle_documents enable row level security;
+alter table vehicle_document_cleanup enable row level security;
 alter table payment_orders enable row level security;
 alter table payment_events enable row level security;
 alter table notification_jobs enable row level security;

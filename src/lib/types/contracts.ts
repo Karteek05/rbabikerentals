@@ -67,6 +67,8 @@ export interface RevenueResponse {
   }>;
   vehicle_wise: Array<{
     vehicle_id: string;
+    vehicle_label: string;
+    registration_number: string | null;
     booking_count: number;
     revenue: number;
   }>;

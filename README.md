@@ -48,16 +48,21 @@ Never enable `ALLOW_DEV_HEADERS=true` in staging or production.
 - `POST /api/bookings/[id]/cancel`
 - `POST /api/kyc/digilocker/start`
 - `GET /api/kyc/[userId]`
-- `GET /api/partner/revenue`
+- `GET /api/partner/revenue` (partner/investor-scoped gross booking analytics)
+- `GET /api/partner/dashboard`
+- `GET /api/partner/vehicles`
 - `POST /api/vehicles/[id]/block`
 - `GET /api/admin/bookings`
 - `POST /api/admin/bookings/[id]/reject`
 - `GET /api/admin/vehicles`
-- `POST /api/admin/vehicles`
+- `POST /api/admin/vehicles` (admin assigns each vehicle to an investor account)
 - `PATCH /api/admin/vehicles/[id]`
 - `DELETE /api/admin/vehicles/[id]`
 - `POST /api/admin/vehicles/[id]/images`
-- `POST /api/payments/order`
+- `POST /api/admin/vehicles/[id]/documents`
+- `PATCH /api/admin/vehicles/[id]/documents` (edit expiry)
+- `DELETE /api/admin/vehicles/[id]/documents`
+- `GET /api/vehicles/[id]/documents`
 - `POST /api/payments/refund`
 - `POST /api/webhooks/razorpay`
 - `POST /api/kyc/digilocker/callback`
@@ -78,7 +83,8 @@ Never enable `ALLOW_DEV_HEADERS=true` in staging or production.
 ## Database and Jobs
 - Run migration: `npm run migrate`
 - Seed data: `npm run seed`
-- Run document expiry job: `npm run job:documents`
+- Run document expiry reminders and retry orphaned vehicle-document cleanup: `npm run job:documents`
+- The matching `POST /api/internal/jobs/document-expiry` endpoint requires `x-job-secret: $JOB_SECRET`; schedule it regularly. Failed cleanup entries are retried after one hour and are never deleted while a document record still references the file.
 - Run incident escalation job: `npm run job:incidents`
 
 Security-sensitive environment variables to configure before staging/production:
@@ -96,6 +102,11 @@ Security-sensitive environment variables to configure before staging/production:
 Vehicle image storage:
 - If Supabase is configured, uploads go to `SUPABASE_VEHICLE_IMAGE_BUCKET` (default: `vehicle-images`).
 - Without Supabase, uploads are saved to `public/uploads/vehicles/<vehicle_id>/`.
+
+Vehicle document storage:
+- Supabase Storage documents are served only through authenticated application routes; configure the document bucket (`SUPABASE_VEHICLE_DOC_BUCKET`, default `vehicle-documents`) as private.
+- Without Supabase, documents are stored under `.data/vehicle-documents/` and require persistent, private server storage.
+- Replacements use fresh object names. The old file is deleted only after the database points to its replacement; failed removals are queued and retried by the document job.
 
 ## Example cURL
 ```bash

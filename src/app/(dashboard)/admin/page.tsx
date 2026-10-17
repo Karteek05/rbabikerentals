@@ -11,7 +11,12 @@ import {
   resolveVehicleThumbnail
 } from "@/lib/fleet/display";
 import { getKycAdminBadge } from "@/lib/kyc/admin-labels";
-import type { BookingStatus, KycStatus, PricingQuote } from "@/lib/types/domain";
+import type {
+  BookingStatus,
+  KycStatus,
+  PricingQuote,
+  VehicleDocument
+} from "@/lib/types/domain";
 import { formatBookingStatus } from "@/lib/bookings/status-labels";
 import { StatCardsSkeleton, Skeleton } from "@/components/ui/Skeleton";
 
@@ -182,7 +187,8 @@ export default function AdminDashboardPage() {
   const [docType, setDocType] = useState<"rc" | "insurance" | "invoice">("rc");
   const [uploadDocFile, setUploadDocFile] = useState<File | null>(null);
   const [docExpiresAt, setDocExpiresAt] = useState("");
-  const [vehicleDocuments, setVehicleDocuments] = useState<any[]>([]);
+  const [vehicleDocuments, setVehicleDocuments] = useState<VehicleDocument[]>([]);
+  const [docExpiresDraft, setDocExpiresDraft] = useState<Record<string, string>>({});
   const [partnerApplications, setPartnerApplications] = useState<PartnerApplication[]>([]);
   const [approvedPartners, setApprovedPartners] = useState<ApprovedPartner[]>([]);
   const [partnerAppFilter, setPartnerAppFilter] = useState<"pending" | "approved" | "rejected" | "all">(
@@ -695,6 +701,60 @@ export default function AdminDashboardPage() {
       setLoading(null);
     }
   }
+  async function saveDocumentExpiry(docId: string) {
+    if (!editingVehicleId) return;
+    setError(null);
+    setLoading(`document-edit-${docId}`);
+    try {
+      const res = await fetch(`/api/admin/vehicles/${editingVehicleId}/documents`, {
+        method: "PATCH",
+        ...fetchInit,
+        body: JSON.stringify({
+          doc_id: docId,
+          expires_at: docExpiresDraft[docId] || null
+        })
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) {
+        setError(json?.error?.message ?? "Failed to update document");
+        return;
+      }
+      setVehicleDocuments((current) =>
+        current.map((doc) => (doc.id === docId ? json.data.document : doc))
+      );
+      showSuccess("Document expiry updated.");
+    } finally {
+      setLoading(null);
+    }
+  }
+
+  async function deleteDocument(docId: string) {
+    if (!editingVehicleId || !window.confirm("Delete this vehicle document? Customers and investors will no longer be able to access it.")) return;
+    setError(null);
+    setLoading(`document-delete-${docId}`);
+    try {
+      const res = await fetch(`/api/admin/vehicles/${editingVehicleId}/documents`, {
+        method: "DELETE",
+        ...fetchInit,
+        body: JSON.stringify({ doc_id: docId })
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) {
+        setError(json?.error?.message ?? "Failed to delete document");
+        return;
+      }
+      setVehicleDocuments((current) => current.filter((doc) => doc.id !== docId));
+      setDocExpiresDraft((current) => {
+        const next = { ...current };
+        delete next[docId];
+        return next;
+      });
+      showSuccess("Document removed.");
+    } finally {
+      setLoading(null);
+    }
+  }
+
 
   async function removeImage(imageUrl: string) {
     if (!selectedVehicle) return;
@@ -966,7 +1026,7 @@ export default function AdminDashboardPage() {
                 <Icon name="bike" className="w-5 h-5" />
                 Fleet Operations
               </h2>
-              <p>Create, update, deactivate, delete vehicles, and manage images.</p>
+              <p>Create and edit vehicles, assign each vehicle to its investor, and manage vehicle images and documents.</p>
             </div>
           </div>
 
@@ -985,7 +1045,7 @@ export default function AdminDashboardPage() {
 
               <div className="form-row mb-3" style={{ gridTemplateColumns: "1fr 1fr" }}>
                 <div className="form-group">
-                  <label className="form-label">Partner owner</label>
+                  <label className="form-label">Investor / fleet owner</label>
                   <select
                     className="form-input form-select"
                     value={vehicleForm.owner_id}
@@ -1258,7 +1318,10 @@ export default function AdminDashboardPage() {
 
               {selectedVehicle && (
                 <div style={{ marginTop: 18, borderTop: "1px solid rgba(0,0,0,0.08)", paddingTop: 14 }}>
-                  <div style={{ fontWeight: 700, marginBottom: 10 }}>Vehicle Documents</div>
+                  <div style={{ fontWeight: 700, marginBottom: 4 }}>Vehicle Documents</div>
+                  <p className="mb-3 text-xs text-muted">
+                    Add a document or replace the current file. Each vehicle supports one current RC, insurance, and invoice.
+                  </p>
                   
                   <div className="form-row mb-3" style={{ gridTemplateColumns: "1fr 1fr" }}>
                     <div className="form-group">
@@ -1266,7 +1329,7 @@ export default function AdminDashboardPage() {
                       <select
                         className="form-input form-select"
                         value={docType}
-                        onChange={(e) => setDocType(e.target.value as any)}
+                        onChange={(e) => setDocType(e.target.value as "rc" | "insurance" | "invoice")}
                       >
                         <option value="rc">Registration (RC)</option>
                         <option value="insurance">Insurance</option>
@@ -1285,7 +1348,7 @@ export default function AdminDashboardPage() {
                   </div>
 
                   <div className="form-group mb-3">
-                    <label className="form-label">Upload Document</label>
+                    <label className="form-label">Add or replace document</label>
                     <div className="flex gap-2">
                       <input
                         type="file"
@@ -1294,21 +1357,63 @@ export default function AdminDashboardPage() {
                         onChange={(event) => setUploadDocFile(event.target.files?.[0] ?? null)}
                       />
                       <button className="btn btn-secondary btn-sm" onClick={uploadVehicleDocument} disabled={!!loading}>
-                        {loading === "document-file" ? <span className="spinner" /> : "Upload"}
+                        {loading === "document-file" ? (
+                          <span className="spinner" />
+                        ) : vehicleDocuments.some((doc) => doc.doc_type === docType) ? (
+                          "Replace document"
+                        ) : (
+                          "Add document"
+                        )}
                       </button>
                     </div>
                   </div>
 
                   <div className="grid gap-2">
-                    {vehicleDocuments.map((doc: any) => (
-                      <div key={doc.id} className="card p-2 flex-between">
-                        <div>
-                          <div style={{ fontWeight: 600 }}>{doc.doc_type.toUpperCase()}</div>
-                          <div className="text-xs text-muted">Expires: {doc.expires_at ? formatDate(doc.expires_at) : "N/A"}</div>
+                    {vehicleDocuments.map((doc) => (
+                      <div key={doc.id} className="card grid gap-2 p-3 sm:grid-cols-[1fr_auto]">
+                        <div className="grid gap-2 sm:grid-cols-[1fr_180px] sm:items-end">
+                          <div>
+                            <div style={{ fontWeight: 600 }}>{doc.doc_type.toUpperCase()}</div>
+                            <div className="text-xs text-muted">
+                              Current expiry: {doc.expires_at ? formatDate(doc.expires_at) : "No expiry"}
+                            </div>
+                            <a href={doc.file_url} target="_blank" rel="noopener noreferrer" className="btn btn-secondary btn-sm mt-2 inline-block">
+                              View
+                            </a>
+                          </div>
+                          <div className="form-group">
+                            <label className="form-label">Edit expiry</label>
+                            <input
+                              type="date"
+                              className="form-input"
+                              value={docExpiresDraft[doc.id] ?? doc.expires_at?.slice(0, 10) ?? ""}
+                              onChange={(event) =>
+                                setDocExpiresDraft((current) => ({
+                                  ...current,
+                                  [doc.id]: event.target.value
+                                }))
+                              }
+                            />
+                          </div>
                         </div>
-                        <a href={doc.file_url} target="_blank" rel="noopener noreferrer" className="btn btn-secondary btn-sm">
-                          View
-                        </a>
+                        <div className="flex flex-wrap items-end gap-2">
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-sm"
+                            disabled={!!loading}
+                            onClick={() => saveDocumentExpiry(doc.id)}
+                          >
+                            {loading === `document-edit-${doc.id}` ? <span className="spinner" /> : "Save"}
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-danger btn-sm"
+                            disabled={!!loading}
+                            onClick={() => deleteDocument(doc.id)}
+                          >
+                            {loading === `document-delete-${doc.id}` ? <span className="spinner" /> : "Delete"}
+                          </button>
+                        </div>
                       </div>
                     ))}
                     {vehicleDocuments.length === 0 && (

@@ -1,57 +1,26 @@
-import { listBookings } from "@/lib/data/repository";
+import {
+  getLatestPaidPaymentOrderForBooking,
+  listBookings
+} from "@/lib/data/repository";
 import { bookingDocumentsVehicleId } from "@/lib/bookings/assignment";
 import type { ActorContext } from "@/lib/auth/context";
-import type { Booking, BookingStatus, Vehicle, VehicleDocument } from "@/lib/types/domain";
+import type { BookingStatus, Vehicle, VehicleDocument } from "@/lib/types/domain";
 import { ApiException } from "@/lib/utils/errors";
 
-/** Post-payment statuses only — no payment_pending or completed. */
+/** Booking states that can follow successful payment. The API additionally verifies the payment record. */
 export const CUSTOMER_VEHICLE_DOC_STATUSES: BookingStatus[] = [
   "confirmed",
   "ongoing",
   "extension_requested",
-  "extended"
+  "extended",
+  "completed",
+  "cancelled"
 ];
 
 export const LOCAL_DOC_PREFIX = "local:";
 
-export function isWithinRentalWindow(
-  booking: Pick<Booking, "pickup_at" | "drop_at">,
-  now = new Date()
-) {
-  const start = new Date(booking.pickup_at).getTime();
-  const end = new Date(booking.drop_at).getTime();
-  const t = now.getTime();
-  return t >= start && t <= end;
-}
-
-export function isBeforeRentalWindow(
-  booking: Pick<Booking, "pickup_at">,
-  now = new Date()
-) {
-  return now.getTime() < new Date(booking.pickup_at).getTime();
-}
-
-export function isBookingStatusEligibleForVehicleDocs(status: BookingStatus) {
-  return CUSTOMER_VEHICLE_DOC_STATUSES.includes(status);
-}
-
-export function isBookingEligibleForVehicleDocs(
-  booking: Pick<Booking, "status" | "pickup_at" | "drop_at">,
-  now = new Date()
-) {
-  return (
-    CUSTOMER_VEHICLE_DOC_STATUSES.includes(booking.status) && isWithinRentalWindow(booking, now)
-  );
-}
-
-export function canShowVehicleDocsSection(
-  booking: Pick<Booking, "status" | "pickup_at" | "drop_at">,
-  now = new Date()
-) {
-  return (
-    isBookingStatusEligibleForVehicleDocs(booking.status) &&
-    (isWithinRentalWindow(booking, now) || isBeforeRentalWindow(booking, now))
-  );
+export function isBookingEligibleForVehicleDocs(booking: { status: BookingStatus }) {
+  return CUSTOMER_VEHICLE_DOC_STATUSES.includes(booking.status);
 }
 
 export function parseOptionalExpiresAt(value: FormDataEntryValue | null): string | null {
@@ -63,8 +32,9 @@ export function parseOptionalExpiresAt(value: FormDataEntryValue | null): string
   return parsed.toISOString();
 }
 
-export function vehicleDocumentDownloadPath(vehicleId: string, docId: string) {
-  return `/api/vehicles/${vehicleId}/documents/${docId}/file`;
+export function vehicleDocumentDownloadPath(vehicleId: string, docId: string, download = false) {
+  const path = `/api/vehicles/${vehicleId}/documents/${docId}/file`;
+  return download ? `${path}?download=1` : path;
 }
 
 export function vehicleDocumentViewPath(vehicleId: string, docId: string) {
@@ -74,9 +44,9 @@ export function vehicleDocumentViewPath(vehicleId: string, docId: string) {
 export function toClientDocument(
   vehicleId: string,
   doc: VehicleDocument,
-  options?: { viewOnly?: boolean }
+  options?: { openInViewer?: boolean }
 ): VehicleDocument {
-  const file_url = options?.viewOnly
+  const file_url = options?.openInViewer
     ? vehicleDocumentViewPath(vehicleId, doc.id)
     : vehicleDocumentDownloadPath(vehicleId, doc.id);
   return { ...doc, file_url };
@@ -94,12 +64,13 @@ export async function assertVehicleDocumentAccess(actor: ActorContext, vehicle: 
   if (actor.role === "partner_investor" && vehicle.owner_id === actor.userId) return;
   if (actor.role === "customer") {
     const bookings = await listBookings({ userId: actor.userId });
-    const allowed = bookings.some(
-      (booking) =>
-        isBookingEligibleForVehicleDocs(booking) &&
-        bookingDocumentsVehicleId(booking) === vehicle.id
+    const matchingBookings = bookings.filter(
+      (booking) => bookingDocumentsVehicleId(booking) === vehicle.id
     );
-    if (allowed) return;
+    const paidOrders = await Promise.all(
+      matchingBookings.map((booking) => getLatestPaidPaymentOrderForBooking(booking.id))
+    );
+    if (paidOrders.some(Boolean)) return;
   }
   throw new ApiException(
     403,

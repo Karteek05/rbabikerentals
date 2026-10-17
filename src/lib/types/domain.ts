@@ -199,6 +199,14 @@ export interface VehicleDocument {
   created_at: string;
   updated_at: string;
 }
+export interface VehicleDocumentCleanup {
+  id: string;
+  file_url: string;
+  attempts: number;
+  last_error: string | null;
+  created_at: string;
+}
+
 
 export interface NotificationJob {
   id: string;

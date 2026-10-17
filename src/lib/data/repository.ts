@@ -16,8 +16,10 @@ import type {
   Vehicle,
   VehicleLiveLocation,
   VehicleBlockWindow,
-  VehicleDocument
+  VehicleDocument,
+  VehicleDocumentCleanup
 } from "@/lib/types/domain";
+import { newId } from "@/lib/utils/ids";
 import { ApiException } from "@/lib/utils/errors";
 
 type DataMode = "memory" | "supabase";
@@ -878,6 +880,147 @@ export async function upsertVehicleDocument(doc: VehicleDocument): Promise<Vehic
   if (error) throw new ApiException(500, "db_error", error.message);
   return data as VehicleDocument;
 }
+export async function updateVehicleDocument(
+  vehicleId: string,
+  docId: string,
+  patch: Pick<VehicleDocument, "expires_at" | "updated_at">
+): Promise<VehicleDocument> {
+  const existing = await getVehicleDocumentOrThrow(vehicleId, docId);
+  if (getDataMode() === "memory") {
+    const index = store.vehicleDocuments.findIndex((item) => item.id === existing.id);
+    store.vehicleDocuments[index] = { ...existing, ...patch };
+    return store.vehicleDocuments[index];
+  }
+
+  const supabase = getSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("vehicle_documents")
+    .update(patch)
+    .eq("vehicle_id", vehicleId)
+    .eq("id", docId)
+    .select("*")
+    .single();
+  if (error) throw new ApiException(500, "db_error", error.message);
+  return data as VehicleDocument;
+}
+
+export async function deleteVehicleDocument(vehicleId: string, docId: string) {
+  const existing = await getVehicleDocumentOrThrow(vehicleId, docId);
+  if (getDataMode() === "memory") {
+    store.vehicleDocuments = store.vehicleDocuments.filter((item) => item.id !== existing.id);
+    return existing;
+  }
+
+  const supabase = getSupabaseServiceClient();
+  const { error } = await supabase
+    .from("vehicle_documents")
+    .delete()
+    .eq("vehicle_id", vehicleId)
+    .eq("id", docId);
+  if (error) throw new ApiException(500, "db_error", error.message);
+  return existing;
+}
+export async function queueVehicleDocumentCleanup(fileUrl: string) {
+  if (getDataMode() === "memory") {
+    if (!store.vehicleDocumentCleanup.some((item) => item.file_url === fileUrl)) {
+      store.vehicleDocumentCleanup.push({
+        id: newId("vdoccleanup"),
+        file_url: fileUrl,
+        attempts: 0,
+        last_error: null,
+        created_at: new Date().toISOString()
+      });
+    }
+    return;
+  }
+
+  const supabase = getSupabaseServiceClient();
+  const { error } = await supabase.from("vehicle_document_cleanup").upsert(
+    {
+      id: newId("vdoccleanup"),
+      file_url: fileUrl,
+      attempts: 0,
+      last_error: null
+    },
+    { onConflict: "file_url", ignoreDuplicates: true }
+  );
+  if (error) throw new ApiException(500, "db_error", error.message);
+}
+
+export async function listVehicleDocumentCleanup(cutoff: string): Promise<VehicleDocumentCleanup[]> {
+  if (getDataMode() === "memory") {
+    return store.vehicleDocumentCleanup
+      .filter((item) => item.created_at <= cutoff)
+      .sort((left, right) => left.created_at.localeCompare(right.created_at))
+      .slice(0, 100);
+  }
+
+  const supabase = getSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("vehicle_document_cleanup")
+    .select("*")
+    .lte("created_at", cutoff)
+    .order("created_at", { ascending: true })
+    .limit(100);
+  if (error) throw new ApiException(500, "db_error", error.message);
+  return (data ?? []) as VehicleDocumentCleanup[];
+}
+
+export async function isVehicleDocumentFileReferenced(fileUrl: string) {
+  if (getDataMode() === "memory") {
+    return store.vehicleDocuments.some((item) => item.file_url === fileUrl);
+  }
+
+  const supabase = getSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("vehicle_documents")
+    .select("id")
+    .eq("file_url", fileUrl)
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new ApiException(500, "db_error", error.message);
+  return Boolean(data);
+}
+
+export async function removeVehicleDocumentCleanup(fileUrl: string) {
+  if (getDataMode() === "memory") {
+    store.vehicleDocumentCleanup = store.vehicleDocumentCleanup.filter(
+      (item) => item.file_url !== fileUrl
+    );
+    return;
+  }
+
+  const supabase = getSupabaseServiceClient();
+  const { error } = await supabase
+    .from("vehicle_document_cleanup")
+    .delete()
+    .eq("file_url", fileUrl);
+  if (error) throw new ApiException(500, "db_error", error.message);
+}
+
+export async function markVehicleDocumentCleanupFailure(
+  item: VehicleDocumentCleanup,
+  errorMessage: string
+) {
+  const patch = {
+    attempts: item.attempts + 1,
+    last_error: errorMessage.slice(0, 500)
+  };
+  if (getDataMode() === "memory") {
+    const index = store.vehicleDocumentCleanup.findIndex((entry) => entry.file_url === item.file_url);
+    if (index >= 0) store.vehicleDocumentCleanup[index] = { ...item, ...patch };
+    return;
+  }
+
+  const supabase = getSupabaseServiceClient();
+  const { error } = await supabase
+    .from("vehicle_document_cleanup")
+    .update(patch)
+    .eq("file_url", item.file_url);
+  if (error) throw new ApiException(500, "db_error", error.message);
+}
+
+
 
 export async function updateBookingIfStatus(
   bookingId: string,

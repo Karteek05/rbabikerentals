@@ -4,10 +4,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import type { Booking } from "@/lib/types/domain";
 import {
-  canShowVehicleDocsSection,
   isBookingEligibleForVehicleDocs,
-  isBeforeRentalWindow,
-  isWithinRentalWindow
+  vehicleDocumentDownloadPath
 } from "@/lib/vehicles/documents";
 
 type Doc = {
@@ -35,8 +33,6 @@ type Props = {
 export default function VehicleDocsPanel({
   assignedVehicleId,
   bookingStatus,
-  pickupAt,
-  dropAt,
   compact
 }: Props) {
   const [open, setOpen] = useState(false);
@@ -46,18 +42,9 @@ export default function VehicleDocsPanel({
   const [error, setError] = useState("");
 
   const eligible = isBookingEligibleForVehicleDocs({
-    status: bookingStatus as Booking["status"],
-    pickup_at: pickupAt,
-    drop_at: dropAt
+    status: bookingStatus as Booking["status"]
   });
-  const canPreview = canShowVehicleDocsSection({
-    status: bookingStatus as Booking["status"],
-    pickup_at: pickupAt,
-    drop_at: dropAt
-  });
-  const beforePickup = isBeforeRentalWindow({ pickup_at: pickupAt });
   const docsVehicleId = assignedVehicleId ?? null;
-
   const loadDocs = useCallback(async () => {
     if (!docsVehicleId) return;
     setLoading(true);
@@ -86,17 +73,12 @@ export default function VehicleDocsPanel({
     setVehicleRef(null);
     void loadDocs();
   }, [open, docsVehicleId, eligible, loadDocs]);
+  if (!eligible) return null;
 
-  if (!canPreview) return null;
 
   function toggle() {
     setOpen((current) => !current);
   }
-
-  const pickupLabel = new Date(pickupAt).toLocaleString("en-IN", {
-    dateStyle: "medium",
-    timeStyle: "short"
-  });
 
   const hasRc = docs.some((d) => d.doc_type === "rc");
   const reg = vehicleRef?.registration_number;
@@ -113,11 +95,6 @@ export default function VehicleDocsPanel({
             <p className="text-sm text-[color:var(--color-copy)]">
               Your physical bike is assigned at handover. Insurance, RC, and invoice will show here
               once that is done.
-            </p>
-          ) : beforePickup && !isWithinRentalWindow({ pickup_at: pickupAt, drop_at: dropAt }) ? (
-            <p className="text-sm text-[color:var(--color-copy)]">
-              RC, insurance, and invoice unlock at pickup ({pickupLabel}). Your assigned bike is
-              ready — documents appear when the rental starts.
             </p>
           ) : (
             <>
@@ -148,6 +125,12 @@ export default function VehicleDocsPanel({
                     <Link href={doc.file_url} className="btn-primary btn-sm mt-2 inline-block w-full text-center">
                       View
                     </Link>
+                    <a
+                      href={vehicleDocumentDownloadPath(docsVehicleId, doc.id, true)}
+                      className="btn-secondary btn-sm mt-2 inline-block w-full text-center"
+                    >
+                      Download
+                    </a>
                   </div>
                 ))}
               </div>

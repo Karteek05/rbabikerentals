@@ -19,9 +19,9 @@ export async function GET(
     const vehicle = await getVehicleOrThrow(id);
     await assertVehicleDocumentAccess(actor, vehicle);
 
-    const viewOnly = actor.role === "customer";
+    const openInViewer = actor.role === "customer";
     const documents = (await listVehicleDocuments(id)).map((doc) =>
-      toClientDocument(id, doc, { viewOnly })
+      toClientDocument(id, doc, { openInViewer })
     );
     return ok({ documents, vehicle: toVehicleDocReference(vehicle) });
   } catch (error) {

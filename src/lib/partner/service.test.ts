@@ -3,9 +3,11 @@ import type { Booking, BookingStatus, Vehicle, VehicleBlockWindow } from "@/lib/
 import {
   deriveVehiclePosition,
   filterBookingsByTab,
+  getPartnerRevenue,
   isBlockActive,
   maskPartnerName
 } from "@/lib/partner/service";
+import { store } from "@/lib/data/store";
 
 function makeVehicle(overrides: Partial<Vehicle> = {}): Vehicle {
   return {
@@ -130,5 +132,56 @@ describe("filterBookingsByTab", () => {
     expect(filterBookingsByTab(bookings, "cancelled").map((booking) => booking.status)).toEqual([
       "cancelled"
     ]);
+  });
+});
+describe("investor revenue analytics", () => {
+  it("scopes vehicle totals to the assigned investor and includes completed rentals", async () => {
+    const investorVehicleId = "veh_investor_revenue_test";
+    const otherVehicleId = "veh_other_investor_revenue_test";
+    const completedBooking = {
+      ...makeBooking("completed"),
+      id: "booking_investor_revenue_test",
+      vehicle_id: investorVehicleId
+    };
+    const pendingBooking = {
+      ...makeBooking("payment_pending"),
+      id: "booking_investor_pending_test",
+      vehicle_id: investorVehicleId
+    };
+    const otherBooking = {
+      ...makeBooking("completed"),
+      id: "booking_other_investor_revenue_test",
+      vehicle_id: otherVehicleId
+    };
+    store.vehicles.push(
+      makeVehicle({ id: investorVehicleId, owner_id: "partner_001" }),
+      makeVehicle({ id: otherVehicleId, owner_id: "partner_other" })
+    );
+    store.bookings.push(completedBooking, pendingBooking, otherBooking);
+
+    try {
+      const revenue = await getPartnerRevenue("partner_001");
+      expect(revenue.totals.gross_revenue).toBe(completedBooking.quote.total_payable);
+      expect(revenue.totals.pending_revenue).toBe(pendingBooking.quote.total_payable);
+      expect(revenue.vehicle_wise).toEqual([
+        {
+          vehicle_id: investorVehicleId,
+          vehicle_label: "Test Scooter",
+          registration_number: null,
+          booking_count: 2,
+          revenue: completedBooking.quote.total_payable
+        }
+      ]);
+    } finally {
+      store.vehicles = store.vehicles.filter(
+        (vehicle) => vehicle.id !== investorVehicleId && vehicle.id !== otherVehicleId
+      );
+      store.bookings = store.bookings.filter(
+        (booking) =>
+          booking.id !== completedBooking.id &&
+          booking.id !== pendingBooking.id &&
+          booking.id !== otherBooking.id
+      );
+    }
   });
 });

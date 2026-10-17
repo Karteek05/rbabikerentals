@@ -1,10 +1,15 @@
 import {
   hasNotificationJobForPayload,
   insertNotificationJob,
+  isVehicleDocumentFileReferenced,
   listOpenDamageIncidents,
-  listVehicleDocumentsExpiringBefore
+  listVehicleDocumentCleanup,
+  listVehicleDocumentsExpiringBefore,
+  markVehicleDocumentCleanupFailure,
+  removeVehicleDocumentCleanup
 } from "@/lib/data/repository";
 import { newId } from "@/lib/utils/ids";
+import { removeStoredVehicleDocument } from "@/lib/vehicles/storage";
 
 export async function runDocumentExpiryReminderJob() {
   const reminderCutoff = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -39,11 +44,41 @@ export async function runDocumentExpiryReminderJob() {
     queuedNotifications += 1;
   }
 
+  const cleanup = await runVehicleDocumentCleanupJob();
   return {
     scanned: docs.length,
-    queued_notifications: queuedNotifications
+    queued_notifications: queuedNotifications,
+    stale_document_files_removed: cleanup.removed,
+    stale_document_file_cleanup_failures: cleanup.failed
   };
 }
+export async function runVehicleDocumentCleanupJob() {
+  const eligibleAfter = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+  const pending = await listVehicleDocumentCleanup(eligibleAfter);
+  let removed = 0;
+  let retained = 0;
+  let failed = 0;
+
+  for (const item of pending) {
+    try {
+      if (await isVehicleDocumentFileReferenced(item.file_url)) {
+        await removeVehicleDocumentCleanup(item.file_url);
+        retained += 1;
+        continue;
+      }
+      await removeStoredVehicleDocument(item.file_url);
+      await removeVehicleDocumentCleanup(item.file_url);
+      removed += 1;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Storage cleanup failed.";
+      await markVehicleDocumentCleanupFailure(item, message);
+      failed += 1;
+    }
+  }
+
+  return { scanned: pending.length, removed, retained, failed };
+}
+
 
 export async function runIncidentEscalationJob() {
   const incidents = await listOpenDamageIncidents();
