@@ -16,7 +16,8 @@ type DocumentRow = {
 };
 
 type DocumentFilter = "all" | "expiring" | "expired";
-type DocumentType = VehicleDocument["doc_type"];
+type DocumentTypeFilter = DocumentType | "all";
+type VehicleCategoryFilter = Vehicle["category"] | "all";
 
 const DOCUMENT_TYPES: Array<{ value: DocumentType; label: string }> = [
   { value: "rc", label: "Registration certificate" },
@@ -58,8 +59,9 @@ function expiryLabel(document: VehicleDocument) {
 export default function AdminDocumentsPage() {
   const [vehicles, setVehicles] = useState<AdminVehicle[]>([]);
   const [rows, setRows] = useState<DocumentRow[]>([]);
-  const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<DocumentFilter>("all");
+  const [vehicleCategoryFilter, setVehicleCategoryFilter] = useState<VehicleCategoryFilter>("all");
+  const [documentTypeFilter, setDocumentTypeFilter] = useState<DocumentTypeFilter>("all");
   const [selectedVehicleId, setSelectedVehicleId] = useState("");
   const [documentType, setDocumentType] = useState<DocumentType>("rc");
   const [expiresAt, setExpiresAt] = useState("");
@@ -109,6 +111,8 @@ export default function AdminDocumentsPage() {
       const days = daysUntilExpiry(document.expires_at);
       if (filter === "expired" && !(days !== null && days < 0)) return false;
       if (filter === "expiring" && !(days !== null && days >= 0 && days <= 30)) return false;
+      if (vehicleCategoryFilter !== "all" && vehicle.category !== vehicleCategoryFilter) return false;
+      if (documentTypeFilter !== "all" && document.doc_type !== documentTypeFilter) return false;
       if (!query) return true;
       return [
         vehicle.brand,
@@ -119,7 +123,7 @@ export default function AdminDocumentsPage() {
         documentLabel(document.doc_type)
       ].some((value) => value?.toLocaleLowerCase().includes(query));
     });
-  }, [filter, rows, search]);
+  }, [documentTypeFilter, filter, rows, search, vehicleCategoryFilter]);
 
   const activeVehicleIds = useMemo(
     () => new Set(vehicles.filter((vehicle) => vehicle.is_active).map((vehicle) => vehicle.id)),
@@ -295,6 +299,36 @@ export default function AdminDocumentsPage() {
                   placeholder="Search vehicle, investor, or document"
                 />
               </label>
+              <div className="admin-document-select-filters">
+                <label className="admin-document-select-filter">
+                  <span>Vehicle type</span>
+                  <select
+                    className="form-input form-select"
+                    value={vehicleCategoryFilter}
+                    onChange={(event) => setVehicleCategoryFilter(event.target.value as VehicleCategoryFilter)}
+                    aria-label="Filter by vehicle type"
+                  >
+                    <option value="all">All vehicle types</option>
+                    <option value="scooter">Scooters</option>
+                    <option value="bike">Bikes</option>
+                    <option value="ev_bike">EV bikes</option>
+                  </select>
+                </label>
+                <label className="admin-document-select-filter">
+                  <span>Document type</span>
+                  <select
+                    className="form-input form-select"
+                    value={documentTypeFilter}
+                    onChange={(event) => setDocumentTypeFilter(event.target.value as DocumentTypeFilter)}
+                    aria-label="Filter by document type"
+                  >
+                    <option value="all">All document types</option>
+                    {DOCUMENT_TYPES.map((type) => (
+                      <option key={type.value} value={type.value}>{type.label}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
               <div className="admin-document-filters" role="group" aria-label="Filter documents">
                 {([
                   ["all", "All files"],
