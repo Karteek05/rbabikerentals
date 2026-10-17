@@ -693,11 +693,11 @@ export default function AdminDashboardPage() {
   const initialLoading = loading === "refresh" && bookings.length === 0 && vehicles.length === 0;
 
   return (
-    <div className="dashboard-layout ops-shell">
+    <div className="dashboard-layout ops-shell admin-dashboard-layout">
       <Sidebar role="admin" navItems={ADMIN_NAV_ITEMS} userName="Admin (ops)" />
 
-      <div className="dashboard-content">
-        <div className="flex-between mb-6">
+      <div className="dashboard-content admin-dashboard-content">
+        <div className="flex-between admin-dashboard-header">
           <div className="page-header" style={{ marginBottom: 0 }}>
             <h1 className="inline-flex items-center gap-2">
               <Icon name="settings" className="w-5 h-5" />
@@ -725,8 +725,8 @@ export default function AdminDashboardPage() {
 
         {initialLoading ? (
           <>
-            <StatCardsSkeleton />
-            <Skeleton className="mb-6 h-72 w-full rounded-xl" />
+            <StatCardsSkeleton count={6} />
+            <Skeleton className="h-72 w-full rounded-xl" />
             <Skeleton className="h-96 w-full rounded-xl" />
           </>
         ) : (
@@ -766,7 +766,7 @@ export default function AdminDashboardPage() {
           </div>
         </div>
 
-        <div id="partner-applications" className="mb-6">
+        <div id="partner-applications" className="admin-dashboard-section">
           <div className="section-header mb-4">
             <div>
               <h2 className="inline-flex items-center gap-2">
@@ -893,7 +893,7 @@ export default function AdminDashboardPage() {
           ) : null}
         </div>
 
-        <div id="fleet" className="mb-6">
+        <div id="fleet" className="admin-dashboard-section">
           <div className="section-header mb-4">
             <div>
               <h2 className="inline-flex items-center gap-2">
@@ -904,8 +904,8 @@ export default function AdminDashboardPage() {
             </div>
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-3">
-            <div className="card p-4 lg:col-span-1">
+          <div className="admin-fleet-layout">
+            <div className="admin-fleet-editor card p-4">
               <div className="flex-between mb-4">
                 <div style={{ fontWeight: 700 }}>
                   {editingVehicleId ? `Editing ${editingVehicleId}` : "Add New Vehicle"}
@@ -1192,7 +1192,7 @@ export default function AdminDashboardPage() {
 
             </div>
 
-            <div className="card p-4 lg:col-span-2 admin-fleet-vehicle-list">
+            <div className="card admin-fleet-vehicle-list">
               <div className="section-header mb-4">
                 <div>
                   <h2 className="inline-flex items-center gap-2">
@@ -1330,7 +1330,7 @@ export default function AdminDashboardPage() {
           </div>
         </div>
 
-        <div id="bookings" className="mb-6">
+        <div id="bookings" className="admin-dashboard-section">
           <div className="section-header mb-4">
             <div>
               <h2 className="inline-flex items-center gap-2">
