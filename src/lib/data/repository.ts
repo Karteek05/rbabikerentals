@@ -822,6 +822,20 @@ export async function listVehicleDocuments(vehicleId: string): Promise<VehicleDo
   return (data ?? []) as VehicleDocument[];
 }
 
+export async function listAllVehicleDocuments(): Promise<VehicleDocument[]> {
+  if (getDataMode() === "memory") {
+    return [...store.vehicleDocuments];
+  }
+
+  const supabase = getSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("vehicle_documents")
+    .select("*")
+    .order("updated_at", { ascending: false });
+  if (error) throw new ApiException(500, "db_error", error.message);
+  return (data ?? []) as VehicleDocument[];
+}
+
 export async function getVehicleDocumentOrThrow(
   vehicleId: string,
   docId: string

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Sidebar from "../../components/Sidebar";
 import Icon from "../../components/Icon";
+import { ADMIN_NAV_ITEMS } from "@/app/components/admin/admin-nav";
 import { listAssignableUnitsForBooking } from "@/lib/bookings/assignable-units";
 import { PUBLIC_FLEET } from "@/lib/fleet/catalog";
 import {
@@ -11,12 +12,7 @@ import {
   resolveVehicleThumbnail
 } from "@/lib/fleet/display";
 import { getKycAdminBadge } from "@/lib/kyc/admin-labels";
-import type {
-  BookingStatus,
-  KycStatus,
-  PricingQuote,
-  VehicleDocument
-} from "@/lib/types/domain";
+import type { BookingStatus, KycStatus, PricingQuote } from "@/lib/types/domain";
 import { formatBookingStatus } from "@/lib/bookings/status-labels";
 import { StatCardsSkeleton, Skeleton } from "@/components/ui/Skeleton";
 
@@ -100,13 +96,6 @@ type ApprovedPartner = {
   vehicle_count: number;
 };
 
-const navItems = [
-  { href: "/admin", icon: "settings", label: "Dashboard" },
-  { href: "/admin#partner-applications", icon: "briefcase", label: "Partners" },
-  { href: "/admin#fleet", icon: "bike", label: "Fleet Ops" },
-  { href: "/admin#bookings", icon: "list", label: "Bookings" },
-  { href: "/admin#audit", icon: "search", label: "Audit Logs" }
-] as const;
 
 const emptyVehicleForm: VehicleForm = {
   owner_id: "partner_001",
@@ -184,11 +173,6 @@ export default function AdminDashboardPage() {
   const [newImageUrl, setNewImageUrl] = useState("");
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   
-  const [docType, setDocType] = useState<"rc" | "insurance" | "invoice">("rc");
-  const [uploadDocFile, setUploadDocFile] = useState<File | null>(null);
-  const [docExpiresAt, setDocExpiresAt] = useState("");
-  const [vehicleDocuments, setVehicleDocuments] = useState<VehicleDocument[]>([]);
-  const [docExpiresDraft, setDocExpiresDraft] = useState<Record<string, string>>({});
   const [partnerApplications, setPartnerApplications] = useState<PartnerApplication[]>([]);
   const [approvedPartners, setApprovedPartners] = useState<ApprovedPartner[]>([]);
   const [partnerAppFilter, setPartnerAppFilter] = useState<"pending" | "approved" | "rejected" | "all">(
@@ -527,19 +511,7 @@ export default function AdminDashboardPage() {
     setVehicleForm(mapVehicleToForm(vehicle));
     setNewImageUrl("");
     setUploadFile(null);
-    setUploadDocFile(null);
-    setDocExpiresAt("");
     setError(null);
-    
-    // Fetch documents for the selected vehicle
-    fetch(`/api/vehicles/${vehicle.id}/documents`, { credentials: "include" })
-      .then((res) => res.json())
-      .then((json) => {
-        if (json.ok && json.data.documents) {
-          setVehicleDocuments(json.data.documents);
-        }
-      })
-      .catch((err) => console.error("Failed to load documents", err));
   }
 
   function resetVehicleEditor() {
@@ -547,9 +519,6 @@ export default function AdminDashboardPage() {
     setVehicleForm(emptyVehicleForm);
     setNewImageUrl("");
     setUploadFile(null);
-    setUploadDocFile(null);
-    setDocExpiresAt("");
-    setVehicleDocuments([]);
   }
 
   async function toggleVehicle(vehicle: VehicleItem) {
@@ -659,101 +628,6 @@ export default function AdminDashboardPage() {
     }
   }
 
-  async function uploadVehicleDocument() {
-    if (!editingVehicleId) {
-      setError("Create or select a vehicle first before uploading documents.");
-      return;
-    }
-    if (!uploadDocFile) {
-      setError("Choose a document file first.");
-      return;
-    }
-    setError(null);
-    setLoading("document-file");
-    try {
-      const formData = new FormData();
-      formData.append("file", uploadDocFile);
-      formData.append("doc_type", docType);
-      if (docExpiresAt) {
-        formData.append("expires_at", docExpiresAt);
-      }
-      
-      const res = await fetch(`/api/admin/vehicles/${editingVehicleId}/documents`, {
-        method: "POST",
-        credentials: "include",
-        body: formData
-      });
-      const json = await res.json();
-      if (!res.ok || !json.ok) {
-        setError(json?.error?.message ?? "Failed to upload document");
-      } else {
-        setUploadDocFile(null);
-        setDocExpiresAt("");
-        showSuccess("Vehicle document uploaded.");
-        // Refresh documents
-        const docRes = await fetch(`/api/vehicles/${editingVehicleId}/documents`, { credentials: "include" });
-        const docJson = await docRes.json();
-        if (docJson.ok) {
-          setVehicleDocuments(docJson.data.documents || []);
-        }
-      }
-    } finally {
-      setLoading(null);
-    }
-  }
-  async function saveDocumentExpiry(docId: string) {
-    if (!editingVehicleId) return;
-    setError(null);
-    setLoading(`document-edit-${docId}`);
-    try {
-      const res = await fetch(`/api/admin/vehicles/${editingVehicleId}/documents`, {
-        method: "PATCH",
-        ...fetchInit,
-        body: JSON.stringify({
-          doc_id: docId,
-          expires_at: docExpiresDraft[docId] || null
-        })
-      });
-      const json = await res.json();
-      if (!res.ok || !json.ok) {
-        setError(json?.error?.message ?? "Failed to update document");
-        return;
-      }
-      setVehicleDocuments((current) =>
-        current.map((doc) => (doc.id === docId ? json.data.document : doc))
-      );
-      showSuccess("Document expiry updated.");
-    } finally {
-      setLoading(null);
-    }
-  }
-
-  async function deleteDocument(docId: string) {
-    if (!editingVehicleId || !window.confirm("Delete this vehicle document? Customers and investors will no longer be able to access it.")) return;
-    setError(null);
-    setLoading(`document-delete-${docId}`);
-    try {
-      const res = await fetch(`/api/admin/vehicles/${editingVehicleId}/documents`, {
-        method: "DELETE",
-        ...fetchInit,
-        body: JSON.stringify({ doc_id: docId })
-      });
-      const json = await res.json();
-      if (!res.ok || !json.ok) {
-        setError(json?.error?.message ?? "Failed to delete document");
-        return;
-      }
-      setVehicleDocuments((current) => current.filter((doc) => doc.id !== docId));
-      setDocExpiresDraft((current) => {
-        const next = { ...current };
-        delete next[docId];
-        return next;
-      });
-      showSuccess("Document removed.");
-    } finally {
-      setLoading(null);
-    }
-  }
 
 
   async function removeImage(imageUrl: string) {
@@ -820,7 +694,7 @@ export default function AdminDashboardPage() {
 
   return (
     <div className="dashboard-layout ops-shell">
-      <Sidebar role="admin" navItems={[...navItems]} userName="Admin (ops)" />
+      <Sidebar role="admin" navItems={ADMIN_NAV_ITEMS} userName="Admin (ops)" />
 
       <div className="dashboard-content">
         <div className="flex-between mb-6">
@@ -1026,7 +900,7 @@ export default function AdminDashboardPage() {
                 <Icon name="bike" className="w-5 h-5" />
                 Fleet Operations
               </h2>
-              <p>Create and edit vehicles, assign each vehicle to its investor, and manage vehicle images and documents.</p>
+              <p>Create and edit vehicles, assign each vehicle to its investor, and manage vehicle images.</p>
             </div>
           </div>
 
@@ -1316,112 +1190,6 @@ export default function AdminDashboardPage() {
                 </div>
               )}
 
-              {selectedVehicle && (
-                <div style={{ marginTop: 18, borderTop: "1px solid rgba(0,0,0,0.08)", paddingTop: 14 }}>
-                  <div style={{ fontWeight: 700, marginBottom: 4 }}>Vehicle Documents</div>
-                  <p className="mb-3 text-xs text-muted">
-                    Add a document or replace the current file. Each vehicle supports one current RC, insurance, and invoice.
-                  </p>
-                  
-                  <div className="form-row mb-3" style={{ gridTemplateColumns: "1fr 1fr" }}>
-                    <div className="form-group">
-                      <label className="form-label">Document Type</label>
-                      <select
-                        className="form-input form-select"
-                        value={docType}
-                        onChange={(e) => setDocType(e.target.value as "rc" | "insurance" | "invoice")}
-                      >
-                        <option value="rc">Registration (RC)</option>
-                        <option value="insurance">Insurance</option>
-                        <option value="invoice">Invoice</option>
-                      </select>
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label">Expiry (Optional)</label>
-                      <input
-                        type="date"
-                        className="form-input"
-                        value={docExpiresAt}
-                        onChange={(e) => setDocExpiresAt(e.target.value)}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="form-group mb-3">
-                    <label className="form-label">Add or replace document</label>
-                    <div className="flex gap-2">
-                      <input
-                        type="file"
-                        className="form-input"
-                        accept="application/pdf,image/*"
-                        onChange={(event) => setUploadDocFile(event.target.files?.[0] ?? null)}
-                      />
-                      <button className="btn btn-secondary btn-sm" onClick={uploadVehicleDocument} disabled={!!loading}>
-                        {loading === "document-file" ? (
-                          <span className="spinner" />
-                        ) : vehicleDocuments.some((doc) => doc.doc_type === docType) ? (
-                          "Replace document"
-                        ) : (
-                          "Add document"
-                        )}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="grid gap-2">
-                    {vehicleDocuments.map((doc) => (
-                      <div key={doc.id} className="card grid gap-2 p-3 sm:grid-cols-[1fr_auto]">
-                        <div className="grid gap-2 sm:grid-cols-[1fr_180px] sm:items-end">
-                          <div>
-                            <div style={{ fontWeight: 600 }}>{doc.doc_type.toUpperCase()}</div>
-                            <div className="text-xs text-muted">
-                              Current expiry: {doc.expires_at ? formatDate(doc.expires_at) : "No expiry"}
-                            </div>
-                            <a href={doc.file_url} target="_blank" rel="noopener noreferrer" className="btn btn-secondary btn-sm mt-2 inline-block">
-                              View
-                            </a>
-                          </div>
-                          <div className="form-group">
-                            <label className="form-label">Edit expiry</label>
-                            <input
-                              type="date"
-                              className="form-input"
-                              value={docExpiresDraft[doc.id] ?? doc.expires_at?.slice(0, 10) ?? ""}
-                              onChange={(event) =>
-                                setDocExpiresDraft((current) => ({
-                                  ...current,
-                                  [doc.id]: event.target.value
-                                }))
-                              }
-                            />
-                          </div>
-                        </div>
-                        <div className="flex flex-wrap items-end gap-2">
-                          <button
-                            type="button"
-                            className="btn btn-secondary btn-sm"
-                            disabled={!!loading}
-                            onClick={() => saveDocumentExpiry(doc.id)}
-                          >
-                            {loading === `document-edit-${doc.id}` ? <span className="spinner" /> : "Save"}
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn-danger btn-sm"
-                            disabled={!!loading}
-                            onClick={() => deleteDocument(doc.id)}
-                          >
-                            {loading === `document-delete-${doc.id}` ? <span className="spinner" /> : "Delete"}
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                    {vehicleDocuments.length === 0 && (
-                      <div className="text-xs text-muted">No documents uploaded yet.</div>
-                    )}
-                  </div>
-                </div>
-              )}
             </div>
 
             <div className="card p-4 lg:col-span-2 admin-fleet-vehicle-list">

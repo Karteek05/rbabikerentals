@@ -62,6 +62,7 @@ Never enable `ALLOW_DEV_HEADERS=true` in staging or production.
 - `POST /api/admin/vehicles/[id]/documents`
 - `PATCH /api/admin/vehicles/[id]/documents` (edit expiry)
 - `DELETE /api/admin/vehicles/[id]/documents`
+- `GET /api/admin/documents` (fleet-wide investor-attributed document library)
 - `GET /api/vehicles/[id]/documents`
 - `POST /api/payments/refund`
 - `POST /api/webhooks/razorpay`
