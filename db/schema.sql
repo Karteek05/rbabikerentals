@@ -323,6 +323,9 @@ create table if not exists api_rate_limits (
   updated_at timestamptz not null default now()
 );
 
+create index if not exists idx_api_rate_limits_updated_at
+  on api_rate_limits(updated_at);
+
 create or replace function consume_api_rate_limit(p_key text, p_limit integer, p_window_seconds integer)
 returns table(allowed boolean, remaining integer, retry_after_seconds integer)
 language plpgsql
@@ -338,6 +341,8 @@ begin
     return query select false, 0, p_window_seconds;
     return;
   end if;
+  delete from api_rate_limits
+  where updated_at < now_value - interval '24 hours';
   insert into api_rate_limits(key, window_started_at, request_count, updated_at)
   values (p_key, now_value, 1, now_value)
   on conflict (key) do update set

@@ -3,7 +3,8 @@ import {
   buildPricingQuoteFromVehicle,
   computeCancellationBreakup,
   computePricingQuote,
-  mergePricingQuotes
+  mergePricingQuotes,
+  resolveDurationValueFromWindow
 } from "@/lib/pricing/engine";
 
 const sampleVehicle = {
@@ -22,6 +23,23 @@ const sampleVehicle = {
 };
 
 describe("pricing engine", () => {
+  it("rejects a rental window that does not match its selected duration", () => {
+    let error: unknown;
+    try {
+      resolveDurationValueFromWindow({
+        duration_bucket: "day",
+        start_at: "2026-07-14T10:00:00.000Z",
+        end_at: "2026-07-15T09:00:00.000Z"
+      });
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(error).toMatchObject({
+      status: 400,
+      code: "duration_window_mismatch"
+    });
+  });
   it("keeps the original payable amount while adding display breakdown fields", async () => {
     const quote = await computePricingQuote({
       user_id: "cust_001",

@@ -47,6 +47,7 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   env: {
     GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || "",
+    NEXT_PUBLIC_ADMIN_EMAIL: process.env.ADMIN_EMAIL || "admin@rbabikerentals.com",
   },
   turbopack: {
     root: path.resolve(__dirname),

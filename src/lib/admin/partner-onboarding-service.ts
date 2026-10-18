@@ -55,7 +55,7 @@ export async function submitPartnerApplication(
     role: "customer",
     name: nextName,
     phone: input.phone !== undefined ? normalizePhone(input.phone) ?? null : user.phone ?? null,
-    partner_business_name: input.partner_business_name?.trim() || user.partner_business_name || null,
+    partner_business_name: user.partner_business_name ?? null,
     partner_application_status: "pending",
     partner_applied_at: now,
     partner_reviewed_at: null,

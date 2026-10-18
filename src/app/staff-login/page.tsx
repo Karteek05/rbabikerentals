@@ -48,11 +48,6 @@ function StaffLoginForm() {
     setError("");
 
     const normalizedEmail = email.trim().toLowerCase();
-    if (!normalizedEmail.endsWith("@rbabikerentals.com")) {
-      setError("Staff access requires an @rbabikerentals.com email address.");
-      setLoading(false);
-      return;
-    }
 
     try {
       const { error: signInError } = await authClient.signIn.email({
@@ -111,7 +106,7 @@ function StaffLoginForm() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@rbabikerentals.com"
+                placeholder="you@example.com"
                 required
               />
             </label>

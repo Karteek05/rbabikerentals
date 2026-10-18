@@ -6,8 +6,12 @@ Last updated: April 19, 2026
 1. Configure `.env` with:
    - `BETTER_AUTH_SECRET`
    - `BETTER_AUTH_URL`
+   - `APP_BASE_URL`, `NEXT_PUBLIC_SITE_URL`
    - `SUPABASE_URL`
    - `SUPABASE_SERVICE_ROLE_KEY`
+   - `SUPABASE_ANON_KEY`
+   - `SUPABASE_VEHICLE_DOC_BUCKET=vehicle-documents` (private)
+   - `SUPABASE_VEHICLE_IMAGE_BUCKET=vehicle-images` (public)
    - `SUPABASE_DB_URL`
    - `RAZORPAY_KEY_ID`
    - `RAZORPAY_KEY_SECRET`
@@ -39,11 +43,12 @@ Last updated: April 19, 2026
 1. Create booking and confirm it reaches `admin_review` after KYC is verified.
 2. Admin approves it and confirms it moves to `payment_pending`.
 3. Create Razorpay order via `/api/payments/order`.
-3. Re-hit `/api/payments/order` for the same booking and confirm the existing open order is reused.
-4. Confirm a customer cannot create a payment order for another customer booking.
-5. Trigger webhook test event to `/api/webhooks/razorpay`.
-6. Confirm booking moves to `confirmed` on `payment.captured`.
-7. Confirm admin refund creation via `/api/payments/refund` after captured payment reconciliation.
+4. Re-hit `/api/payments/order` for the same booking and confirm the existing open order is reused.
+5. Confirm a customer cannot create a payment order for another customer booking.
+6. Trigger webhook test event to `/api/webhooks/razorpay`.
+7. Confirm booking moves to `confirmed` on `payment.captured`.
+8. Confirm admin refund creation via `/api/payments/refund` after captured payment reconciliation.
+9. Verify payment is not marked paid when Razorpay is unavailable; no manual UPI/third-party QR path is offered.
 
 ## 4) KYC Validation
 1. Start KYC: `/api/kyc/digilocker/start`.
@@ -61,6 +66,11 @@ Last updated: April 19, 2026
 2. Attempt a booking where `duration_bucket` does not match the actual pickup/drop window and confirm API returns `400 duration_window_mismatch`.
 3. Attempt two overlapping bookings for the same vehicle and confirm one is rejected.
 4. Attempt an overlapping extension on the same vehicle and confirm it is rejected.
+
+## 4.2) Investor reporting validation
+1. Select one Bengaluru calendar day and verify bookings created between 00:00 and 23:59 IST are included.
+2. Verify monthly and weekly totals assign a booking using its `created_at` in `Asia/Kolkata`.
+
 
 ## 5) Operational Job Validation
 1. Run document expiry job:

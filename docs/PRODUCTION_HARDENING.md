@@ -69,12 +69,16 @@ Before staging or production, configure all of the following:
 - `APP_ENV=production`
 - `BETTER_AUTH_SECRET`
 - `BETTER_AUTH_URL`
+- `APP_BASE_URL`
+- `NEXT_PUBLIC_SITE_URL`
 - `GOOGLE_CLIENT_ID`
 - `GOOGLE_CLIENT_SECRET`
 - `SUPABASE_URL`
 - `SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `SUPABASE_DB_URL`
+- `SUPABASE_VEHICLE_DOC_BUCKET=vehicle-documents` (private bucket)
+- `SUPABASE_VEHICLE_IMAGE_BUCKET=vehicle-images` (public bucket)
 - `RAZORPAY_KEY_ID`
 - `RAZORPAY_KEY_SECRET`
 - `RAZORPAY_WEBHOOK_SECRET`
@@ -93,21 +97,22 @@ Before staging or production, configure all of the following:
 - `CIBIL_PROVIDER_MODE`
 - `JOB_SECRET`
 
+## Applied source fixes from the website review
+
+- Investor reporting now interprets selected dates and weekly/monthly groups in `Asia/Kolkata`; ranges include the complete final calendar day.
+- Razorpay is required for checkout. When unavailable, order creation returns `503`; the untracked UPI/third-party QR fallback is removed.
+- Payment-order creation, KYC start/status/callback, and authenticated internal job/tracking routes now have rate limits. Supabase-backed limits are used when configured; development may use in-memory limits.
+- Production vehicle-document and image uploads no longer fall back to instance-local files. Vehicle documents must use a private Supabase Storage bucket; vehicle images use the configured public image bucket.
+- Empty storage bucket environment values fall back to the documented bucket names.
+- Database rate-limit records older than 24 hours are cleaned during rate-limit checks.
+
 ## Further Development Backlog
 
 These items are still recommended before a full production launch:
 
 ### Blockers before real public launch
-- Add automated tests for:
-  - spoofed KYC callbacks
-  - cross-user payment order attempts
-  - duration-window mismatch rejection
-  - concurrent same-vehicle booking attempts
-- Add rate limiting on:
-  - auth endpoints
-  - payment order creation
-  - KYC start/status/callback endpoints
-  - internal job endpoints
+- Add an automated database-backed test for concurrent same-vehicle booking attempts; source tests now cover invalid KYC callback secrets, cross-user payment orders, duration mismatch, and disabled payment configuration.
+- Verify Better Auth sign-in, email OTP, and password-reset throttling in the chosen production setup; the route-specific limits above do not cover those provider-managed endpoints.
 
 ### Strongly recommended next
 - Add true idempotency keys for payment-order creation to eliminate duplicate external Razorpay orders under concurrent requests.

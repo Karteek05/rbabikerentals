@@ -8,7 +8,7 @@ This document tracks requested features, missing items, and next steps for the R
 |---------|--------|-------|-------|
 | Policy Transparency Module | Done | Karteek / AI | UI implemented on checkout page |
 | Doorstep Delivery Toggle | Done | Karteek / AI | UI implemented on checkout page; API logic still needs final policy rules |
-| Razorpay Test Flow | Pending | Jagadeep / Karteek | Add test keys to `.env.local` and verify order/webhook/refund flow |
+| Razorpay Test Flow | Pending | Jagadeep / Karteek | Add test keys to `.env` and verify order/webhook/refund flow |
 | Setu DigiLocker Test Flow | Pending | Jagadeep / Karteek | Waiting on Setu sandbox keys |
 | Google Sign-In | Pending | Karteek / AI | Code added; waiting on Google Client ID/Secret |
 | Mobile OTP Sign-In | Pending | Karteek / AI | UI and Better Auth plugin added; production SMS/WhatsApp sender still required |

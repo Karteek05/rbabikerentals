@@ -61,18 +61,6 @@ function toClientOrder(params: {
 	};
 }
 
-function toUpiFallbackOrder(params: { bookingId: string; amount: number }) {
-	return {
-		provider: "upi_fallback" as const,
-		order_id: null,
-		key_id: null,
-		amount: params.amount,
-		currency: "INR" as const,
-		receipt: params.bookingId,
-		status: "upi_fallback",
-		reason: "razorpay_not_configured",
-	};
-}
 
 async function waitForFinalizedBooking(bookingId: string) {
 	for (let attempt = 0; attempt < 5; attempt += 1) {
@@ -418,44 +406,49 @@ export async function createOrderForBooking(
 		);
 	}
 
-	if (isRazorpayConfigured()) {
-		await syncOpenPaymentOrderForBooking(bookingId);
+	if (!isRazorpayConfigured()) {
+		throw new ApiException(
+			503,
+			"payment_unavailable",
+			"Online payment is temporarily unavailable. Please try again later.",
+		);
+	}
+	await syncOpenPaymentOrderForBooking(bookingId);
 
-		const paidOrder = await getLatestPaymentOrderForBooking(bookingId);
-		if (
-			paidOrder?.status === "paid" &&
-			isCheckoutOrderId(paidOrder.provider_order_id)
-		) {
-			try {
-				await finalizeCapturedPayment({
-					updatedOrder: paidOrder,
-					paidAmount: paidOrder.amount,
-				});
-			} catch (error) {
-				console.error("Failed to finalize already-paid payment order:", error);
-			}
+	const paidOrder = await getLatestPaymentOrderForBooking(bookingId);
+	if (
+		paidOrder?.status === "paid" &&
+		isCheckoutOrderId(paidOrder.provider_order_id)
+	) {
+		try {
+			await finalizeCapturedPayment({
+				updatedOrder: paidOrder,
+				paidAmount: paidOrder.amount,
+			});
+		} catch (error) {
+			console.error("Failed to finalize already-paid payment order:", error);
 		}
+	}
 
-		const bookingAfterSync = await getBookingOrThrow(bookingId);
-		if (bookingAfterSync.status !== "payment_pending") {
-			throw new ApiException(
-				409,
-				"payment_already_completed",
-				"Payment is already completed for this booking.",
-			);
-		}
+	const bookingAfterSync = await getBookingOrThrow(bookingId);
+	if (bookingAfterSync.status !== "payment_pending") {
+		throw new ApiException(
+			409,
+			"payment_already_completed",
+			"Payment is already completed for this booking.",
+		);
+	}
 
-		const latestAfterSync = await getLatestPaymentOrderForBooking(bookingId);
-		if (
-			latestAfterSync?.status === "paid" &&
-			isCheckoutOrderId(latestAfterSync.provider_order_id)
-		) {
-			throw new ApiException(
-				409,
-				"payment_finalize_pending",
-				"Payment was received but booking confirmation is still pending. Please wait a moment and refresh, or use the UPI QR below.",
-			);
-		}
+	const latestAfterSync = await getLatestPaymentOrderForBooking(bookingId);
+	if (
+		latestAfterSync?.status === "paid" &&
+		isCheckoutOrderId(latestAfterSync.provider_order_id)
+	) {
+		throw new ApiException(
+			409,
+			"payment_finalize_pending",
+			"Payment was received but booking confirmation is still pending. Please wait a moment and refresh.",
+		);
 	}
 
 	const existingOrder = await getOpenPaymentOrderForBooking(bookingId);
@@ -469,12 +462,6 @@ export async function createOrderForBooking(
 		});
 	}
 
-	if (!isRazorpayConfigured()) {
-		return toUpiFallbackOrder({
-			bookingId,
-			amount: booking.quote.total_payable * 100,
-		});
-	}
 
 	const order = await createRazorpayOrder({
 		amountInPaise: booking.quote.total_payable * 100,

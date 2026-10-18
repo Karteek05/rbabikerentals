@@ -25,7 +25,7 @@ import { fromError, ok, parseJson } from "@/lib/utils/http";
 import { newId } from "@/lib/utils/ids";
 import { recordAudit } from "@/lib/audit/service";
 import type { VehicleDocument } from "@/lib/types/domain";
-import { removeStoredVehicleDocument } from "@/lib/vehicles/storage";
+import { assertVehicleDocumentStorageAvailable, removeStoredVehicleDocument } from "@/lib/vehicles/storage";
 
 export const runtime = "nodejs";
 
@@ -49,6 +49,7 @@ async function uploadFile(
 	docType: string,
 	file: File,
 ): Promise<string> {
+	assertVehicleDocumentStorageAvailable();
 	const { buffer, fileName } = await readValidatedUpload(file, {
 		kind: "document",
 		maxBytes: 15 * 1024 * 1024,
@@ -57,7 +58,7 @@ async function uploadFile(
 	const stampedName = `${Date.now()}-${newId("doc")}-${docType}-${safeName}`;
 
 	if (isSupabaseConfigured()) {
-		const bucket = process.env.SUPABASE_VEHICLE_DOC_BUCKET ?? "vehicle-documents";
+		const bucket = process.env.SUPABASE_VEHICLE_DOC_BUCKET?.trim() || "vehicle-documents";
 		const objectPath = `${vehicleId}/${stampedName}`;
 		const supabase = getSupabaseServiceClient();
 		const { error } = await supabase.storage

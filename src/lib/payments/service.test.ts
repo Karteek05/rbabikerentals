@@ -30,10 +30,10 @@ describe("payments service", () => {
     }
   });
 
-  it("returns a UPI fallback order when Razorpay keys are not configured", async () => {
+  it("rejects checkout when Razorpay keys are not configured", async () => {
     delete process.env.RAZORPAY_KEY_ID;
     delete process.env.RAZORPAY_KEY_SECRET;
-    const bookingId = "booking_payment_upi_fallback_test";
+    const bookingId = "booking_payment_unconfigured_test";
     const now = new Date().toISOString();
 
     store.bookings.push({
@@ -61,17 +61,59 @@ describe("payments service", () => {
       updated_at: now
     });
 
-    const order = await createOrderForBooking(bookingId, {
-      userId: "cust_001",
-      role: "customer"
+    await expect(
+      createOrderForBooking(bookingId, {
+        userId: "cust_001",
+        role: "customer"
+      })
+    ).rejects.toMatchObject({
+      status: 503,
+      code: "payment_unavailable"
+    });
+    expect(
+      store.paymentOrders.filter((order) => order.booking_id === bookingId)
+    ).toHaveLength(0);
+  });
+  it("rejects a customer payment order for another customer's booking", async () => {
+    const bookingId = "booking_payment_foreign_owner_test";
+    const now = new Date().toISOString();
+    store.bookings.push({
+      id: bookingId,
+      user_id: "cust_002",
+      vehicle_id: "veh_001",
+      city: "bengaluru",
+      status: "payment_pending",
+      pickup_at: now,
+      drop_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      quote: {
+        base_amount: 750,
+        duration_amount: 0,
+        addon_amount: 0,
+        coupon_discount: 0,
+        deposit_amount: 2000,
+        tax_amount: 135,
+        total_payable: 2885,
+        km_included: 120,
+        excess_km_rate: 5
+      },
+      km_limit_bucket: "day",
+      km_limit_value: 120,
+      created_at: now,
+      updated_at: now
     });
 
-    expect(order).toMatchObject({
-      provider: "upi_fallback",
-      order_id: null,
-      status: "upi_fallback",
-      reason: "razorpay_not_configured"
+    await expect(
+      createOrderForBooking(bookingId, {
+        userId: "cust_001",
+        role: "customer"
+      })
+    ).rejects.toMatchObject({
+      status: 403,
+      code: "forbidden"
     });
+    expect(
+      store.paymentOrders.filter((order) => order.booking_id === bookingId)
+    ).toHaveLength(0);
   });
 
   it("marks payment order paid and confirms booking on captured webhook", async () => {

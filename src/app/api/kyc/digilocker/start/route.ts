@@ -3,6 +3,8 @@ import { startDigilockerKyc } from "@/lib/kyc/service";
 import type { KycStartRequest } from "@/lib/types/contracts";
 import { parseJson, ok, fromError } from "@/lib/utils/http";
 import { ApiException } from "@/lib/utils/errors";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
+
 
 export async function POST(request: Request) {
   try {
@@ -16,6 +18,13 @@ export async function POST(request: Request) {
         "Customer can start KYC only for own user."
       );
     }
+    await enforceRateLimit(
+      `kyc-start:${body.user_id}`,
+      5,
+      10 * 60_000,
+      "Too many identity verification attempts. Please try again later."
+    );
+
 
     const result = await startDigilockerKyc(body.user_id);
     return ok(result, 201);

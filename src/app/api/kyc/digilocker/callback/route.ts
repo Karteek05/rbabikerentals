@@ -2,6 +2,8 @@ import { handleDigilockerCallback } from "@/lib/kyc/service";
 import type { KycCallbackRequest } from "@/lib/types/contracts";
 import { ApiException } from "@/lib/utils/errors";
 import { parseJson, ok, fromError } from "@/lib/utils/http";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
+
 
 export async function POST(request: Request) {
   try {
@@ -21,6 +23,8 @@ export async function POST(request: Request) {
     if (providedSecret !== expectedSecret) {
       throw new ApiException(401, "invalid_callback_secret", "Invalid KYC callback secret.");
     }
+    await enforceRateLimit("setu-callback", 120, 60_000);
+
 
     const body = await parseJson<KycCallbackRequest>(request);
     const updated = await handleDigilockerCallback({

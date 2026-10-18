@@ -2,6 +2,8 @@ import {
 	getSupabaseServiceClient,
 	isSupabaseConfigured,
 } from "@/lib/db/supabase-client";
+import { ApiException } from "@/lib/utils/errors";
+
 
 export type RateLimitResult = {
 	allowed: boolean;
@@ -77,6 +79,20 @@ export async function consumeRateLimit(
 			: consumeLocal(key, limit, windowMs);
 	}
 }
+export async function enforceRateLimit(
+	key: string,
+	limit: number,
+	windowMs: number,
+	message = "Too many requests. Please try again shortly.",
+) {
+	const result = await consumeRateLimit(key, limit, windowMs, {
+		failClosed: true,
+	});
+	if (!result.allowed) {
+		throw new ApiException(429, "too_many_requests", message);
+	}
+}
+
 
 export function resetLocalRateLimitsForTests() {
 	localBuckets.clear();

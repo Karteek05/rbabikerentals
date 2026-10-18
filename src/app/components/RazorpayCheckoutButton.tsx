@@ -40,9 +40,6 @@ export default function RazorpayCheckoutButton({
       }
 
       const order = orderData.data.order;
-      if (order.provider === "upi_fallback") {
-        throw new Error("Online payment is not configured for this booking.");
-      }
 
       if (!order.key_id || !order.order_id) {
         throw new Error("Razorpay checkout is not configured.");

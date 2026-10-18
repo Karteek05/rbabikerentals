@@ -2,6 +2,8 @@ import { upsertTrackingLocation } from "@/lib/tracking/service";
 import type { UpdateVehicleTrackingRequest } from "@/lib/types/contracts";
 import { ApiException } from "@/lib/utils/errors";
 import { fromError, ok, parseJson } from "@/lib/utils/http";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
+
 
 export async function POST(request: Request) {
   try {
@@ -11,6 +13,12 @@ export async function POST(request: Request) {
     }
 
     const body = await parseJson<UpdateVehicleTrackingRequest>(request);
+    await enforceRateLimit(
+      `tracking-update:${body.vehicle_id}`,
+      120,
+      60_000,
+      "Too many tracking updates for this vehicle."
+    );
     const updated = await upsertTrackingLocation(body);
     return ok({ location: updated });
   } catch (error) {

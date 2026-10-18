@@ -4,9 +4,9 @@ Last updated: April 19, 2026
 
 ## Completed
 ## 1) Product and Architecture Docs
-- [x] PRD finalized: [PRD.md](c:\Users\jagad\OneDrive\Desktop\project\docs\PRD.md)
-- [x] Tech stack decisions finalized: [TECH_STACK.md](c:\Users\jagad\OneDrive\Desktop\project\docs\TECH_STACK.md)
-- [x] Backend architecture finalized: [BACKEND_ARCHITECTURE.md](c:\Users\jagad\OneDrive\Desktop\project\docs\BACKEND_ARCHITECTURE.md)
+- [x] PRD finalized: [PRD.md](PRD.md)
+- [x] Tech stack decisions finalized: [TECH_STACK.md](TECH_STACK.md)
+- [x] Backend architecture finalized: [BACKEND_ARCHITECTURE.md](BACKEND_ARCHITECTURE.md)
 - [x] Bengaluru-only scope clarified across docs.
 
 ## 2) App Scaffold and Project Setup
@@ -54,14 +54,14 @@ Last updated: April 19, 2026
 - [x] `POST /api/internal/tracking/update`
 
 ## 5) Security and Integration Boundaries
-- [x] Role-based request authorization via headers (`x-user-id`, `x-role`) for scaffold testing.
+- [x] Role-based authorization supports development headers only outside production; production API access uses Better Auth sessions.
 - [x] Error handling and response envelope utilities added.
 - [x] Integration boundary modules added for:
   - Better Auth
   - Supabase REST/service headers
   - Razorpay order/signature utilities
   - Setu DigiLocker request creation
-- [x] Postgres schema draft with RLS scaffold added: [schema.sql](c:\Users\jagad\OneDrive\Desktop\project\db\schema.sql)
+- [x] Postgres schema draft with RLS scaffold added: [schema.sql](../db/schema.sql)
 - [x] Production hardening pass completed for:
   - Better Auth production secret enforcement
   - default user/KYC bootstrap
@@ -69,7 +69,7 @@ Last updated: April 19, 2026
   - payment order ownership + reuse of active orders
   - protected DigiLocker webhook callback secret
   - sanitized `5xx` error responses
-  - booking overlap exclusion constraint
+  - Booking overlap checks are enforced by the application inventory/assignment flow; production concurrency still needs a database-backed race test.
   - baseline HTTP security headers
 
 ## Pending (Next Execution Steps)
@@ -122,8 +122,8 @@ Last updated: April 19, 2026
 ## 7) QA and Release
 - [x] Unit tests added (state machine, pricing).
 - [x] API/role-access tests added (admin bookings, quotes).
-- [x] Typecheck/build passing locally.
-- [ ] Add automated tests for webhook spoofing, cross-user payment orders, and booking overlap races.
+- [ ] Re-run typecheck/build for the latest source changes; not verified in the current environment.
+- [ ] Add a database-backed concurrency test for overlapping bookings and extensions.
 - [ ] Deploy staging and complete Bengaluru UAT sign-off with real credentials.
 
 ## Notes
@@ -133,10 +133,11 @@ Last updated: April 19, 2026
   - Run `npm run migrate` and `npm run seed` on the real Supabase project.
   - Configure Razorpay webhook URL in Razorpay dashboard.
   - Configure Setu callback/redirect URL and `SETU_WEBHOOK_SECRET` for production.
-  - Complete staging deployment and Bengaluru UAT signoff.
+- Choose and provision a deployment host/project owner; the previous Vercel account is unavailable.
+- Complete staging deployment and Bengaluru UAT signoff.
 - Detailed hardening notes and future backlog are documented in:
-  [PRODUCTION_HARDENING.md](c:\Users\jagad\OneDrive\Desktop\project\docs\PRODUCTION_HARDENING.md)
+  [PRODUCTION_HARDENING.md](PRODUCTION_HARDENING.md)
 - Business-owner onboarding prerequisites and timelines are documented in:
-  [BUSINESS_OWNER_ACCOUNT_SETUP.md](c:\Users\jagad\OneDrive\Desktop\project\docs\BUSINESS_OWNER_ACCOUNT_SETUP.md)
+  [BUSINESS_OWNER_ACCOUNT_SETUP.md](BUSINESS_OWNER_ACCOUNT_SETUP.md)
 - Staging/UAT execution checklist is documented in:
-  [STAGING_UAT_CHECKLIST.md](c:\Users\jagad\OneDrive\Desktop\project\docs\STAGING_UAT_CHECKLIST.md)
+  [STAGING_UAT_CHECKLIST.md](STAGING_UAT_CHECKLIST.md)

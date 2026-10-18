@@ -2,6 +2,8 @@ import { requireActor } from "@/lib/auth/context";
 import { getKycStatus } from "@/lib/kyc/service";
 import { ApiException } from "@/lib/utils/errors";
 import { ok, fromError } from "@/lib/utils/http";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
+
 
 export async function GET(
   request: Request,
@@ -18,6 +20,13 @@ export async function GET(
         "Customer can view only own KYC status."
       );
     }
+    await enforceRateLimit(
+      `kyc-read:${actor.userId}`,
+      60,
+      60_000,
+      "Too many identity status checks. Please wait before trying again."
+    );
+
 
     const kyc = await getKycStatus(userId);
     return ok(kyc);

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import PartnerPageHeader from "../../components/partner/PartnerPageHeader";
 import PartnerFilterDrawer from "../../components/partner/PartnerFilterDrawer";
 import PartnerKpiCard from "../../components/partner/PartnerKpiCard";
@@ -42,6 +43,29 @@ type RevenueAnalytics = {
   period_wise: { monthly: Array<{ month: string; revenue: number }> };
 };
 
+function formatCurrency(amount: number) {
+  return `₹${amount.toLocaleString("en-IN")}`;
+}
+
+const COMPACT_CURRENCY_FORMATTER = new Intl.NumberFormat("en-IN", {
+  style: "currency",
+  currency: "INR",
+  notation: "compact",
+  maximumFractionDigits: 1
+});
+
+function formatCompactCurrency(amount: number) {
+  return COMPACT_CURRENCY_FORMATTER.format(amount);
+}
+
+function formatMonthLabel(month: string) {
+  const [year, monthNumber] = month.split("-").map(Number);
+  return new Date(year, monthNumber - 1, 1).toLocaleDateString("en-IN", {
+    month: "short",
+    year: "2-digit"
+  });
+}
+
 export default function PartnerDashboardPage() {
   const router = useRouter();
   const [revenue, setRevenue] = useState<RevenueAnalytics | null>(null);
@@ -54,14 +78,28 @@ export default function PartnerDashboardPage() {
 
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [filterOpen, setFilterOpen] = useState(false);
 
   const range = useMemo(() => getWeekRangeFromStart(weekStart), [weekStart]);
+  const vehiclePerformance = useMemo(
+    () => [...(revenue?.vehicle_wise ?? [])].sort((a, b) => b.revenue - a.revenue),
+    [revenue]
+  );
+  const monthlyRevenue = useMemo(
+    () =>
+      [...(revenue?.period_wise.monthly ?? [])]
+        .sort((a, b) => a.month.localeCompare(b.month))
+        .slice(-6),
+    [revenue]
+  );
+  const maxMonthlyRevenue = Math.max(0, ...monthlyRevenue.map((period) => period.revenue));
 
   const loadDashboard = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setSummary(null);
+    setRevenue(null);
     try {
       const params = new URLSearchParams({ from: range.from, to: range.to });
       if (bookingStatus !== "all") params.set("status", bookingStatus);
@@ -102,50 +140,78 @@ export default function PartnerDashboardPage() {
   }
 
   return (
-    <>
+    <main className="partner-dashboard-page">
       <PartnerPageHeader
-        title="Investor Dashboard"
-        subtitle={`${formatDateRangeLabel(range.from, range.to)} · Gross booking analytics`}
+        title="Investor dashboard"
+        subtitle={`${formatDateRangeLabel(range.from, range.to)} · Values use booking creation dates and are not investor payouts`}
         onFilterClick={() => setFilterOpen(true)}
       />
 
-      {error ? <div className="error-banner mb-4">{error}</div> : null}
-      {loading && !summary ? (
+      {error && summary ? (
+        <div className="partner-error-banner" role="alert">
+          <span>{error}</span>
+          <button type="button" className="partner-error-retry" onClick={() => void loadDashboard()} disabled={loading}>
+            Retry
+          </button>
+        </div>
+      ) : null}
+
+      {loading ? (
         <PartnerDashboardSkeleton />
-      ) : (
+      ) : summary ? (
         <>
-          <div className="partner-kpi-grid">
-            <PartnerKpiCard icon="bike" label="Total Vehicles" value={summary?.total_vehicles ?? 0} />
-            <PartnerKpiCard icon="calendar" label="Total Bookings" value={summary?.total_bookings ?? 0} />
+          <section className="partner-kpi-grid" aria-label="Fleet and booking summary">
+            <PartnerKpiCard
+              icon="bike"
+              label="Vehicles"
+              value={summary.total_vehicles}
+              hint="Assigned to your account"
+            />
+            <PartnerKpiCard
+              icon="calendar"
+              label="Bookings"
+              value={summary.total_bookings}
+              hint="Selected week and booking filter"
+            />
             <PartnerKpiCard
               icon="money"
-              label="Gross Paid Booking Value"
-              value={`₹${(summary?.total_revenue ?? 0).toLocaleString("en-IN")}`}
+              label="Gross booking value"
+              value={formatCurrency(summary.total_revenue)}
+              hint="Paid-status booking totals; not your payout"
             />
-            <PartnerKpiCard icon="location" label="Active Rides" value={summary?.active_rides ?? 0} />
-          </div>
+            <PartnerKpiCard
+              icon="location"
+              label="Ongoing bookings"
+              value={summary.active_rides}
+              hint="Created in the selected week; booking filter applies"
+            />
+          </section>
 
-          <div className="partner-analytics-grid">
+          <div className="partner-analytics-grid partner-dashboard-top-grid">
             <section className="card partner-panel">
-              <h2 className="partner-panel-title">Vehicle Status</h2>
-              {summary ? (
-                <StatusDonut breakdown={summary.status_breakdown} />
-              ) : (
-                <div className="partner-donut-empty">
-                  <p>—</p>
+              <div className="partner-panel-head">
+                <div>
+                  <h2 className="partner-panel-title">Fleet tracking</h2>
+                  <p className="partner-panel-subtitle">Latest vehicle location status</p>
                 </div>
-              )}
+                <Link className="partner-panel-link" href="/partner/tracking">View live tracking</Link>
+              </div>
+              <StatusDonut breakdown={summary.status_breakdown} />
             </section>
 
             <section className="card partner-panel">
-              <div className="partner-panel-head">
-                <h2 className="partner-panel-title">Bookings</h2>
-                <div className="partner-tab-row">
+              <div className="partner-panel-head partner-bookings-head">
+                <div>
+                  <h2 className="partner-panel-title">Booking activity</h2>
+                  <p className="partner-panel-subtitle">Selected week, grouped by booking creation day</p>
+                </div>
+                <div className="partner-tab-row" aria-label="Filter bookings by status">
                   {PARTNER_BOOKING_TABS.map((tab) => (
                     <button
                       key={tab.id}
                       type="button"
                       className={`partner-tab${bookingStatus === tab.id ? " active" : ""}`}
+                      aria-pressed={bookingStatus === tab.id}
                       onClick={() => updateParams({ status: tab.id === "all" ? null : tab.id })}
                     >
                       {tab.label}
@@ -153,82 +219,130 @@ export default function PartnerDashboardPage() {
                   ))}
                 </div>
               </div>
-              {summary ? (
-                <BookingsWeekChart points={summary.bookings_by_weekday} />
-              ) : (
-                <div className="partner-week-chart partner-week-chart-empty">No booking trend yet</div>
-              )}
+              <BookingsWeekChart points={summary.bookings_by_weekday} />
             </section>
           </div>
-            <div className="partner-analytics-grid mt-4">
-              <section className="card partner-panel">
-                <h2 className="partner-panel-title">Vehicle performance</h2>
-                <p className="mb-3 text-xs text-muted">
-                  Values are gross booking totals, not investor payouts or profit.
-                </p>
+
+          <div className="partner-analytics-grid partner-dashboard-lower-grid">
+            <section className="card partner-panel">
+              <div className="partner-panel-head">
+                <div>
+                  <h2 className="partner-panel-title">Vehicle booking value</h2>
+                  <p className="partner-panel-subtitle">All-time paid-status booking totals by vehicle</p>
+                </div>
+                <Link className="partner-panel-link" href="/partner/vehicles">View vehicles</Link>
+              </div>
+              {revenue ? (
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm">
+                  <table className="partner-performance-table">
+                    <caption className="sr-only">Booking counts and paid-status booking totals by vehicle</caption>
                     <thead>
                       <tr>
-                        <th className="py-2">Vehicle</th>
-                        <th className="py-2">Bookings</th>
-                        <th className="py-2 text-right">Paid value</th>
+                        <th scope="col">Vehicle</th>
+                        <th scope="col">Bookings</th>
+                        <th scope="col" className="text-right">Booking value</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {(revenue?.vehicle_wise ?? []).map((vehicle) => (
-                        <tr key={vehicle.vehicle_id} className="border-t border-[color:var(--color-line)]">
-                          <td className="py-2 font-medium">
-                            {vehicle.vehicle_label}
+                      {vehiclePerformance.map((vehicle) => (
+                        <tr key={vehicle.vehicle_id}>
+                          <td>
+                            <span className="partner-vehicle-name">{vehicle.vehicle_label}</span>
                             {vehicle.registration_number ? (
-                              <span className="block text-xs font-normal text-muted">
-                                {vehicle.registration_number}
-                              </span>
+                              <span className="partner-vehicle-registration">{vehicle.registration_number}</span>
                             ) : null}
                           </td>
-                          <td className="py-2">{vehicle.booking_count}</td>
-                          <td className="py-2 text-right">₹{vehicle.revenue.toLocaleString("en-IN")}</td>
+                          <td>{vehicle.booking_count}</td>
+                          <td className="text-right">{formatCurrency(vehicle.revenue)}</td>
                         </tr>
                       ))}
-                      {!revenue?.vehicle_wise.length ? (
+                      {!vehiclePerformance.length ? (
                         <tr>
-                          <td colSpan={3} className="py-3 text-center text-muted">No vehicle revenue yet.</td>
+                          <td colSpan={3} className="partner-performance-empty">No booking activity for your vehicles yet.</td>
                         </tr>
                       ) : null}
                     </tbody>
                   </table>
                 </div>
-              </section>
-              <section className="card partner-panel">
-                <h2 className="partner-panel-title">Revenue summary</h2>
-                <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                  <div>
-                    <p className="text-xs text-muted">All-time gross paid value</p>
-                    <p className="text-lg font-bold">₹{(revenue?.totals.gross_revenue ?? 0).toLocaleString("en-IN")}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted">Pending bookings</p>
-                    <p className="text-lg font-bold">₹{(revenue?.totals.pending_revenue ?? 0).toLocaleString("en-IN")}</p>
-                  </div>
+              ) : (
+                <p className="partner-dashboard-empty">Vehicle revenue details are unavailable.</p>
+              )}
+            </section>
+
+            <section className="card partner-panel">
+              <div className="partner-panel-head">
+                <div>
+                  <h2 className="partner-panel-title">Booking value summary</h2>
+                  <p className="partner-panel-subtitle">All-time booking totals by status; not payouts or profit</p>
                 </div>
-                <h3 className="mt-4 text-sm font-semibold">Monthly paid booking value</h3>
-                <ul className="mt-2 divide-y divide-[color:var(--color-line)]">
-                  {(revenue?.period_wise.monthly ?? []).slice().reverse().map((period) => (
-                    <li key={period.month} className="flex justify-between gap-3 py-2 text-sm">
-                      <span>{new Date(`${period.month}-01T00:00:00`).toLocaleDateString("en-IN", {
-                        month: "long",
-                        year: "numeric"
-                      })}</span>
-                      <span className="font-semibold">₹{period.revenue.toLocaleString("en-IN")}</span>
-                    </li>
-                  ))}
-                  {!revenue?.period_wise.monthly.length ? (
-                    <li className="py-3 text-sm text-muted">No paid bookings yet.</li>
-                  ) : null}
-                </ul>
-              </section>
-            </div>
+              </div>
+              {revenue ? (
+                <>
+                  <div className="partner-revenue-totals">
+                    <div>
+                      <span>Paid-status booking value</span>
+                      <strong>{formatCurrency(revenue.totals.gross_revenue)}</strong>
+                    </div>
+                    <div>
+                      <span>In review or awaiting payment</span>
+                      <strong>{formatCurrency(revenue.totals.pending_revenue)}</strong>
+                      <small>Quoted value; not collected</small>
+                    </div>
+                    <div>
+                      <span>Completed booking value</span>
+                      <strong>{formatCurrency(revenue.totals.completed_revenue)}</strong>
+                    </div>
+                  </div>
+
+                  <div className="partner-monthly-heading">
+                    <h3>Paid-status booking value by month</h3>
+                    <span>By booking creation month · latest 6 active months</span>
+                  </div>
+                  {monthlyRevenue.length ? (
+                    <div className="partner-monthly-chart" role="list" aria-label="Monthly value from paid-status bookings">
+                      {monthlyRevenue.map((period) => {
+                        const monthLabel = formatMonthLabel(period.month);
+                        const barHeight = maxMonthlyRevenue
+                          ? Math.max(4, (period.revenue / maxMonthlyRevenue) * 100)
+                          : 0;
+                        return (
+                          <div
+                            key={period.month}
+                            className="partner-monthly-column"
+                            role="listitem"
+                            aria-label={`${monthLabel}: ${formatCurrency(period.revenue)}`}
+                          >
+                            <span className="partner-monthly-value" aria-hidden="true">
+                              {formatCompactCurrency(period.revenue)}
+                            </span>
+                            <div className="partner-monthly-track" aria-hidden="true">
+                              <span style={{ height: `${barHeight}%` }} />
+                            </div>
+                            <span className="partner-monthly-label" aria-hidden="true">{monthLabel}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="partner-dashboard-empty">Paid booking totals will appear here.</p>
+                  )}
+                </>
+              ) : (
+                <p className="partner-dashboard-empty">Revenue details are unavailable.</p>
+              )}
+            </section>
+          </div>
         </>
+      ) : (
+        <div className="partner-load-error" role="alert">
+          <div>
+            <h2>Dashboard data couldn’t be loaded</h2>
+            <p>{error ?? "Check your connection, then try again."}</p>
+          </div>
+          <button type="button" className="btn btn-secondary" onClick={() => void loadDashboard()} disabled={loading}>
+            Try again
+          </button>
+        </div>
       )}
 
       <PartnerFilterDrawer
@@ -238,6 +352,6 @@ export default function PartnerDashboardPage() {
         onApply={(nextWeek) => updateParams({ week: nextWeek })}
         onReset={() => updateParams({ week: getDefaultWeekStart() })}
       />
-    </>
+    </main>
   );
 }

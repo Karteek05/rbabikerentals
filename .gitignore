@@ -24,3 +24,8 @@ homepage-*.png
 .vercel
 .data/
 new/
+
+.pi/
+.pi-subagents/
+scripts/__pycache__/
+.tmp-setu-probe.txt

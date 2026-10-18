@@ -182,17 +182,45 @@ export function filterBookingsByTab(bookings: Booking[], tab: PartnerBookingTab)
   return bookings.filter((booking) => booking.status === "cancelled");
 }
 
+const BUSINESS_TIME_ZONE = "Asia/Kolkata";
+const BUSINESS_DATE_FORMATTER = new Intl.DateTimeFormat("en-CA", {
+  timeZone: BUSINESS_TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit"
+});
+
+function getBusinessDateString(value: string) {
+  const timestamp = new Date(value);
+  if (Number.isNaN(timestamp.getTime())) return "";
+  const parts = BUSINESS_DATE_FORMATTER.formatToParts(timestamp);
+  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value])) as Partial<
+    Record<Intl.DateTimeFormatPartTypes, string>
+  >;
+  return `${values.year ?? ""}-${values.month ?? ""}-${values.day ?? ""}`;
+}
+
+function getBusinessDateStartMs(date: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return Number.NaN;
+  const [year, month, day] = date.split("-").map(Number);
+  const midnightUtc = Date.UTC(year, month - 1, day);
+  if (new Date(midnightUtc).toISOString().slice(0, 10) !== date) return Number.NaN;
+  return midnightUtc - 5.5 * 60 * 60 * 1000;
+}
+
 export function filterBookingsByDateRange(
   bookings: Booking[],
   from?: string,
   to?: string
 ) {
   if (!from && !to) return bookings;
-  const fromMs = from ? new Date(from).getTime() : 0;
-  const toMs = to ? new Date(to).getTime() + 24 * 60 * 60 * 1000 - 1 : Number.POSITIVE_INFINITY;
+  const fromMs = from ? getBusinessDateStartMs(from) : Number.NEGATIVE_INFINITY;
+  const toExclusiveMs = to
+    ? getBusinessDateStartMs(to) + 24 * 60 * 60 * 1000
+    : Number.POSITIVE_INFINITY;
   return bookings.filter((booking) => {
     const ts = new Date(booking.created_at).getTime();
-    return ts >= fromMs && ts <= toMs;
+    return ts >= fromMs && ts < toExclusiveMs;
   });
 }
 
@@ -282,18 +310,25 @@ export async function getPartnerDashboardSummary(
   const activeRides = rangedBookings.filter((booking) => ONGOING_STATUSES.has(booking.status)).length;
 
   const weekdayLabels = [
-    "Sunday",
     "Monday",
     "Tuesday",
     "Wednesday",
     "Thursday",
     "Friday",
-    "Saturday"
+    "Saturday",
+    "Sunday"
   ];
+  const weekdayCounts = Array.from({ length: 7 }, () => 0);
+  for (const booking of rangedBookings) {
+    const businessDate = getBusinessDateString(booking.created_at);
+    if (!businessDate) continue;
+    const [year, month, date] = businessDate.split("-").map(Number);
+    const weekday = new Date(Date.UTC(year, month - 1, date)).getUTCDay();
+    weekdayCounts[(weekday + 6) % 7] += 1;
+  }
   const bookings_by_weekday = weekdayLabels.map((day, index) => ({
     day,
-    count: rangedBookings.filter((booking) => new Date(booking.created_at).getDay() === index)
-      .length
+    count: weekdayCounts[index]
   }));
 
   const total_revenue = rangedBookings
@@ -349,13 +384,14 @@ export async function getPartnerRevenue(userId: string) {
 
   const weeklyMap = new Map<string, number>();
   const monthlyMap = new Map<string, number>();
-
+  const monthCountMap = new Map<string, number>();
   for (const booking of paidBookings) {
-    const weekKey = getWeekKey(booking.created_at);
-    const monthKey = booking.created_at.slice(0, 7);
-
+    const businessDate = getBusinessDateString(booking.created_at);
+    const weekKey = getWeekKey(businessDate);
+    const monthKey = businessDate.slice(0, 7);
     weeklyMap.set(weekKey, (weeklyMap.get(weekKey) ?? 0) + booking.quote.total_payable);
     monthlyMap.set(monthKey, (monthlyMap.get(monthKey) ?? 0) + booking.quote.total_payable);
+    monthCountMap.set(monthKey, (monthCountMap.get(monthKey) ?? 0) + 1);
   }
 
   const grossRevenue = sumRevenue(paidBookings);
@@ -403,16 +439,16 @@ export async function getPartnerRevenue(userId: string) {
     by_period: Array.from(monthlyMap.entries()).map(([period, revenue]) => ({
       period,
       revenue,
-      bookings: paidBookings.filter((booking) => booking.created_at.slice(0, 7) === period).length
+      bookings: monthCountMap.get(period) ?? 0
     }))
   };
 }
 
-function getWeekKey(value: string) {
-  const date = new Date(value);
-  const day = date.getUTCDay();
-  const diffToMonday = day === 0 ? -6 : 1 - day;
-  const monday = new Date(date);
-  monday.setUTCDate(date.getUTCDate() + diffToMonday);
-  return monday.toISOString().slice(0, 10);
+function getWeekKey(businessDate: string) {
+  if (!businessDate) return "";
+  const [year, month, day] = businessDate.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  const weekday = date.getUTCDay();
+  date.setUTCDate(date.getUTCDate() + (weekday === 0 ? -6 : 1 - weekday));
+  return date.toISOString().slice(0, 10);
 }

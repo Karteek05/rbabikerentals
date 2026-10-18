@@ -13,6 +13,7 @@ import {
 	getSupabaseServiceClient,
 	isSupabaseConfigured,
 } from "@/lib/db/supabase-client";
+import { isProductionRuntime } from "@/lib/utils/app-url";
 import type { AdminVehicleImageRequest } from "@/lib/types/contracts";
 import { ApiException } from "@/lib/utils/errors";
 import { fromError, ok, parseJson } from "@/lib/utils/http";
@@ -48,7 +49,7 @@ async function uploadFile(vehicleId: string, file: File): Promise<string> {
 
 	if (isSupabaseConfigured()) {
 		const bucket =
-			process.env.SUPABASE_VEHICLE_IMAGE_BUCKET ?? "vehicle-images";
+			process.env.SUPABASE_VEHICLE_IMAGE_BUCKET?.trim() || "vehicle-images";
 		const objectPath = `${vehicleId}/${stampedName}`;
 		const supabase = getSupabaseServiceClient();
 		const { error } = await supabase.storage
@@ -67,11 +68,18 @@ async function uploadFile(vehicleId: string, file: File): Promise<string> {
 		}
 		return data.publicUrl;
 	}
+	if (isProductionRuntime()) {
+		throw new ApiException(
+			503,
+			"vehicle_image_storage_unavailable",
+			"Persistent vehicle image storage is not configured."
+		);
+	}
 
 	const relativeDir = path.join("uploads", "vehicles", vehicleId);
 	const absDir = path.join(process.cwd(), "public", relativeDir);
 	await mkdir(absDir, { recursive: true });
-	await writeFile(path.join(absDir, stampedName), buffer);
+	await writeFile(path.join(absDir, stampedName), buffer, { flag: "wx" });
 	return `/${path.join(relativeDir, stampedName).replace(/\\/g, "/")}`;
 }
 

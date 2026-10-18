@@ -4,6 +4,7 @@ import { requireActor } from "@/lib/auth/context";
 import { getVehicleDocumentOrThrow, getVehicleOrThrow } from "@/lib/data/repository";
 import { assertVehicleDocumentAccess, LOCAL_DOC_PREFIX } from "@/lib/vehicles/documents";
 import { getSupabaseServiceClient, isSupabaseConfigured } from "@/lib/db/supabase-client";
+import { assertVehicleDocumentStorageAvailable } from "@/lib/vehicles/storage";
 import { ApiException } from "@/lib/utils/errors";
 import { fromError } from "@/lib/utils/http";
 
@@ -67,16 +68,22 @@ async function readRemoteDocument(url: string, download = false) {
 }
 
 async function readStoredDocument(relativePath: string, download = false) {
+  assertVehicleDocumentStorageAvailable();
   const fileName = path.basename(relativePath);
 
   if (isSupabaseConfigured()) {
-    const bucket = process.env.SUPABASE_VEHICLE_DOC_BUCKET ?? "vehicle-documents";
+    const bucket = process.env.SUPABASE_VEHICLE_DOC_BUCKET?.trim() || "vehicle-documents";
     const supabase = getSupabaseServiceClient();
     const { data, error } = await supabase.storage.from(bucket).download(relativePath);
-    if (!error && data) {
-      const buffer = Buffer.from(await data.arrayBuffer());
-      return documentResponse(buffer, fileName, download);
+    if (error || !data) {
+      throw new ApiException(
+        503,
+        "vehicle_document_storage_unavailable",
+        "Vehicle document could not be retrieved from persistent storage."
+      );
     }
+    const buffer = Buffer.from(await data.arrayBuffer());
+    return documentResponse(buffer, fileName, download);
   }
 
   const storageRoot = path.join(process.cwd(), ".data", "vehicle-documents");

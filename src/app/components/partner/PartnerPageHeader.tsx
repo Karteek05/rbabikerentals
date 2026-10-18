@@ -25,9 +25,14 @@ export default function PartnerPageHeader({
       <div className="partner-page-actions">
         {actions}
         {onFilterClick ? (
-          <button type="button" className="btn btn-secondary partner-filter-btn" onClick={onFilterClick}>
+          <button
+            type="button"
+            className="btn btn-secondary partner-filter-btn"
+            onClick={onFilterClick}
+            aria-label="Change reporting week"
+          >
             <Icon name="filter" className="w-4 h-4" />
-            Week
+            Change week
           </button>
         ) : null}
       </div>

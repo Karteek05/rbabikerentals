@@ -5,6 +5,7 @@ import {
 } from "@/lib/uploads/validation";
 import {
 	consumeRateLimit,
+	enforceRateLimit,
 	resetLocalRateLimitsForTests,
 } from "@/lib/security/rate-limit";
 
@@ -50,6 +51,13 @@ describe("rate limiter", () => {
 			allowed: false,
 			remaining: 0,
 			distributed: false,
+		});
+	});
+	it("rejects requests after the configured limit", async () => {
+		await enforceRateLimit("enforced-test", 1, 60_000);
+		await expect(enforceRateLimit("enforced-test", 1, 60_000)).rejects.toMatchObject({
+			status: 429,
+			code: "too_many_requests",
 		});
 	});
 });

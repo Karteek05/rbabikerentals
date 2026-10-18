@@ -13,7 +13,7 @@ This repository contains a Bengaluru-only Phase 1 implementation scaffold for:
 - Setu DigiLocker start/callback/status flow
 
 ## Quick Start
-1. Copy `.env.example` to `.env.local`.
+1. Copy `.env.example` to `.env`.
 2. Fill required values (for pure local scaffold use dummy provider credentials, but keep valid Supabase vars if you want DB mode).
 3. Install dependencies: `npm install`
 4. Start app: `npm run dev`
@@ -30,7 +30,7 @@ This project is a single Next.js app (App Router + API routes), so `npm run dev`
    - Customer: `cust_001`
    - Partner: `partner_001`
    - Admin: `admin_001`
-4. For local header-auth testing only, set `ALLOW_DEV_HEADERS=true` in `.env.local` and restart the dev server.
+4. For local header-auth testing only, set `ALLOW_DEV_HEADERS=true` in `.env` and restart the dev server.
 
 ## Current Auth Model (Scaffold)
 Better Auth is wired. Session users are bootstrapped into `app_users` on first authenticated request, and KYC records are auto-created on first KYC/booking access.

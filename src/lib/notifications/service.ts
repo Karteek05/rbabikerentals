@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer";
+import { isProductionRuntime } from "@/lib/utils/app-url";
 import { getVehicleDisplayName, formatBookingReference } from "@/lib/fleet/display";
 import { insertNotificationJob } from "@/lib/data/repository";
 import { getSupabaseServiceClient } from "@/lib/db/supabase-client";
@@ -112,6 +113,13 @@ export async function sendResetPasswordEmail(email: string, resetLink: string) {
 }
 
 export async function sendOtpEmail(email: string, otp: string) {
+  const smtpConfigured = Boolean(
+    process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS
+  );
+  if (isProductionRuntime() && !smtpConfigured) {
+    throw new Error("Verification email delivery is currently unavailable.");
+  }
+
   const text = `Hi there,\n\nYour verification code is: ${otp}\n\nThis code will expire shortly. Please enter it to verify your email address.\n\nThanks,\nRBA Bike Rentals Team`;
   const html = `<p>Hi there,</p><p>Your verification code is: <strong style="font-size:24px;letter-spacing:4px;padding:10px;background:#f5f5f5;border-radius:4px;display:inline-block;margin:10px 0;">${otp}</strong></p><p>This code will expire shortly. Please enter it to verify your email address.</p><p>Thanks,<br>RBA Bike Rentals Team</p>`;
 

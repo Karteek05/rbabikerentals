@@ -224,7 +224,6 @@ export interface AdminVehicleImageRequest {
 export interface PartnerApplyRequest {
   name?: string;
   phone?: string;
-  partner_business_name?: string;
   message?: string;
 }
 

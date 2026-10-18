@@ -22,7 +22,6 @@ function PartnerApplyForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [phone, setPhone] = useState("");
-  const [businessName, setBusinessName] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -56,7 +55,6 @@ function PartnerApplyForm() {
       body: JSON.stringify({
         name: name.trim() || undefined,
         phone: phone.trim() || undefined,
-        partner_business_name: businessName.trim() || undefined,
         message: message.trim() || undefined
       })
     });
@@ -208,9 +206,14 @@ function PartnerApplyForm() {
           </h1>
           <p className="mt-2 text-sm text-[#526074]">
             {showOtp
-              ? `Enter the code sent to ${email}`
+              ? `Enter the verification code for ${email}`
               : "Apply to list your fleet on RBA. Admin approval is required before dashboard access."}
           </p>
+          {showOtp && process.env.NODE_ENV === "development" ? (
+            <p className="mt-2 text-sm text-[#526074]">
+              For local development, the verification code is also printed in the terminal running the app.
+            </p>
+          ) : null}
         </div>
 
         <div className="rounded-2xl border border-brand-dark/10 bg-white p-6 shadow-[rgba(0,0,0,0.08)_0px_8px_24px]">
@@ -222,15 +225,6 @@ function PartnerApplyForm() {
 
           {session?.user && !showOtp ? (
             <form onSubmit={handleApplySignedIn} className="space-y-4">
-              <label className="block">
-                <span className="form-label">Business name</span>
-                <input
-                  className="form-input"
-                  value={businessName}
-                  onChange={(event) => setBusinessName(event.target.value)}
-                  placeholder="Your fleet or business name"
-                />
-              </label>
               <label className="block">
                 <span className="form-label">Phone</span>
                 <input
@@ -283,14 +277,6 @@ function PartnerApplyForm() {
               <label className="block">
                 <span className="form-label">Phone</span>
                 <input className="form-input" value={phone} onChange={(e) => setPhone(e.target.value)} />
-              </label>
-              <label className="block">
-                <span className="form-label">Business name</span>
-                <input
-                  className="form-input"
-                  value={businessName}
-                  onChange={(e) => setBusinessName(e.target.value)}
-                />
               </label>
               <button type="submit" className="btn-primary w-full py-3" disabled={loading}>
                 {loading ? "Creating account…" : "Create account & apply"}

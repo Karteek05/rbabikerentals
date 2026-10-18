@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { buildUserEmail, notifyUser } from "@/lib/notifications/service";
+import { buildUserEmail, notifyUser, sendOtpEmail } from "@/lib/notifications/service";
 import { store } from "@/lib/data/store";
 
-const smtpEnvKeys = ["SMTP_HOST", "SMTP_USER", "SMTP_PASS", "EMAIL_FROM"] as const;
+const smtpEnvKeys = ["SMTP_HOST", "SMTP_USER", "SMTP_PASS", "EMAIL_FROM", "APP_ENV"] as const;
 const originalSmtpEnv = Object.fromEntries(
   smtpEnvKeys.map((key) => [key, process.env[key]])
 );
@@ -59,4 +59,15 @@ describe("notification email templates", () => {
       "booking_approved_pay_now_smtp_skipped"
     );
   });
+  it("rejects OTP delivery in production when SMTP is not configured", async () => {
+    for (const key of smtpEnvKeys) {
+      delete process.env[key];
+    }
+    process.env.APP_ENV = "production";
+
+    await expect(sendOtpEmail("customer@example.com", "123456")).rejects.toThrow(
+      "Verification email delivery is currently unavailable."
+    );
+  });
+
 });

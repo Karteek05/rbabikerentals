@@ -32,14 +32,10 @@ async function main() {
 
   if (!email || !password) {
     console.error("Usage: npm run bootstrap:admin -- <email> <password> [name]");
-    console.error("Example: npm run bootstrap:admin -- adminuser@rbabikerentals.com 'YourSecurePass123!'");
+    console.error("Example: npm run bootstrap:admin -- adminuser@gmail.com 'YourSecurePass123!'");
     process.exit(1);
   }
 
-  if (!email.endsWith("@rbabikerentals.com")) {
-    console.error("Admin bootstrap requires an @rbabikerentals.com email.");
-    process.exit(1);
-  }
 
   const dbUrl = process.env.SUPABASE_DB_URL ?? process.env.DATABASE_URL;
   if (!dbUrl) {

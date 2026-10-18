@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Booking, BookingStatus, Vehicle, VehicleBlockWindow } from "@/lib/types/domain";
 import {
   deriveVehiclePosition,
+  filterBookingsByDateRange,
   filterBookingsByTab,
   getPartnerRevenue,
   isBlockActive,
@@ -134,6 +135,38 @@ describe("filterBookingsByTab", () => {
     ]);
   });
 });
+describe("investor reporting date boundaries", () => {
+  it("includes the full selected Bengaluru calendar day and excludes the next one", () => {
+    const bookings = [
+      {
+        ...makeBooking("confirmed"),
+        id: "booking_reporting_before_day",
+        created_at: "2026-07-13T18:29:59.999Z"
+      },
+      {
+        ...makeBooking("confirmed"),
+        id: "booking_reporting_day_start",
+        created_at: "2026-07-13T18:30:00.000Z"
+      },
+      {
+        ...makeBooking("confirmed"),
+        id: "booking_reporting_day_end",
+        created_at: "2026-07-14T18:29:59.999Z"
+      },
+      {
+        ...makeBooking("confirmed"),
+        id: "booking_reporting_next_day",
+        created_at: "2026-07-14T18:30:00.000Z"
+      }
+    ];
+
+    expect(
+      filterBookingsByDateRange(bookings, "2026-07-14", "2026-07-14").map(
+        (booking) => booking.id
+      )
+    ).toEqual(["booking_reporting_day_start", "booking_reporting_day_end"]);
+  });
+});
 describe("investor revenue analytics", () => {
   it("scopes vehicle totals to the assigned investor and includes completed rentals", async () => {
     const investorVehicleId = "veh_investor_revenue_test";
@@ -141,7 +174,8 @@ describe("investor revenue analytics", () => {
     const completedBooking = {
       ...makeBooking("completed"),
       id: "booking_investor_revenue_test",
-      vehicle_id: investorVehicleId
+      vehicle_id: investorVehicleId,
+      created_at: "2026-07-31T20:00:00.000Z"
     };
     const pendingBooking = {
       ...makeBooking("payment_pending"),
@@ -162,6 +196,13 @@ describe("investor revenue analytics", () => {
     try {
       const revenue = await getPartnerRevenue("partner_001");
       expect(revenue.totals.gross_revenue).toBe(completedBooking.quote.total_payable);
+      expect(revenue.by_period).toEqual([
+        {
+          period: "2026-08",
+          revenue: completedBooking.quote.total_payable,
+          bookings: 1
+        }
+      ]);
       expect(revenue.totals.pending_revenue).toBe(pendingBooking.quote.total_payable);
       expect(revenue.vehicle_wise).toEqual([
         {

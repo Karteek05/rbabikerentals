@@ -22,8 +22,10 @@ Set this in production:
 
 ```env
 NEXT_PUBLIC_SITE_URL=https://www.rbabikerentals.com
+APP_BASE_URL=https://www.rbabikerentals.com
 BETTER_AUTH_URL=https://www.rbabikerentals.com
 ```
+
 
 ### B. Manual steps (required for Google visibility)
 
@@ -99,10 +101,11 @@ Target phrases naturally in visible page copy (not keyword stuffing):
 ### Infrastructure
 - [ ] `APP_ENV=production` on Render/Vercel
 - [ ] Custom domain `www.rbabikerentals.com` with HTTPS
-- [ ] `NEXT_PUBLIC_SITE_URL` and `BETTER_AUTH_URL` set to production URL
+- [ ] `NEXT_PUBLIC_SITE_URL`, `APP_BASE_URL`, and `BETTER_AUTH_URL` set to the production URL
 - [ ] Supabase production project (not dev DB)
 - [ ] Run `npm run migrate` on production DB
 - [ ] **Do not** run seed in production unless intentional
+- [ ] `vehicle-documents` Supabase bucket is private; `vehicle-images` bucket is public and configured
 
 ### Auth & security
 - [ ] `BETTER_AUTH_SECRET` — strong random secret
@@ -115,7 +118,7 @@ Target phrases naturally in visible page copy (not keyword stuffing):
 - [ ] Razorpay live keys (not test) in production
 - [ ] Webhook URL: `https://www.rbabikerentals.com/api/webhooks/razorpay`
 - [ ] Test full flow: approve booking → pay → webhook → confirmed
-- [ ] UPI fallback / `NEXT_PUBLIC_UPI_ID` if used
+- [ ] Confirm checkout fails without Razorpay keys and payment is recorded only after a verified checkout signature or webhook event
 
 ### KYC & email
 - [ ] Setu DigiLocker production credentials
@@ -123,7 +126,7 @@ Target phrases naturally in visible page copy (not keyword stuffing):
 - [ ] Test booking confirmation + payment emails
 
 ### Operations
-- [ ] Admin accounts on `@rbabikerentals.com`
+- [ ] Admin accounts provisioned by an authorized operator; assign the admin role explicitly, independent of email domain.
 - [ ] Fleet data matches live inventory (rates, images, stock)
 - [ ] Document expiry job scheduled (`npm run job:documents`)
 - [ ] Incident escalation job scheduled

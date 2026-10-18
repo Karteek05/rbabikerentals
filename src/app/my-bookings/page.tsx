@@ -50,7 +50,6 @@ const fetchOptions = {
 };
 
 
-const UPI_ID = process.env.NEXT_PUBLIC_UPI_ID || "rbabikerentals@upi";
 
 const STATUS_STYLES: Record<string, string> = {
   confirmed: "bg-black text-white",
@@ -77,20 +76,6 @@ function StatusBadge({ status }: { status: string }) {
   return <span className={`badge ${cls} text-xs`}>{formatBookingStatus(status)}</span>;
 }
 
-function getUpiLink(booking: Booking) {
-  const params = new URLSearchParams({
-    pa: UPI_ID,
-    pn: "RBA Bike Rentals",
-    am: booking.quote.total_payable.toFixed(2),
-    cu: "INR",
-    tn: `RBA booking ${booking.id}`
-  });
-  return `upi://pay?${params.toString()}`;
-}
-
-function getQrImageUrl(booking: Booking) {
-  return `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=12&data=${encodeURIComponent(getUpiLink(booking))}`;
-}
 
 export default function MyBookingsPage() {
   const { data: session, isPending: sessionPending } = authClient.useSession();
@@ -103,7 +88,6 @@ export default function MyBookingsPage() {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [tab, setTab] = useState("all");
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
-  const [qrBookingId, setQrBookingId] = useState<string | null>(null);
   const [kyc, setKyc] = useState<CustomerKyc | null>(null);
 
   const showSuccess = (msg: string) => {
@@ -237,26 +221,22 @@ export default function MyBookingsPage() {
         if (json?.error?.code === "payment_already_completed") {
           await fetchBookings();
           showSuccess("Payment was already completed for this booking.");
-          setQrBookingId(null);
           return;
         }
         if (json?.error?.code === "payment_finalize_pending") {
           await fetchBookings();
-          setQrBookingId(null);
           setError(
             json.error.message ??
               "Payment received. Confirmation is processing — please refresh in a moment."
           );
           return;
         }
-        setQrBookingId(booking.id);
-        setError(json?.error?.message ?? "Could not start Razorpay checkout. Use the UPI QR below.");
+        setError(json?.error?.message ?? "Could not start payment. Please try again later.");
         return;
       }
       const order = json.data.order;
-      if (order?.provider === "upi_fallback" || !order?.key_id || !order?.order_id) {
-        setQrBookingId(booking.id);
-        setError("Razorpay checkout is not configured. Use the UPI QR below.");
+      if (!order?.key_id || !order?.order_id) {
+        setError("Payment checkout is currently unavailable. Please try again later.");
         return;
       }
 
@@ -275,12 +255,10 @@ export default function MyBookingsPage() {
           try {
             await confirmCheckoutPayment(booking.id, response);
             showSuccess("Payment confirmed. Your booking is now confirmed.");
-            setQrBookingId(null);
           } catch (confirmError) {
             if (await recoverConfirmedPayment(booking.id)) {
               return;
             }
-            setQrBookingId(null);
             setError(
               confirmError instanceof Error
                 ? confirmError.message
@@ -296,11 +274,10 @@ export default function MyBookingsPage() {
         }
       });
     } catch (payError) {
-      setQrBookingId(booking.id);
       setError(
         payError instanceof Error
           ? payError.message
-          : "Payment checkout is unavailable right now. Use the UPI QR below."
+          : "Payment checkout is unavailable right now. Please try again later."
       );
     } finally {
       setActionLoading(null);
@@ -658,39 +635,6 @@ export default function MyBookingsPage() {
                       </div>
                     ) : null}
 
-                    {booking.status === "payment_pending" && qrBookingId === booking.id ? (
-                      <div className="mt-4 grid gap-4 rounded-lg border border-[color:var(--color-line)] bg-[color:var(--color-paper)] p-4 sm:grid-cols-[180px_minmax(0,1fr)]">
-                        <div className="rounded-lg border border-[color:var(--color-line)] bg-white p-3">
-                          <img
-                            src={getQrImageUrl(booking)}
-                            alt={`UPI QR for booking ${booking.id}`}
-                            className="mx-auto h-36 w-36 object-contain sm:h-40 sm:w-40"
-                          />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="mb-1 text-xs font-bold uppercase text-[color:var(--color-muted)]">
-                            UPI payment
-                          </div>
-                          <h4 className="text-lg font-black text-[color:var(--color-ink)]">Scan to pay ₹{booking.quote.total_payable.toLocaleString()}</h4>
-                          <p className="mt-1 text-sm leading-relaxed text-[color:var(--color-copy)]">
-                            Use this QR to complete payment. Keep the booking ID in the payment note.
-                          </p>
-                          <div className="mt-3 grid gap-2 text-sm">
-                            <div className="flex items-center justify-between gap-3 rounded-md bg-white px-3 py-2">
-                              <span className="text-[color:var(--color-muted)]">UPI ID</span>
-                              <span className="truncate font-bold text-[color:var(--color-ink)]">{UPI_ID}</span>
-                            </div>
-                            <div className="flex items-center justify-between gap-3 rounded-md bg-white px-3 py-2">
-                              <span className="text-[color:var(--color-muted)]">Booking ID</span>
-                              <span className="truncate font-mono text-xs font-bold text-[color:var(--color-ink)]">{booking.id}</span>
-                            </div>
-                          </div>
-                          <a href={getUpiLink(booking)} className="btn-primary mt-4 inline-flex text-sm">
-                            Open UPI App
-                          </a>
-                        </div>
-                      </div>
-                    ) : null}
                   </div>
                 </div>
               );
