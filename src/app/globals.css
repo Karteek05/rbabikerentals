@@ -1138,7 +1138,7 @@
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: var(--space-sm);
-    margin-bottom: var(--space-lg);
+    margin-bottom: var(--space-md);
   }
 
   .partner-kpi-card {
@@ -1196,7 +1196,7 @@
     display: grid;
     grid-template-columns: minmax(260px, 1fr) minmax(0, 1.4fr);
     gap: var(--space-md);
-    align-items: start;
+    align-items: stretch;
   }
 
   .partner-panel {
@@ -1890,7 +1890,7 @@
   .admin-dashboard-content {
     display: grid;
     align-content: start;
-    gap: 24px;
+    gap: 20px;
   }
 
   .ops-shell .admin-dashboard-content > .admin-dashboard-header {
@@ -1905,7 +1905,7 @@
 
   .admin-dashboard-content > .stats-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 14px;
+    gap: 12px;
     margin: 0;
   }
 
@@ -1921,19 +1921,23 @@
   }
 
   .admin-dashboard-section > .section-header {
-    margin-bottom: 16px;
+    margin-bottom: 12px;
   }
 
   .admin-fleet-layout {
     display: grid;
     grid-template-columns: minmax(360px, 0.9fr) minmax(0, 1.4fr);
-    align-items: start;
+    align-items: stretch;
     gap: 20px;
   }
 
   .admin-fleet-editor,
   .admin-fleet-vehicle-list {
     min-width: 0;
+  }
+  .admin-fleet-vehicle-list {
+    display: flex;
+    flex-direction: column;
   }
 
   .admin-fleet-editor {
@@ -1985,8 +1989,8 @@
 
   .admin-fleet-vehicle-list .table-container {
     max-height: min(520px, 58vh);
-    overflow: auto;
-    overscroll-behavior: contain;
+    flex: 1 1 auto;
+    min-height: 0;
   }
 
   .admin-fleet-vehicle-list .table-container table {
@@ -2861,11 +2865,12 @@
   }
 
   .partner-dashboard-lower-grid {
-    grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr);
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
     margin-top: var(--space-md);
   }
 
   .partner-panel {
+    min-width: 0;
     border-color: color-mix(in oklch, var(--color-line) 82%, var(--color-ink));
     box-shadow: 0 2px 8px color-mix(in oklch, var(--color-ink) 4%, transparent);
   }
