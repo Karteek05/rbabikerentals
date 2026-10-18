@@ -15,11 +15,12 @@ type DocumentRow = {
   owner_name: string;
 };
 
+type AdminDocumentType = Extract<VehicleDocument["doc_type"], "rc" | "insurance" | "invoice">;
 type DocumentFilter = "all" | "expiring" | "expired";
-type DocumentTypeFilter = DocumentType | "all";
+type DocumentTypeFilter = AdminDocumentType | "all";
 type VehicleCategoryFilter = Vehicle["category"] | "all";
 
-const DOCUMENT_TYPES: Array<{ value: DocumentType; label: string }> = [
+const DOCUMENT_TYPES: Array<{ value: AdminDocumentType; label: string }> = [
   { value: "rc", label: "Registration certificate" },
   { value: "insurance", label: "Insurance" },
   { value: "invoice", label: "Invoice" }
@@ -44,7 +45,7 @@ function formatDate(value?: string | null) {
   }).format(new Date(value));
 }
 
-function documentLabel(type: DocumentType) {
+function documentLabel(type: AdminDocumentType) {
   return DOCUMENT_TYPES.find((item) => item.value === type)?.label ?? type;
 }
 
@@ -63,7 +64,7 @@ export default function AdminDocumentsPage() {
   const [vehicleCategoryFilter, setVehicleCategoryFilter] = useState<VehicleCategoryFilter>("all");
   const [documentTypeFilter, setDocumentTypeFilter] = useState<DocumentTypeFilter>("all");
   const [selectedVehicleId, setSelectedVehicleId] = useState("");
-  const [documentType, setDocumentType] = useState<DocumentType>("rc");
+  const [documentType, setDocumentType] = useState<AdminDocumentType>("rc");
   const [expiresAt, setExpiresAt] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [fileInputKey, setFileInputKey] = useState(0);
@@ -449,7 +450,7 @@ export default function AdminDocumentsPage() {
                   id="document-type"
                   className="form-input form-select"
                   value={documentType}
-                  onChange={(event) => setDocumentType(event.target.value as DocumentType)}
+                  onChange={(event) => setDocumentType(event.target.value as AdminDocumentType)}
                 >
                   {DOCUMENT_TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
                 </select>
