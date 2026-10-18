@@ -45,7 +45,7 @@ function formatDate(value?: string | null) {
   }).format(new Date(value));
 }
 
-function documentLabel(type: AdminDocumentType) {
+function documentLabel(type: VehicleDocument["doc_type"]) {
   return DOCUMENT_TYPES.find((item) => item.value === type)?.label ?? type;
 }
 
