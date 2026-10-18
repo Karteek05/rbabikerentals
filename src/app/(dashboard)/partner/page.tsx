@@ -143,7 +143,7 @@ export default function PartnerDashboardPage() {
     <main className="partner-dashboard-page">
       <PartnerPageHeader
         title="Investor dashboard"
-        subtitle={`${formatDateRangeLabel(range.from, range.to)} · Values use booking creation dates and are not investor payouts`}
+        subtitle={formatDateRangeLabel(range.from, range.to)}
         onFilterClick={() => setFilterOpen(true)}
       />
 
