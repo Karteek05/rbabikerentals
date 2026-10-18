@@ -61,6 +61,7 @@ export default function AdminDocumentsPage() {
   const [vehicles, setVehicles] = useState<AdminVehicle[]>([]);
   const [rows, setRows] = useState<DocumentRow[]>([]);
   const [filter, setFilter] = useState<DocumentFilter>("all");
+  const [search, setSearch] = useState("");
   const [vehicleCategoryFilter, setVehicleCategoryFilter] = useState<VehicleCategoryFilter>("all");
   const [documentTypeFilter, setDocumentTypeFilter] = useState<DocumentTypeFilter>("all");
   const [selectedVehicleId, setSelectedVehicleId] = useState("");
