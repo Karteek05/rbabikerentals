@@ -171,7 +171,6 @@ export default function MyBookingsPage() {
     const updated = refreshed.find((item) => item.id === bookingId);
     if (updated?.status === "confirmed" || updated?.status === "extended") {
       showSuccess("Payment confirmed. Your booking is now confirmed.");
-      setQrBookingId(null);
       setError(null);
       return true;
     }
