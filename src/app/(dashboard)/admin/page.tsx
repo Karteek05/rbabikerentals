@@ -11,9 +11,8 @@ import {
   getVehicleDisplayName,
   resolveVehicleThumbnail
 } from "@/lib/fleet/display";
-import { getKycAdminBadge } from "@/lib/kyc/admin-labels";
-import type { BookingStatus, KycStatus, PricingQuote } from "@/lib/types/domain";
 import { formatBookingStatus } from "@/lib/bookings/status-labels";
+import type { BookingStatus, PricingQuote } from "@/lib/types/domain";
 import { StatCardsSkeleton, Skeleton } from "@/components/ui/Skeleton";
 import { useToast } from "@/app/components/ToastProvider";
 
@@ -41,7 +40,6 @@ type Booking = {
     phone?: string | null;
     pan_number?: string | null;
     date_of_birth?: string | null;
-    kyc_status?: KycStatus | null;
   } | null;
 };
 
@@ -137,10 +135,6 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function KycStatusBadge({ status }: { status?: KycStatus | null }) {
-  const { label, badgeClass } = getKycAdminBadge(status);
-  return <span className={`badge ${badgeClass}`}>{label}</span>;
-}
 
 function truncateFleetId(id: string, max = 14) {
   if (id.length <= max) return id;
@@ -1460,9 +1454,6 @@ export default function AdminDashboardPage() {
                         </div>
                         <div className="text-xs text-muted">{booking.user?.email ?? booking.user_id}</div>
                         {booking.user?.phone && <div className="text-xs text-muted">{booking.user.phone}</div>}
-                        <div style={{ marginTop: 6 }}>
-                          <KycStatusBadge status={booking.user?.kyc_status} />
-                        </div>
                       </td>
                       <td className="td-muted">
                         <div style={{ fontWeight: 700 }}>{getVehicleDisplayName(booking.vehicle_id)}</div>

@@ -2,6 +2,7 @@ export type Role = "customer" | "partner_investor" | "admin";
 
 export type PartnerApplicationStatus = "pending" | "approved" | "rejected";
 
+// Legacy persisted status; active application flows do not perform identity verification.
 export type KycStatus =
   | "not_started"
   | "in_progress"
@@ -12,6 +13,7 @@ export type KycStatus =
 
 export type BookingStatus =
   | "draft"
+// `pending_kyc` is retained for historical bookings only; new bookings do not enter this state.
   | "pending_kyc"
   | "admin_review"
   | "payment_pending"
@@ -147,23 +149,6 @@ export interface DamageIncident {
   created_at: string;
 }
 
-export interface KycRecord {
-  user_id: string;
-  status: KycStatus;
-  provider: "setu_digilocker";
-  request_id?: string;
-  reference_id?: string;
-  consent_scopes?: string[];
-  aadhaar_verified: boolean;
-  dl_verified: boolean;
-  cibil_score?: number | null;
-  cibil_risk_band?: "low" | "medium" | "high" | "unknown" | null;
-  cibil_checked_at?: string | null;
-  pan_last4?: string | null;
-  needs_manual_review: boolean;
-  failure_reason?: string;
-  updated_at: string;
-}
 
 export interface AuditEvent {
   id: string;

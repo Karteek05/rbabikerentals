@@ -76,9 +76,8 @@ describe("direct payment booking flow", () => {
     ).rejects.toMatchObject({ code: "invalid_pickup_location" });
   });
 
-
-  it("allows admin to approve a booking that is still pending KYC", async () => {
-    const bookingId = `booking_pending_kyc_${Date.now()}`;
+  it("allows admin to approve a booking in the legacy review state", async () => {
+    const bookingId = `booking_legacy_review_${Date.now()}`;
     const baseTime = Date.now();
 
     store.bookings.push({
@@ -112,7 +111,7 @@ describe("direct payment booking flow", () => {
 
     const approved = await approveBooking(
       bookingId,
-      { note: "manual approval without KYC for current ops" },
+      { note: "manual approval of legacy review" },
       { userId: "admin_001", role: "admin" }
     );
 

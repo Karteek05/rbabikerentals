@@ -9,8 +9,7 @@ This repository contains a Bengaluru-only Phase 1 implementation scaffold for:
 - Next.js (App Router)
 - Better Auth session integration (`/api/auth/[...all]`)
 - Supabase repository support + schema (`db/schema.sql`)
-- Razorpay order + webhook flow
-- Setu DigiLocker start/callback/status flow
+- Razorpay order + webhook flow. Aadhaar/DigiLocker identity verification is paused pending required permissions; existing records remain in the database and no identity provider is contacted.
 
 ## Quick Start
 1. Copy `.env.example` to `.env`.
@@ -33,7 +32,7 @@ This project is a single Next.js app (App Router + API routes), so `npm run dev`
 4. For local header-auth testing only, set `ALLOW_DEV_HEADERS=true` in `.env` and restart the dev server.
 
 ## Current Auth Model (Scaffold)
-Better Auth is wired. Session users are bootstrapped into `app_users` on first authenticated request, and KYC records are auto-created on first KYC/booking access.
+Better Auth is wired. Session users are bootstrapped into `app_users` on first authenticated request. Identity verification is paused; historical identity records are not created, read, or updated by active application flows.
 
 For local development without a Better Auth session, temporarily set `ALLOW_DEV_HEADERS=true` and use request headers:
 - `x-user-id`
@@ -46,8 +45,6 @@ Never enable `ALLOW_DEV_HEADERS=true` in staging or production.
 - `POST /api/bookings`
 - `POST /api/bookings/[id]/extend`
 - `POST /api/bookings/[id]/cancel`
-- `POST /api/kyc/digilocker/start`
-- `GET /api/kyc/[userId]`
 - `GET /api/partner/revenue` (partner/investor-scoped gross booking analytics)
 - `GET /api/partner/dashboard`
 - `GET /api/partner/vehicles`
@@ -78,13 +75,8 @@ Never enable `ALLOW_DEV_HEADERS=true` in staging or production.
 - `GET /api/vehicles/[id]/documents`
 - `POST /api/payments/refund`
 - `POST /api/webhooks/razorpay`
-- `POST /api/kyc/digilocker/callback`
-- `GET /api/kyc/digilocker/status/[requestId]`
 - `POST /api/maps/distance`
 - `POST /api/maps/reverse-geocode`
-- `GET /api/admin/kyc/manual-review`
-- `POST /api/admin/kyc/[userId]/approve`
-- `POST /api/admin/kyc/[userId]/reject`
 - `GET /api/customer/bookings`
 - `POST /api/bookings/[id]/damage`
 - `GET /api/partner/tracking`
@@ -112,7 +104,6 @@ Security-sensitive environment variables to configure before staging/production:
 - `RAZORPAY_KEY_ID`
 - `RAZORPAY_KEY_SECRET`
 - `RAZORPAY_WEBHOOK_SECRET`
-- `SETU_WEBHOOK_SECRET`
 - `CIBIL_PROVIDER_MODE` (`mock` until provider contract keys are available)
 - `JOB_SECRET`
 - Supabase service credentials

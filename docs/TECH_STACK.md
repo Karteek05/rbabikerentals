@@ -6,7 +6,7 @@ Phase 1 will ship as a single web application with role-segmented experiences (`
 - Better Auth for authentication/session handling with role claims.
 - Supabase (PostgreSQL + Storage + RLS) for core data, files, and access control.
 - Razorpay for booking payments and security deposit collection workflows.
-- Setu DigiLocker for Aadhaar + Driving Licence KYC.
+- No Aadhaar/DigiLocker provider is active; identity-document verification is paused pending required permissions.
 - Notification provider abstraction for WhatsApp/SMS alerts.
 
 ## 2. Stack Components
@@ -36,14 +36,11 @@ Auth strategy:
 ## 2.3 Data + Storage: Supabase
 Why:
 - Managed Postgres with strong SQL modeling and easy migrations.
-- Storage bucket model fits KYC docs, vehicle docs, damage photos.
-- RLS enables strict multi-tenant row-level isolation.
+- Storage: vehicle compliance docs and incident media. Existing KYC records are retained only for historical compatibility.
 
 Usage:
 - Postgres: users, vehicles, bookings, pricing rules, blocks, payouts, audits.
-- Storage: KYC evidence references, vehicle compliance docs, incident media.
-- RLS: role and ownership enforcement.
-
+- Storage: vehicle compliance docs and incident media. Historical KYC records remain in the database only for compatibility; active code has no access to them.
 ## 2.4 Payments: Razorpay
 Why:
 - India-first payment rails (UPI/cards/wallets).
@@ -55,16 +52,8 @@ Phase 1 payments:
 - Security deposit capture/hold-style operational flow (actual implementation depends on configured Razorpay pattern and legal/accounting setup).
 - Refund support for cancellations and deposit return flows.
 
-## 2.5 KYC: Setu DigiLocker Integration
-Why:
-- Faster integration path with clean REST APIs.
-- Government-backed document retrieval and consent-first approach.
-- Supports Aadhaar + DL retrieval/verification scenarios needed for onboarding.
-
-Policy:
-- Primary: DigiLocker-based Aadhaar + DL verification.
-- Fallback: Admin manual review queue.
-- CIBIL: captured as review signal only in Phase 1, not hard auto-block.
+## 2.5 Identity verification: Paused
+Automated Aadhaar/DigiLocker verification is disabled pending required permissions. Provider integration code and identity-facing UI/API routes are removed. Historical database records are retained; application runtime does not access or update them. Credit bureau checks remain unimplemented and non-blocking.
 
 ## 2.6 Notifications: Provider Abstraction
 Why:
@@ -72,8 +61,7 @@ Why:
 - Uniform templating/event model for OTP, booking alerts, policy reminders.
 
 Phase 1 events:
-- OTP and KYC updates.
-- Booking confirmation.
+- Booking and account updates.
 - Ride reminders.
 - Cancellation/refund updates.
 - Insurance/document expiry reminders.
@@ -88,7 +76,7 @@ Phase 1 events:
 ## 4. Security and Compliance Posture
 - RLS enabled on all app-facing tables in exposed schema.
 - Service role key only on trusted server-side paths.
-- KYC/PII fields encrypted at rest where applicable and access-restricted by role.
+- Restrict access to account PII and vehicle documents; legacy identity records are not used by active flows.
 - Audit logging for admin and partner operational actions.
 - Retention policy for sensitive documents with controlled lifecycle.
 
@@ -106,5 +94,4 @@ Phase 1 events:
 
 ## 7. Alternatives Considered and Rejected (Phase 1)
 - Separate frontend apps per role: rejected due to velocity and operational overhead.
-- Supabase Auth as primary auth: deferred because team preference is Better Auth.
-- Direct DigiLocker integration first: deferred to reduce integration overhead and speed execution.
+- Direct DigiLocker integration is paused until permissions are obtained.

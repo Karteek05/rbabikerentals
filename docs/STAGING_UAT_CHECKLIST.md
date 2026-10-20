@@ -17,12 +17,6 @@ Last updated: April 19, 2026
    - `RAZORPAY_KEY_SECRET`
    - `RAZORPAY_WEBHOOK_SECRET`
    - `GOOGLE_MAPS_API_KEY`
-   - `SETU_CLIENT_ID`
-   - `SETU_CLIENT_SECRET`
-   - `SETU_PRODUCT_INSTANCE_ID`
-   - `SETU_DIGILOCKER_BASE_URL`
-   - `SETU_REDIRECT_URL`
-   - `SETU_WEBHOOK_SECRET`
    - `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM`, `ADMIN_EMAIL`
    - `CIBIL_PROVIDER_MODE=mock` until live CIBIL credentials are handed off
    - `JOB_SECRET`
@@ -41,28 +35,22 @@ Last updated: April 19, 2026
 4. Create and deactivate a pickup location in admin; confirm only active locations appear in homepage, browse, and booking, and an inactive location is rejected by booking APIs.
 
 ## 3) Payment Validation
-1. Create booking and confirm it reaches `admin_review` after KYC is verified.
-2. Admin approves it and confirms it moves to `payment_pending`.
-3. Create Razorpay order via `/api/payments/order`.
+1. Create a booking and confirm it can proceed to payment without an Aadhaar/DigiLocker check.
+2. Confirm new bookings are created in `payment_pending` and require no identity-provider approval.
+3. Create a Razorpay order via `/api/payments/order`.
 4. Re-hit `/api/payments/order` for the same booking and confirm the existing open order is reused.
 5. Confirm a customer cannot create a payment order for another customer booking.
-6. Trigger webhook test event to `/api/webhooks/razorpay`.
+6. Trigger a webhook test event to `/api/webhooks/razorpay`.
 7. Confirm booking moves to `confirmed` on `payment.captured`.
 8. Confirm admin refund creation via `/api/payments/refund` after captured payment reconciliation.
 9. Verify payment is not marked paid when Razorpay is unavailable; no manual UPI/third-party QR path is offered.
 10. On `/admin/payments`, verify Razorpay mode is `test`, `live`, `unconfigured`, or `unknown` without exposing credentials; production must use a matching `rzp_live_` key ID and secret.
-11. After a refund request, verify customer My Bookings shows the initiated/partial/refunded state accurately; “initiated” means provider accepted, not bank settlement.
+11. After a refund request, verify My Bookings shows initiated/partial/refunded state accurately; “initiated” means provider accepted, not bank settlement.
 
-## 4) KYC Validation
-1. Start KYC: `/api/kyc/digilocker/start`.
-2. Validate callback handling: `/api/kyc/digilocker/callback` with correct `x-setu-webhook-secret`.
-3. Validate callback rejection with an invalid or missing webhook secret.
-4. Validate status polling: `/api/kyc/digilocker/status/[requestId]`.
-5. Confirm a customer cannot poll another user's KYC request.
-6. Validate admin queue and approve/reject:
-   - `/api/admin/kyc/manual-review`
-   - `/api/admin/kyc/[userId]/approve`
-   - `/api/admin/kyc/[userId]/reject`
+## 4) Identity verification pause
+1. Confirm `/kyc` is not available.
+2. Confirm `/api/kyc/[userId]`, `/api/kyc/digilocker/*`, and `/api/admin/kyc/*` routes are absent.
+3. Confirm booking/payment paths do not call an identity provider or require identity verification.
 
 ## 4.1) Booking integrity validation
 1. Create a booking with a valid duration window for the selected plan.
@@ -106,8 +94,7 @@ Last updated: April 19, 2026
    - Fleet ops: upload/remove vehicle images.
    - Fleet ops: edit hourly, daily, weekly, and monthly rates, deposit, included mileage by duration, and extra-kilometre fee for scooter, bike, and EV-bike catalogues; verify public browse cards and booking quotes use saved values.
    - Confirm tax, package discount, and payment balance remain system-calculated rather than manually editable.
-   - View bookings -> reject booking.
-   - View KYC queue -> approve/reject entries.
+   - View bookings -> approve/reject.
    - Monitor live fleet locations.
 
 4. Payments & refunds: inspect payment mode and request a valid full/partial refund; confirm failure messages remain visible.

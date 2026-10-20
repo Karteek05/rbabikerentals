@@ -96,22 +96,6 @@ export interface AssignBookingVehicleRequest {
   assigned_vehicle_id: string;
 }
 
-export interface KycStartRequest {
-  user_id: string;
-}
-
-export interface KycCallbackRequest {
-  requestId: string;
-  status?: "verified" | "failed" | "manual_review";
-  aadhaarVerified?: boolean;
-  dlVerified?: boolean;
-  cibilScore?: number | null;
-  failureReason?: string;
-}
-
-export interface KycAdminDecisionRequest {
-  reason?: string;
-}
 
 export interface ApiSuccess<T> {
   ok: true;

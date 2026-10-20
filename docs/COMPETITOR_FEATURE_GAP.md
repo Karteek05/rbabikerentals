@@ -19,8 +19,7 @@ Last updated: April 19, 2026
 - Role-gated dashboards (customer, partner, admin).
 - Admin fleet operations: add/edit/deactivate/delete vehicles + image upload/remove.
 - Partner/admin live vehicle tracking map.
-- Booking lifecycle (create, extend, cancel) with pricing quote flow.
-- DigiLocker KYC integration boundary + admin manual-review queue.
+- Booking lifecycle (create, extend, cancel) with pricing quote flow; Aadhaar/DigiLocker verification is paused pending required permissions.
 - Razorpay order + webhook confirmation flow.
 
 ## Missing Features vs Market (Priority)

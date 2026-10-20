@@ -34,16 +34,10 @@ This document tracks the production-safety fixes that have already been implemen
 - Database schema now adds a partial unique index to allow only one `created` payment order per booking.
 - Admin refund support is wired through `POST /api/payments/refund` and stores Razorpay payment/refund identifiers for reconciliation.
 
-### 4. KYC callback protection
-- DigiLocker callback endpoint now requires `SETU_WEBHOOK_SECRET`.
-- Missing webhook secret is treated as server misconfiguration.
-- Invalid webhook secret is rejected with `401`.
-- KYC status polling is now scoped to the authenticated user unless the actor is admin.
-- KYC verification is no longer granted from boolean fields alone.
-- Callback processing now requires provider status intent:
-  - `failed` -> `failed`
-  - `verified` + Aadhaar + DL verified -> `verified`
-  - anything else -> `manual_review`
+### 4. Identity verification paused
+- Aadhaar/DigiLocker UI, provider integration, callback/polling routes, and KYC review APIs are disabled pending required permissions.
+- Historical identity records remain in the schema for compatibility and are not read or updated by active application flows.
+- No Setu credentials or migration are required for this cutover.
 
 ### 5. Database safety
 - Booking table now has a GiST exclusion constraint to prevent overlapping active bookings for the same vehicle.
@@ -83,11 +77,6 @@ Before staging or production, configure all of the following:
 - `RAZORPAY_KEY_SECRET`
 - `RAZORPAY_WEBHOOK_SECRET`
 - `GOOGLE_MAPS_API_KEY`
-- `SETU_CLIENT_ID`
-- `SETU_CLIENT_SECRET`
-- `SETU_PRODUCT_INSTANCE_ID`
-- `SETU_REDIRECT_URL`
-- `SETU_WEBHOOK_SECRET`
 - `SMTP_HOST`
 - `SMTP_PORT`
 - `SMTP_USER`
@@ -101,7 +90,7 @@ Before staging or production, configure all of the following:
 
 - Investor reporting now interprets selected dates and weekly/monthly groups in `Asia/Kolkata`; ranges include the complete final calendar day.
 - Razorpay is required for checkout. When unavailable, order creation returns `503`; the untracked UPI/third-party QR fallback is removed.
-- Payment-order creation, KYC start/status/callback, and authenticated internal job/tracking routes now have rate limits. Supabase-backed limits are used when configured; development may use in-memory limits.
+- Investor reporting uses `Asia/Kolkata`; Razorpay payment paths and internal scheduled-job/tracking routes are rate-limited. No KYC provider routes are active.
 - Production vehicle-document and image uploads no longer fall back to instance-local files. Vehicle documents must use a private Supabase Storage bucket; vehicle images use the configured public image bucket.
 - Empty storage bucket environment values fall back to the documented bucket names.
 - Database rate-limit records older than 24 hours are cleaned during rate-limit checks.
@@ -111,29 +100,24 @@ Before staging or production, configure all of the following:
 These items are still recommended before a full production launch:
 
 ### Blockers before real public launch
-- Add an automated database-backed test for concurrent same-vehicle booking attempts; source tests now cover invalid KYC callback secrets, cross-user payment orders, duration mismatch, and disabled payment configuration.
+- Add an automated database-backed test for concurrent same-vehicle booking attempts; source tests cover cross-user payment orders, duration mismatch, and disabled payment configuration.
 - Verify Better Auth sign-in, email OTP, and password-reset throttling in the chosen production setup; the route-specific limits above do not cover those provider-managed endpoints.
 
 ### Strongly recommended next
 - Add true idempotency keys for payment-order creation to eliminate duplicate external Razorpay orders under concurrent requests.
 - Add booking/payment reconciliation jobs for orphaned provider orders and webhook gaps.
-- Add structured server logging and alerting for:
-  - failed webhooks
-  - KYC manual-review spikes
-  - booking overlap conflicts
-  - internal job failures
+- Add structured server logging and alerting for failed webhooks, booking overlap conflicts, and internal job failures.
 - Add admin tooling to replay failed webhooks safely.
-- Add retention/deletion policy for KYC-related operational metadata.
 
 ### Nice next improvements
 - Add request tracing / correlation IDs.
 - Add security test coverage in CI.
 - Add audit dashboards for privileged admin and partner actions.
-- Add staging smoke tests for booking, KYC, payments, and tracking flows.
+- Add staging smoke tests for booking, payments, and tracking flows.
 
 ## Operational Reminder
 
 After merging these hardening changes:
 1. Run `npm run migrate` against the target Supabase database.
 2. Run `npm run seed` only in non-production environments where seed data is appropriate.
-3. Re-test booking creation, extension, payment order creation, KYC callback flow, and admin/partner dashboards in staging.
+3. Re-test booking creation, extension, payment order creation, and admin/partner dashboards in staging.

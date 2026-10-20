@@ -12,10 +12,11 @@ import {
 	MapPin,
 	Pencil,
 	Phone,
-	ShieldCheck,
 	Trash2,
+	ShieldCheck,
 	UserRound,
 } from "lucide-react";
+import type { Booking, User } from "@/lib/types/domain";
 import { authClient } from "@/lib/auth/auth-client";
 import {
 	formatBookingReference,
@@ -27,7 +28,6 @@ import {
 	startGoogleSignIn,
 } from "@/lib/auth/google-sign-in";
 import { COMPANY } from "@/lib/legal/company";
-import type { Booking, KycStatus, User } from "@/lib/types/domain";
 import BookingRequirementsPanel from "@/components/BookingRequirementsPanel";
 import { useToast } from "@/app/components/ToastProvider";
 import {
@@ -80,11 +80,6 @@ export default function ProfilePage() {
 	const [savingProfile, setSavingProfile] = useState(false);
 	const [profileForm, setProfileForm] = useState({ name: "", phone: "" });
 	const [bookingsError, setBookingsError] = useState("");
-	const [kyc, setKyc] = useState<{
-		status: KycStatus;
-		aadhaar_verified: boolean;
-		dl_verified: boolean;
-	} | null>(null);
 
 	const fetchOptions = {
 		credentials: "include" as const,
@@ -175,40 +170,6 @@ export default function ProfilePage() {
 		};
 	}, [account?.authenticated, account?.user]);
 
-	useEffect(() => {
-		if (!account?.authenticated || !account.user) {
-			setKyc(null);
-			return;
-		}
-
-		const userId = account.user.id;
-		let cancelled = false;
-
-		async function loadKyc() {
-			try {
-				const response = await fetch(`/api/kyc/${userId}`, fetchOptions);
-				const json = await response.json();
-				if (!response.ok || !json.ok || !json.data) {
-					if (!cancelled) setKyc(null);
-					return;
-				}
-				if (!cancelled) {
-					setKyc({
-						status: json.data.status as KycStatus,
-						aadhaar_verified: Boolean(json.data.aadhaar_verified),
-						dl_verified: Boolean(json.data.dl_verified),
-					});
-				}
-			} catch {
-				if (!cancelled) setKyc(null);
-			}
-		}
-
-		void loadKyc();
-		return () => {
-			cancelled = true;
-		};
-	}, [account?.authenticated, account?.user]);
 
 	const user = account?.user ?? null;
 
@@ -446,28 +407,6 @@ export default function ProfilePage() {
 						</div>
 					</div>
 
-					{user.kyc_status !== "verified" ? (
-						<div className="mt-6 flex flex-col gap-3 rounded-[var(--radius-md)] border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center sm:justify-between">
-							<div className="flex items-start gap-3">
-								<ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-amber-800" />
-								<div>
-									<p className="font-bold text-amber-900">
-										Identity verification required
-									</p>
-									<p className="mt-1 text-sm text-amber-900/80">
-										Complete identity verification so we can review and confirm your
-										booking.
-									</p>
-								</div>
-							</div>
-							<Link
-								href="/kyc?return=/profile"
-								className="btn-primary shrink-0 text-sm"
-							>
-								Verify now
-							</Link>
-						</div>
-					) : null}
 
 					<div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
 						<div className="rounded-[var(--radius-md)] border border-[color:var(--color-line)] bg-[color:var(--color-paper)] p-4">
@@ -659,7 +598,7 @@ export default function ProfilePage() {
 					</div>
 					<div className="mt-5 grid gap-3">
 						{pendingBookings.map((booking) => (
-							<RideCard key={booking.id} booking={booking} kyc={kyc} />
+							<RideCard key={booking.id} booking={booking} />
 						))}
 					</div>
 				</section>
@@ -690,7 +629,7 @@ export default function ProfilePage() {
 							</div>
 						) : confirmedRides.length ? (
 							confirmedRides.map((booking) => (
-								<RideCard key={booking.id} booking={booking} kyc={kyc} />
+								<RideCard key={booking.id} booking={booking} />
 							))
 						) : (
 							<div className="rounded-[var(--radius-md)] border border-dashed border-[color:var(--color-line)] bg-[color:var(--color-paper)] p-6 text-center">
@@ -808,17 +747,7 @@ function ProfileFact({
 	);
 }
 
-function RideCard({
-	booking,
-	kyc,
-}: {
-	booking: Booking;
-	kyc: {
-		status: KycStatus;
-		aadhaar_verified: boolean;
-		dl_verified: boolean;
-	} | null;
-}) {
+function RideCard({ booking }: { booking: Booking }) {
 	return (
 		<article className="grid gap-4 rounded-[var(--radius-md)] border border-[color:var(--color-line)] bg-[color:var(--color-paper)] p-4 sm:grid-cols-[minmax(0,1fr)_auto]">
 			<div className="min-w-0">
@@ -874,10 +803,6 @@ function RideCard({
 					bookingStatus={booking.status}
 					pickupAt={booking.pickup_at}
 					dropAt={booking.drop_at}
-					kycStatus={kyc?.status}
-					aadhaarVerified={kyc?.aadhaar_verified}
-					dlVerified={kyc?.dl_verified}
-					returnTo="/profile"
 				/>
 			</div>
 		</article>

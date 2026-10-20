@@ -17,6 +17,8 @@ Use a business email on the production domain before sending these. Suggested se
    - KYC data-use and retention policy
 5. Use provider dashboards only with company-owned email IDs, not personal Gmail accounts.
 
+> **Paused:** Do not send this Setu/DigiLocker outreach draft or configure its callback. Aadhaar/DigiLocker integration is disabled pending required permissions.
+
 ## Email 1: Setu DigiLocker API Access
 
 Subject: Request for DigiLocker API sandbox and production access for bike rental KYC
@@ -36,8 +38,7 @@ Business details:
 - Website: https://rbabikerentals.com
 - Launch geography: Bengaluru, India
 - Business category: bike and scooter rental
-- Callback URL: https://rbabikerentals.com/api/kyc/digilocker/callback
-- Redirect URL: https://rbabikerentals.com/kyc
+- Callback URL: not configured; identity verification is paused.
 
 Please share the onboarding requirements for sandbox credentials, production approval, allowed scopes, callback payload schema, pricing, compliance documents, and estimated review timeline.
 

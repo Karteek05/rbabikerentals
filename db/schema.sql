@@ -230,6 +230,7 @@ create index if not exists idx_bookings_status_created_at on bookings(status, cr
 -- conflicts with multi-unit inventory for the same scooter model.
 alter table if exists bookings drop constraint if exists bookings_vehicle_active_window_excl;
 
+-- Retained for compatibility with historical identity records; active app flows do not read/write this table.
 create table if not exists kyc_records (
   user_id text primary key references app_users(id),
   status kyc_status_type not null default 'not_started',

@@ -2,7 +2,6 @@ import type {
   AuditEvent,
   Booking,
   DamageIncident,
-  KycRecord,
   NotificationJob,
   PaymentEvent,
   PaymentOrder,
@@ -85,7 +84,6 @@ export const store: {
   users: User[];
   vehicles: Vehicle[];
   bookings: Booking[];
-  kycRecords: KycRecord[];
   vehicleBlocks: VehicleBlockWindow[];
   vehicleLiveLocations: VehicleLiveLocation[];
   damageIncidents: DamageIncident[];
@@ -124,7 +122,7 @@ export const store: {
       name: "Nikhil Fleet Partner",
       role: "partner_investor",
       city: "bengaluru",
-      kyc_status: "verified",
+      kyc_status: "not_started",
       partner_application_status: "approved"
     },
     {
@@ -132,35 +130,11 @@ export const store: {
       name: "RBA Admin",
       role: "admin",
       city: "bengaluru",
-      kyc_status: "verified"
+      kyc_status: "not_started"
     }
   ],
   vehicles: generateVehicles(),
   bookings: [],
-  kycRecords: [
-    {
-      user_id: "cust_001",
-      status: "verified",
-      provider: "setu_digilocker",
-      aadhaar_verified: true,
-      dl_verified: true,
-      cibil_score: 782,
-      cibil_risk_band: "low",
-      cibil_checked_at: now,
-      pan_last4: "1234",
-      needs_manual_review: false,
-      updated_at: now
-    },
-    {
-      user_id: "cust_002",
-      status: "not_started",
-      provider: "setu_digilocker",
-      aadhaar_verified: false,
-      dl_verified: false,
-      needs_manual_review: false,
-      updated_at: now
-    }
-  ],
   vehicleBlocks: [],
   vehicleLiveLocations: [
     {

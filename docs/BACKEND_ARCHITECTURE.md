@@ -15,8 +15,7 @@ Core principles:
 - Authorization middleware for API routes.
 
 ## 2.2 `users`
-- Customer, partner_investor, admin profiles.
-- KYC status metadata and account lifecycle.
+- Customer, partner_investor, and admin profiles; legacy identity-status fields are retained for database compatibility only.
 
 ## 2.3 `vehicles`
 - Vehicle catalog, availability windows, operational status.
@@ -34,13 +33,12 @@ Core principles:
 - Razorpay order creation, callbacks/webhooks, reconciliation.
 - Booking payment and deposit accounting records.
 
-## 2.7 `kyc`
-- DigiLocker start/check flows via Setu.
-- KYC decisioning with manual-review fallback path.
+## 2.7 Identity verification (paused)
+Identity-document verification through Aadhaar/DigiLocker is paused pending required permissions. There are no active provider, callback, polling, customer-status, or admin-review endpoints. Existing KYC records remain stored for historical compatibility; no provider is contacted.
 
 ## 2.8 `documents`
 - Vehicle compliance docs and expiry tracking.
-- Incident evidence and KYC artifact references.
+- Incident evidence and existing KYC record references.
 
 ## 2.9 `partner_ops`
 - Revenue aggregates and booking insights.
@@ -48,7 +46,7 @@ Core principles:
 
 ## 2.10 `admin_ops`
 - Platform-wide booking oversight.
-- KYC queue operations.
+- Booking review, fleet governance, and policy management.
 - Reject/override actions and governance workflows.
 
 ## 2.11 `tracking`
@@ -123,10 +121,9 @@ For booking creation and extension, the server derives billable duration from ac
 3. Customer submits booking via `POST /api/bookings`.
 4. Booking service recomputes duration from pickup/drop timestamps and refuses mismatched duration plans.
 5. Booking overlap is checked both in application logic and at the database constraint layer.
-6. Booking enters `pending_kyc` or `admin_review` based on KYC status.
-7. Admin approval moves the booking to `payment_pending`.
-8. Customer payment creates or reuses a single active Razorpay order for that booking.
-9. On verified success callback, status moves to `confirmed`.
+6. New bookings enter `payment_pending` and do not depend on identity-provider verification.
+7. Customer payment creates or reuses a single active Razorpay order for that booking.
+8. On verified payment success, status moves to `confirmed`.
 
 ## 6.2 Extension and recalculation
 1. Customer calls `POST /api/bookings/{id}/extend`.
@@ -164,8 +161,6 @@ For booking creation and extension, the server derives billable duration from ac
 - `POST /api/bookings`
 - `POST /api/bookings/{id}/extend`
 - `POST /api/bookings/{id}/cancel`
-- `POST /api/kyc/digilocker/start`
-- `GET /api/kyc/{userId}`
 - `GET /api/partner/revenue`
 - `GET /api/partner/tracking`
 - `POST /api/vehicles/{id}/block`
@@ -188,8 +183,7 @@ For booking creation and extension, the server derives billable duration from ac
 - First authenticated session bootstraps an `app_users` row when missing.
 
 ## 8.2 Supabase RLS strategy
-- Enable RLS on all exposed app tables.
-- Customer sees only own booking/KYC scoped rows.
+- Customer sees only own bookings; legacy identity records are not exposed through active APIs.
 - Partner sees only owned/invested vehicle and derived booking/revenue rows.
 - Admin role can view/operate all governed rows via secure server-side pathways.
 
@@ -198,15 +192,14 @@ For booking creation and extension, the server derives billable duration from ac
 - Never exposed to browser clients.
 
 ## 8.4 Audit and traceability
-- All admin rejects/overrides, partner block changes, and KYC decisions are audit logged.
+- All admin booking decisions/overrides and partner block changes are audit logged.
 - Audit records immutable and queryable for incident review.
 - System-driven events such as webhook processors are allowed to write audit entries without requiring a matching human `app_users` row.
 
-## 8.5 KYC and PII handling
-- Store only necessary KYC metadata and document references.
-- Apply retention windows and deletion/archive policy for sensitive artifacts.
-- Restrict raw document access to authorized admin workflows.
-- DigiLocker callback ingestion requires a shared webhook secret and does not auto-verify users from boolean fields alone.
+## 8.5 Identity-data handling
+- Automated Aadhaar/DigiLocker verification and its callback, polling, and review APIs are disabled pending required permissions.
+- Existing KYC records remain in the database for historical compatibility; this code does not read or update them.
+- Do not enable identity provider credentials or expose historical identity fields in user interfaces.
 
 ## 8.6 Transport and browser hardening
 - Global HTTP responses include a Content Security Policy and baseline browser security headers.
@@ -220,20 +213,18 @@ For booking creation and extension, the server derives billable duration from ac
 
 ## 9.2 Scenario validation
 1. Successful booking with coupon + deposit collection.
-2. KYC pass path vs manual-review fallback.
-3. Extension flow with availability check and differential charging.
-4. Cancellation with policy-based charges/refund.
-5. Partner block window preventing new booking.
-6. Admin reject action with complete audit trail.
+2. Cancellation with policy-based charges/refund.
+3. Partner block window preventing new booking.
+4. Admin reject action with complete audit trail.
 
 ## 9.3 Security validation
 1. Role-to-endpoint access matrix enforced.
 2. RLS policy intent validated by role simulation.
-3. KYC document access constraints and retention enforcement confirmed.
+3. Vehicle-document access constraints and retention enforcement confirmed.
 
 ## 10. Assumptions and Constraints
 - Phase 1 remains web-only.
 - `partner_investor` merged role for velocity.
 - CIBIL remains non-blocking, manual-review signal.
-- DigiLocker design follows current requester/partner consent constraints and June 2, 2025 requester terms, implemented through Setu-first integration path.
+- Aadhaar/DigiLocker verification is paused until the business obtains required permissions.
 - Geography is Bengaluru-only in Phase 1; location data model remains extensible for later city expansion.

@@ -22,17 +22,13 @@ Last updated: April 19, 2026
   - `BookingStatus`
   - `PricingQuote`
 - [x] Vehicle live-location model added (`VehicleLiveLocation`) for map tracking.
-- [x] In-memory Bengaluru seed data added (users, vehicles, KYC).
+- [x] In-memory Bengaluru seed data added (users and vehicles; historical KYC records retained in schema only).
 - [x] Booking state machine guard implemented.
 - [x] Pricing engine implemented (duration, coupon, helmet, tax, deposit, excess KM rate).
 - [x] Booking lifecycle service implemented:
   - create booking
   - extend booking
   - cancel booking
-- [x] KYC service implemented:
-  - start DigiLocker flow
-  - get KYC status
-- [x] Partner revenue aggregation service implemented.
 - [x] Vehicle block window service implemented.
 - [x] Vehicle tracking service implemented (list + upsert for live location pings).
 - [x] Admin booking operations service implemented.
@@ -43,8 +39,6 @@ Last updated: April 19, 2026
 - [x] `POST /api/bookings`
 - [x] `POST /api/bookings/{id}/extend`
 - [x] `POST /api/bookings/{id}/cancel`
-- [x] `POST /api/kyc/digilocker/start`
-- [x] `GET /api/kyc/{userId}`
 - [x] `GET /api/partner/revenue`
 - [x] `GET /api/partner/tracking`
 - [x] `POST /api/vehicles/{id}/block`
@@ -60,16 +54,14 @@ Last updated: April 19, 2026
   - Better Auth
   - Supabase REST/service headers
   - Razorpay order/signature utilities
-  - Setu DigiLocker request creation
 - [x] Postgres schema draft with RLS scaffold added: [schema.sql](../db/schema.sql)
 - [x] Production hardening pass completed for:
   - Better Auth production secret enforcement
-  - default user/KYC bootstrap
+  - Runtime user bootstrap and profile initialization; identity verification itself is paused.
   - booking duration validation from actual timestamps
   - payment order ownership + reuse of active orders
-  - protected DigiLocker webhook callback secret
   - sanitized `5xx` error responses
-  - Booking overlap checks are enforced by the application inventory/assignment flow; production concurrency still needs a database-backed race test.
+  - Booking overlap checks enforced by application inventory/assignment flow; production concurrency still needs a database-backed race test.
   - baseline HTTP security headers
 
 ## Pending (Next Execution Steps)
@@ -96,21 +88,14 @@ Last updated: April 19, 2026
 - [ ] Deposit refund workflow automation and payout reconciliation exports.
 - [ ] Add first-class idempotency key support for external order creation under concurrent retries.
 
-## 4) Setu DigiLocker Hardening
-- [x] DigiLocker start flow integrated with provider boundary.
-- [x] Callback ingestion endpoint implemented.
-- [x] Status polling endpoint implemented.
-- [x] Request IDs/reference IDs/consent scope fields modeled.
-- [x] Admin manual-review queue + approve/reject APIs implemented.
-- [x] Callback endpoint now requires a shared webhook secret.
-- [x] Status polling is now ownership-scoped for customers.
-- [ ] Connect production Setu webhook/callback payload mapping with real field schema.
+## 4) Identity verification pause
+- Aadhaar/DigiLocker UI, provider integration, callbacks, status polling, and manual-review APIs were removed pending required permissions.
+- Historical KYC schema is retained for compatibility; runtime does not query or modify identity records.
+- No Setu environment variables, migration, or cron configuration are required.
 
 ## 5) UI Implementation
 - [x] Customer dashboard flow: quote/create/list/report damage.
-- [x] Partner dashboard flow: revenue + block window action + live vehicle tracking map.
-- [x] Admin dashboard flow: bookings + KYC queue actions + platform tracking map.
-- [x] Admin fleet operations UI: add/edit/deactivate/delete vehicles + image management.
+- [x] Customer, partner, and admin dashboard flows operate without Aadhaar/DigiLocker verification.
 - [ ] UX polish and design refinement pass for production-grade visuals.
 
 ## 6) Operational Jobs
@@ -129,10 +114,9 @@ Last updated: April 19, 2026
 ## Notes
 - This implementation is a strong Phase 1 backend scaffold and API baseline, not yet production-hardened.
 - External/non-code tasks still pending before production:
-  - Set production credentials (`BETTER_AUTH_SECRET`, Supabase, Razorpay, Setu, `JOB_SECRET`).
+  - Set production credentials (`BETTER_AUTH_SECRET`, Supabase, Razorpay, `JOB_SECRET`).
   - Run `npm run migrate` and `npm run seed` on the real Supabase project.
-  - Configure Razorpay webhook URL in Razorpay dashboard.
-  - Configure Setu callback/redirect URL and `SETU_WEBHOOK_SECRET` for production.
+  - No Setu callback or credentials are configured while Aadhaar/DigiLocker verification is paused.
 - Choose and provision a deployment host/project owner; the previous Vercel account is unavailable.
 - Complete staging deployment and Bengaluru UAT signoff.
 - Detailed hardening notes and future backlog are documented in:

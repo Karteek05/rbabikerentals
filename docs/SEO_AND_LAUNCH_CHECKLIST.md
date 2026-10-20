@@ -95,7 +95,6 @@ Target phrases naturally in visible page copy (not keyword stuffing):
 - Paid ads (Google Ads) can bring traffic while organic SEO builds
 
 ---
-
 ## Part 2 — Production launch checklist
 
 ### Infrastructure
@@ -111,8 +110,7 @@ Target phrases naturally in visible page copy (not keyword stuffing):
 - [ ] `BETTER_AUTH_SECRET` — strong random secret
 - [ ] `ALLOW_DEV_HEADERS=false`
 - [ ] Google OAuth redirect URIs include production domain
-- [ ] All webhook secrets configured (Razorpay, Setu DigiLocker)
-- [ ] `JOB_SECRET` set for internal cron/tracking endpoints
+- [ ] Razorpay webhook secret configured; no Setu/DigiLocker secret is required while identity verification is paused.
 
 ### Payments
 - [ ] Razorpay live keys (not test) in production
@@ -120,9 +118,6 @@ Target phrases naturally in visible page copy (not keyword stuffing):
 - [ ] Test full flow: approve booking → pay → webhook → confirmed
 - [ ] Confirm checkout fails without Razorpay keys and payment is recorded only after a verified checkout signature or webhook event
 
-### KYC & email
-- [ ] Setu DigiLocker production credentials
-- [ ] SMTP sending works (`EMAIL_FROM`, `ADMIN_EMAIL`)
 - [ ] Test booking confirmation + payment emails
 
 ### Operations
@@ -146,8 +141,7 @@ Target phrases naturally in visible page copy (not keyword stuffing):
 1. Browse fleet → book → sign in → submit booking
 2. Admin approves → customer pays → booking confirmed
 3. Cancel flow + refund path (admin)
-4. KYC start → callback (staging first)
-5. Mobile checkout on real phone
+4. Mobile checkout on a real phone
 
 ---
 

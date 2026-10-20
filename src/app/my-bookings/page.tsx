@@ -14,7 +14,7 @@ import { authClient } from "@/lib/auth/auth-client";
 import { BookingListSkeleton } from "@/components/ui/Skeleton";
 import { useToast } from "@/app/components/ToastProvider";
 
-import type { KycStatus, PricingQuote } from "@/lib/types/domain";
+import type { PricingQuote } from "@/lib/types/domain";
 
 type Booking = {
   id: string;
@@ -30,11 +30,6 @@ type Booking = {
   refunded_amount?: number;
 };
 
-type CustomerKyc = {
-  status: KycStatus;
-  aadhaar_verified: boolean;
-  dl_verified: boolean;
-};
 
 type NotificationItem = {
   id: string;
@@ -91,7 +86,6 @@ export default function MyBookingsPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [tab, setTab] = useState("all");
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
-  const [kyc, setKyc] = useState<CustomerKyc | null>(null);
 
   const showSuccess = (msg: string) => showToast({ title: "Update complete", message: msg });
 
@@ -127,23 +121,6 @@ export default function MyBookingsPage() {
     }
   }, []);
 
-  const fetchKyc = useCallback(async (userId: string) => {
-    try {
-      const res = await fetch(`/api/kyc/${userId}`, fetchOptions);
-      const json = await res.json();
-      if (!res.ok || !json.ok || !json.data) {
-        setKyc(null);
-        return;
-      }
-      setKyc({
-        status: json.data.status as KycStatus,
-        aadhaar_verified: Boolean(json.data.aadhaar_verified),
-        dl_verified: Boolean(json.data.dl_verified)
-      });
-    } catch {
-      setKyc(null);
-    }
-  }, []);
 
   useEffect(() => {
     if (sessionPending) return;
@@ -154,10 +131,8 @@ export default function MyBookingsPage() {
       setLoading(false);
       return;
     }
-    fetchBookings();
     fetchNotifications();
-    void fetchKyc(session.user.id);
-  }, [fetchBookings, fetchKyc, fetchNotifications, session?.user?.id, sessionPending]);
+  }, [fetchBookings, fetchNotifications, session?.user?.id, sessionPending]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -378,7 +353,7 @@ export default function MyBookingsPage() {
 
   const TABS = [
     { key: "all", label: "All" },
-    { key: "pending_kyc", label: "Identity check" },
+    { key: "pending_kyc", label: "Awaiting review" },
     { key: "admin_review", label: "Under review" },
     { key: "payment_pending", label: "Pay" },
     { key: "confirmed", label: "Confirmed" },
@@ -559,12 +534,11 @@ export default function MyBookingsPage() {
                       {(isActionable || booking.status === "payment_pending" || booking.status === "admin_review" || booking.status === "pending_kyc") && (
                         <button
                           onClick={() => {
-                            if (booking.status === "pending_kyc") {
-                              window.location.href = "/kyc?return=/my-bookings";
-                              return;
-                            }
-                            if (booking.status === "admin_review") {
-                              alert("Please contact support to continue with payment for this booking.");
+                            if (booking.status === "pending_kyc" || booking.status === "admin_review") {
+                              showToast({
+                                title: "Booking under review",
+                                message: "Our team will update you when the booking is ready for payment."
+                              });
                               return;
                             }
                             booking.status === "payment_pending" ? handlePay(booking) : handleExtend(booking);
@@ -572,8 +546,8 @@ export default function MyBookingsPage() {
                           disabled={booking.status === "payment_pending" ? actPay : actExtend}
                           className="btn-primary text-sm py-2 px-5 disabled:opacity-50"
                         >
-                          {booking.status === "pending_kyc"
-                            ? "Verify identity"
+                          {booking.status === "pending_kyc" || booking.status === "admin_review"
+                            ? "Awaiting review"
                             : booking.status === "payment_pending"
                             ? actPay
                               ? "Opening..."
@@ -602,9 +576,6 @@ export default function MyBookingsPage() {
                       bookingStatus={booking.status}
                       pickupAt={booking.pickup_at}
                       dropAt={booking.drop_at}
-                      kycStatus={kyc?.status}
-                      aadhaarVerified={kyc?.aadhaar_verified}
-                      dlVerified={kyc?.dl_verified}
                     />
 
                     {isCompleted ? (

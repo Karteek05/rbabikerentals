@@ -21,7 +21,6 @@ export default function robots(): MetadataRoute.Robots {
           "/dashboard-access",
           "/profile",
           "/my-bookings",
-          "/kyc",
           "/login",
           "/signup",
           "/forgot-password",

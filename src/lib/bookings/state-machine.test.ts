@@ -8,15 +8,15 @@ describe("booking state machine", () => {
     ).not.toThrow();
   });
 
-  it("allows admin to open payment from KYC pending or admin review", () => {
+  it("allows a legacy review booking to move through admin review", () => {
     expect(() =>
-      assertCanTransition("pending_kyc", "admin_review", "kyc_verified")
+      assertCanTransition("pending_kyc", "admin_review", "admin_review_complete")
     ).not.toThrow();
     expect(() =>
       assertCanTransition("admin_review", "payment_pending", "admin_approve")
     ).not.toThrow();
     expect(() =>
-      assertCanTransition("pending_kyc", "payment_pending", "admin_approve_without_kyc")
+      assertCanTransition("pending_kyc", "payment_pending", "admin_approve")
     ).not.toThrow();
   });
 

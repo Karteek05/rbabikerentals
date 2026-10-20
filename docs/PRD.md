@@ -6,15 +6,14 @@ Rbabikerentals.com is a web-first bike rental platform with three role experienc
 - `partner_investor`
 - `admin`
 
-Phase 1 goal is to launch end-to-end booking and operations for bikes/scooters with strong policy transparency, KYC-first onboarding, and partner/admin operational control.
+Phase 1 goal is to launch end-to-end booking and operations for bikes/scooters with strong policy transparency and partner/admin operational control. Aadhaar/DigiLocker verification is paused pending required permissions.
 
 This PRD uses Selfspin-like feature coverage as a baseline reference (location-based booking flow, policy pages, coupons, partner/invest hooks), but not Selfspin UI design.
 
 ## 2. Scope and Defaults
 - Build scope: web-first only (no native mobile app in Phase 1).
 - Role model: partner and investor are the same role in Phase 1 (`partner_investor`).
-- KYC model: Aadhaar + Driving Licence via Setu DigiLocker; manual-review fallback by admin.
-- CIBIL: not a hard auto-block in Phase 1. Used as manual-review signal only.
+- Aadhaar/DigiLocker identity verification is paused pending required permissions; existing customer booking eligibility does not require that provider flow. Credit bureau checks remain unimplemented and non-blocking.
 - Geography: Bengaluru-only in Phase 1 (all customer bookings, fleet operations, and admin operations scoped to Bengaluru).
 
 ## 3. Personas and Jobs-to-be-Done
@@ -31,9 +30,8 @@ This PRD uses Selfspin-like feature coverage as a baseline reference (location-b
 - Track document expiry and compliance.
 
 ### 3.3 Admin
-- Manage platform-wide bookings and KYC queue.
-- Approve/reject/override exceptional cases.
-- Manage vehicle lifecycle and maintenance windows.
+- Manage platform-wide bookings and fleet operations.
+- Approve/reject bookings and maintain policies.
 - Update policy/document/compliance records.
 
 ## 4. Role-Wise Module Definition
@@ -60,10 +58,8 @@ This PRD uses Selfspin-like feature coverage as a baseline reference (location-b
 - Razorpay payment integration for booking and deposit collection.
 - Booking confirmation with invoice/receipt metadata.
 
-5. KYC and account
-- Aadhaar OTP verification flow via DigiLocker.
-- Driving licence verification via DigiLocker.
-- KYC status visibility.
+5. Account
+- Customers manage their account profile and bookings. Aadhaar/DigiLocker verification is paused pending required permissions.
 
 6. Post-booking operations
 - Booking history (`upcoming`, `ongoing`, `completed`, `cancelled`).
@@ -98,9 +94,8 @@ This PRD uses Selfspin-like feature coverage as a baseline reference (location-b
 - Reject booking action with reason.
 - Override status in controlled operational cases.
 
-2. KYC operations
-- KYC completion/failure/manual review queue.
-- Escalate or approve manual-review cases.
+2. Booking review and operations
+- Review booking requests and make decisions based on business policy.
 
 3. Fleet operations
 - Add vehicle.
@@ -126,8 +121,7 @@ This PRD uses Selfspin-like feature coverage as a baseline reference (location-b
 | Extra helmet charges | Opt-in/pay | Visibility | Configure |
 | Vehicle docs storage and expiry tracking | View vehicle-level basics | Upload/manage own docs | Validate/compliance |
 | Insurance expiry reminders | N/A | Receive and act | Monitor |
-| KYC (Aadhaar OTP + DL) | Complete | N/A | Review fallback queue |
-| CIBIL handling | Consent/signal only | N/A | Manual review signal |
+| Identity-document verification | Paused pending permissions | N/A | No provider review queue |
 | Booking status lifecycle | Own bookings | Fleet-wide own vehicles | All bookings |
 | Revenue dashboard | N/A | Booking/vehicle/period views | Cross-platform reports |
 | Block/maintenance windows | N/A | Create/edit own vehicles | Override/control |
@@ -136,8 +130,8 @@ This PRD uses Selfspin-like feature coverage as a baseline reference (location-b
 ## 6. Public Interface Contracts (Phase 1)
 ### 6.1 Core Types
 - `Role`: `customer | partner_investor | admin`
-- `KycStatus`: `not_started | in_progress | verified | manual_review | failed | expired`
-- `BookingStatus`: `draft | pending_kyc | admin_review | payment_pending | confirmed | ongoing | extension_requested | extended | completed | cancelled`
+- `KycStatus`: legacy status field retained for compatibility; no identity provider flow is active.
+- `BookingStatus`: `draft | pending_kyc (legacy) | admin_review | payment_pending | confirmed | ongoing | extension_requested | extended | completed | cancelled`
 
 ```ts
 interface PricingQuote {
@@ -158,20 +152,18 @@ interface PricingQuote {
 - `POST /api/bookings`
 - `POST /api/bookings/{id}/extend`
 - `POST /api/bookings/{id}/cancel`
-- `POST /api/kyc/digilocker/start`
-- `GET /api/kyc/{userId}`
+- `GET /api/customer/bookings`
 - `GET /api/partner/revenue`
 - `POST /api/vehicles/{id}/block`
 - `GET /api/admin/bookings`
 - `POST /api/admin/bookings/{id}/reject`
 
 ## 7. Phase 1 Acceptance Criteria
-1. Customer can complete booking from discovery to payment with full pricing and policy visibility.
-2. KYC supports DigiLocker-based Aadhaar + DL with manual-review fallback.
-3. Extension and cancellation paths apply configured charge rules correctly.
-4. Partner can view revenues and enforce block/maintenance windows.
-5. Admin can reject bookings, review KYC exceptions, and control vehicle activation.
-6. Policy and charge configuration is reflected in quote generation and booking closeout.
+1. Customers can book with full pricing and policy visibility; identity-provider verification is not required while paused.
+2. Extension and cancellation paths apply configured charge rules correctly.
+3. Partners can view revenues and enforce block/maintenance windows.
+4. Admins can reject bookings and control vehicle activation.
+5. Policy and charge configuration is reflected in quote generation and booking closeout.
 
 ## 8. Out of Scope for Phase 1
 - Native mobile app implementation.

@@ -5,7 +5,7 @@ import {
   reconcileAppUsersForCanonicalId
 } from "@/lib/data/repository";
 import { store } from "@/lib/data/store";
-import type { KycRecord, User } from "@/lib/types/domain";
+import type { User } from "@/lib/types/domain";
 
 describe("user repository", () => {
   const userId = "cust_delete_test";
@@ -17,14 +17,9 @@ describe("user repository", () => {
         !user.id.startsWith("cust_reconcile_") &&
         !user.id.startsWith("cust_reconcile_role_")
     );
-    store.kycRecords = store.kycRecords.filter(
-      (item) =>
-        !item.user_id.startsWith("cust_reconcile_") &&
-        !item.user_id.startsWith("cust_reconcile_role_")
-    );
   });
 
-  it("merges duplicate KYC rows without primary-key collisions", async () => {
+  it("reconciles duplicate user profiles", async () => {
     const canonicalId = "cust_reconcile_canonical";
     const duplicateId = "cust_reconcile_duplicate";
     const email = "reconcile@example.com";
@@ -47,34 +42,12 @@ describe("user repository", () => {
         email
       }
     );
-    const now = new Date().toISOString();
-    store.kycRecords.push(
-      {
-        user_id: canonicalId,
-        status: "not_started",
-        provider: "setu_digilocker",
-        aadhaar_verified: false,
-        dl_verified: false,
-        needs_manual_review: false,
-        updated_at: now
-      },
-      {
-        user_id: duplicateId,
-        status: "not_started",
-        provider: "setu_digilocker",
-        aadhaar_verified: false,
-        dl_verified: false,
-        needs_manual_review: false,
-        updated_at: now
-      }
-    );
 
     const result = await reconcileAppUsersForCanonicalId(canonicalId, email);
 
     expect(result.mergedUserIds).toEqual([duplicateId]);
     expect(store.users.some((user) => user.id === duplicateId)).toBe(false);
-    expect(store.kycRecords.filter((item) => item.user_id === canonicalId)).toHaveLength(1);
-    expect(store.kycRecords.some((item) => item.user_id === duplicateId)).toBe(false);
+    expect(await getUserOrThrow(canonicalId)).toMatchObject({ id: canonicalId, email });
   });
 
   it("preserves the higher-privilege role when reconciling duplicates", async () => {
@@ -107,7 +80,6 @@ describe("user repository", () => {
     expect(result.mergedUserIds).toEqual([duplicateId]);
     const canonical = await getUserOrThrow(canonicalId);
     expect(canonical.role).toBe("admin");
-    expect(canonical.kyc_status).toBe("verified");
     expect(canonical.phone).toBe("9999999999");
   });
 

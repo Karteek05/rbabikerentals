@@ -53,7 +53,6 @@ export const NOINDEX_ROUTE_PREFIXES = [
   "/reset-password",
   "/profile",
   "/my-bookings",
-  "/kyc",
   "/customer",
   "/admin",
   "/partner",
