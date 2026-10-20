@@ -378,8 +378,8 @@ export default function MyBookingsPage() {
 
   const TABS = [
     { key: "all", label: "All" },
-    { key: "pending_kyc", label: "Pending review" },
-    { key: "admin_review", label: "Legacy review" },
+    { key: "pending_kyc", label: "Identity check" },
+    { key: "admin_review", label: "Under review" },
     { key: "payment_pending", label: "Pay" },
     { key: "confirmed", label: "Confirmed" },
     { key: "ongoing", label: "Ongoing" },
@@ -552,7 +552,7 @@ export default function MyBookingsPage() {
                               return;
                             }
                             if (booking.status === "admin_review") {
-                              alert("This older booking needs support assistance before payment.");
+                              alert("Please contact support to continue with payment for this booking.");
                               return;
                             }
                             booking.status === "payment_pending" ? handlePay(booking) : handleExtend(booking);

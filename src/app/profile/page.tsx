@@ -456,7 +456,7 @@ export default function ProfilePage() {
 										Identity verification required
 									</p>
 									<p className="mt-1 text-sm text-amber-900/80">
-										Complete DigiLocker verification so admin can review your
+										Complete identity verification so we can review and confirm your
 										booking.
 									</p>
 								</div>
@@ -656,7 +656,7 @@ export default function ProfilePage() {
 								Active requests
 							</h2>
 							<p className="mt-1 text-sm text-[color:var(--color-copy)]">
-								Bookings waiting for review or payment.
+								Bookings waiting for confirmation or payment.
 							</p>
 						</div>
 						<Link href="/my-bookings?pay=1" className="btn-primary">

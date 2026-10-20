@@ -18,8 +18,7 @@ export default function AboutPage() {
       <LegalSection title="Who we are">
         <p>
           {COMPANY.brand} is a Bengaluru-focused bike rental service offering scooters and two-wheelers on weekly,
-          15-day, and monthly packages. We combine online booking with an operations team that reviews every request
-          before confirmation.
+          15-day, and monthly packages. Our local team checks availability before confirming your booking.
         </p>
       </LegalSection>
 
@@ -35,8 +34,8 @@ export default function AboutPage() {
 
       <LegalSection title="How booking works">
         <p>
-          Choose a vehicle, pick your dates, and submit a booking request. Our team reviews availability, then opens
-          payment once approved. Track status updates in{" "}
+          Choose a vehicle, pick your dates, and send a booking request. We’ll confirm availability and share payment
+          details when your booking is ready. Track updates in{" "}
           <Link href="/my-bookings" className="nav-focus underline underline-offset-2">
             My Bookings
           </Link>

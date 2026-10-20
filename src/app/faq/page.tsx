@@ -15,7 +15,7 @@ const FAQ_ITEMS: Array<{ q: string; a: ReactNode }> = [
   },
   {
     q: "How does booking confirmation work?",
-    a: "After you submit a booking, our team reviews fleet availability. You will see status updates in My Bookings. Payment steps are shared once the booking moves forward in the review flow."
+    a: "We check availability after you submit a booking request. Track updates in My Bookings. If your booking is confirmed, we will share the payment steps."
   },
   {
     q: "What is the security deposit?",

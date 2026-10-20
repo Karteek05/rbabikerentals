@@ -184,7 +184,7 @@ function BrowsePageContent() {
         <div className="section-shell">
           <div className="grid gap-8 md:grid-cols-[1fr_340px] md:items-end">
             <div>
-              <p className="mb-3 text-sm font-semibold text-[color:var(--color-accent)]">Fleet catalogue</p>
+              <p className="mb-3 text-sm font-semibold text-[color:var(--color-accent)]">Browse bikes</p>
               <h1 className="max-w-3xl text-[clamp(2.75rem,7vw,6.25rem)] font-black leading-none text-white">
                 Choose the bike around your day.
               </h1>

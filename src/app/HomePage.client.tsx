@@ -28,13 +28,13 @@ const HOW_STEPS: Array<{ icon: IconName; title: string; desc: string }> = [
   },
   {
     icon: "phone",
-    title: "Share contact details",
-    desc: "Leave your name, email, mobile, and pickup note for confirmation."
+    title: "Send a booking request",
+    desc: "Share your contact details and preferred pickup location."
   },
   {
     icon: "shield",
     title: "Confirm and ride",
-    desc: "The team reviews availability and follows up with payment details."
+    desc: "We’ll confirm availability and send payment details before your ride."
   }
 ];
 
@@ -48,22 +48,22 @@ const TRUST_FACTS: Array<{ icon: IconName; title: string; detail: string }> = [
   {
     icon: "money",
     title: "GST included",
-    detail: "Package prices are shown with GST included, so the fare is easy to compare."
+    detail: "Package prices include GST, so you can compare the total fare upfront."
   },
   {
     icon: "shield",
-    title: "Availability review",
-    detail: "Bookings are reviewed against fleet availability before final confirmation."
+    title: "Availability confirmed first",
+    detail: "We confirm your scooter and rental dates before you make a payment."
   },
   {
     icon: "scooter",
-    title: "Scooter-first fleet",
-    detail: "The current fleet focuses on Activa 110, Dio 110, and Jupiter 125 scooters."
+    title: "Scooters for city rides",
+    detail: "Choose from Activa 110, Dio 110, and Jupiter 125 scooters."
   },
   {
     icon: "support",
-    title: "Ops-managed handoff",
-    detail: "Admin and partner dashboards help the team handle bookings and fleet updates."
+    title: "Clear next steps",
+    detail: "Once your booking is confirmed, we’ll share payment and pickup details."
   }
 ];
 
@@ -506,7 +506,7 @@ export default function HomePage() {
               </Link>
 
               <p className="mt-3 text-center text-[10px] font-semibold text-[color:var(--color-muted)]">
-                GST included - availability reviewed - quick booking follow-up
+                GST included - availability confirmed - clear payment steps
               </p>
             </motion.div>
           </div>
@@ -538,7 +538,7 @@ export default function HomePage() {
           <div className="mb-12 grid gap-6 lg:grid-cols-[0.8fr_1.2fr] lg:items-end">
             <h2 className="section-title">A rental flow that stays out of the way.</h2>
             <p className="section-copy max-w-2xl">
-              The public experience is short and practical: choose a scooter, choose a package, share contact details, and let the team confirm availability.
+              Pick a scooter and package, share your details, and we’ll confirm availability before you pay.
             </p>
           </div>
 
@@ -578,12 +578,12 @@ export default function HomePage() {
         <div className="section-shell">
           <div className="grid gap-10 lg:grid-cols-[0.85fr_1.15fr] lg:items-start">
             <div>
-              <p className="mb-3 text-sm font-semibold text-[color:var(--color-accent)]">Trust signals</p>
+              <p className="mb-3 text-sm font-semibold text-[color:var(--color-accent)]">Your rental, made simple</p>
               <h2 className="mb-6 text-[clamp(2.2rem,5vw,4.75rem)] font-black leading-none text-white">
-                Built for policy-first rentals.
+                Know what to expect.
               </h2>
               <p className="max-w-md text-sm leading-relaxed text-white/62">
-                The product is not just a glossy storefront. It accounts for package pricing, bookings, customer follow-up, fleet operations, and admin review.
+                Choose your scooter and package, send a booking request, and we’ll confirm availability and next steps.
               </p>
             </div>
 

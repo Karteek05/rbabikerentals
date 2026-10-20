@@ -1,6 +1,6 @@
 const BOOKING_STATUS_LABELS: Record<string, string> = {
   draft: "Draft",
-  pending_kyc: "Pending review",
+  pending_kyc: "Identity check",
   admin_review: "Under review",
   payment_pending: "Payment pending",
   confirmed: "Confirmed",

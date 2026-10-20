@@ -15,22 +15,22 @@ const STATUS_COPY: Record<
 > = {
   not_started: {
     title: "Verify your identity",
-    body: "Complete DigiLocker verification so we can review your booking. Aadhaar and driving licence are required.",
+    body: "Use DigiLocker to verify your Aadhaar and driving licence before booking confirmation.",
     tone: "neutral"
   },
   in_progress: {
     title: "Verification in progress",
-    body: "Finish the DigiLocker consent flow or wait while we sync your documents.",
+    body: "Finish the DigiLocker steps or wait while we check your documents.",
     tone: "progress"
   },
   verified: {
     title: "Identity verified",
-    body: "Your documents are verified. Bookings move to admin review automatically.",
+    body: "Your identity is verified. We’ll review your booking and let you know what’s next.",
     tone: "success"
   },
   manual_review: {
     title: "Documents received",
-    body: "DigiLocker consent is recorded. If both Aadhaar and DL were shared, tap Refresh status. Booking approval does not require DigiLocker.",
+    body: "We received your DigiLocker consent. If you shared both your Aadhaar and driving licence, tap Refresh status.",
     tone: "warning"
   },
   failed: {
@@ -238,7 +238,7 @@ export default function KycPageClient() {
           <p className="mb-2 text-sm font-semibold text-[color:var(--color-accent)]">Identity verification</p>
           <h1 className="max-w-2xl text-4xl font-black sm:text-5xl">Verify once, ride sooner.</h1>
           <p className="mt-3 max-w-xl text-sm leading-relaxed text-white/70">
-            DigiLocker confirms your Aadhaar and driving licence. Admin review opens after verification.
+            DigiLocker securely checks your Aadhaar and driving licence details before your booking is confirmed.
           </p>
         </div>
       </section>
@@ -316,11 +316,11 @@ export default function KycPageClient() {
             </div>
 
             <div className="rounded-lg border border-dashed border-[color:var(--color-line)] bg-white p-4 text-sm text-[color:var(--color-copy)]">
-              <p className="font-semibold text-[color:var(--color-ink)]">What we check</p>
+              <p className="font-semibold text-[color:var(--color-ink)]">What you’ll need</p>
               <ul className="mt-2 list-disc space-y-1 pl-5">
-                <li>Aadhaar via DigiLocker consent</li>
-                <li>Valid driving licence</li>
-                <li>Admin approval before payment opens</li>
+                <li>Your Aadhaar, shared through DigiLocker</li>
+                <li>A valid driving licence</li>
+                <li>We’ll confirm your booking before payment</li>
               </ul>
             </div>
           </div>

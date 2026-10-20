@@ -324,7 +324,7 @@ export default function BookPage() {
           type: "success",
           title: "Request submitted",
           message:
-            "We received your booking request. The team will confirm availability and share payment details soon.",
+            "We received your booking request. We’ll confirm availability and share payment details soon.",
           bookingId: newBookingId
         });
       }
@@ -349,7 +349,7 @@ export default function BookPage() {
           <Icon name="search" className="h-8 w-8 text-black/60" />
         </div>
         <h1 className="mb-2 text-3xl font-bold">Vehicle not found</h1>
-        <p className="mb-6 text-uber-body-gray">That vehicle is not in the current rental fleet.</p>
+        <p className="mb-6 text-uber-body-gray">This bike isn’t available for booking.</p>
         <a href="/browse" className="btn-primary">
           Back to Browse
         </a>
@@ -420,8 +420,7 @@ export default function BookPage() {
             <div className="mt-8">
               <h2 className="mb-3 text-xl font-bold">About this scooter</h2>
               <p className="text-sm leading-relaxed text-uber-body-gray">
-                This {vehicle.brand} {vehicle.model} is part of the current Bengaluru scooter fleet. Package pricing is
-                GST-inclusive and availability is confirmed after you submit the request.
+                Available to rent in Bengaluru. Package prices include GST, and we’ll confirm availability after you send your request.
               </p>
             </div>
           </div>
@@ -606,7 +605,7 @@ export default function BookPage() {
                     : "Sign in to submit request"}
               </button>
 
-              <p className="mt-3 text-center text-xs text-uber-muted-gray">Availability and payment details are confirmed after review.</p>
+              <p className="mt-3 text-center text-xs text-uber-muted-gray">We’ll confirm availability and payment details before your booking is finalized.</p>
             </div>
           </div>
         </div>
