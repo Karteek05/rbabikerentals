@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { openRazorpayCheckout } from "@/lib/payments/razorpay-checkout-client";
+import { useToast } from "@/app/components/ToastProvider";
 
 interface RazorpayCheckoutButtonProps {
   bookingId: string;
@@ -16,6 +17,7 @@ export default function RazorpayCheckoutButton({
   onSuccess,
   onError
 }: RazorpayCheckoutButtonProps) {
+  const showToast = useToast();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -53,7 +55,7 @@ export default function RazorpayCheckoutButton({
         description: description ?? `Payment for booking ${bookingId}`,
         onSuccess: () => {
           onSuccess?.();
-          alert("Payment submitted. Your booking will update once payment is confirmed.");
+          showToast({ title: "Payment submitted", message: "Your booking will update once payment is confirmed." });
         },
         onFailure: (message) => {
           setError(message);

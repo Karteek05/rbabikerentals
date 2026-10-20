@@ -1,0 +1,30 @@
+name: Supabase activity
+
+on:
+  schedule:
+    - cron: "17 0,8,16 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Read live fleet catalog
+        env:
+          CATALOG_URL: https://www.rbabikerentals.com/api/fleet/catalog
+        run: |
+          set -euo pipefail
+          response="$(curl --fail --silent --show-error \
+            --retry 3 --retry-delay 10 --retry-all-errors \
+            --max-time 30 "$CATALOG_URL")"
+          node -e '
+            const response = JSON.parse(process.argv[1]);
+            if (response.ok !== true || !Array.isArray(response.data?.items)) {
+              console.error("Fleet catalog health request returned an unexpected response.");
+              process.exit(1);
+            }
+            console.log(`Catalog query succeeded (${response.data.items.length} models).`);
+          ' "$response"

@@ -12,6 +12,7 @@ import { formatBookingStatus } from "@/lib/bookings/status-labels";
 import { openRazorpayCheckout } from "@/lib/payments/razorpay-checkout-client";
 import { authClient } from "@/lib/auth/auth-client";
 import { BookingListSkeleton } from "@/components/ui/Skeleton";
+import { useToast } from "@/app/components/ToastProvider";
 
 import type { KycStatus, PricingQuote } from "@/lib/types/domain";
 
@@ -80,6 +81,7 @@ function StatusBadge({ status }: { status: string }) {
 
 
 export default function MyBookingsPage() {
+  const showToast = useToast();
   const { data: session, isPending: sessionPending } = authClient.useSession();
   const customerName = session?.user?.name || session?.user?.email || "Customer";
   
@@ -87,15 +89,11 @@ export default function MyBookingsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [tab, setTab] = useState("all");
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [kyc, setKyc] = useState<CustomerKyc | null>(null);
 
-  const showSuccess = (msg: string) => {
-    setSuccessMsg(msg);
-    setTimeout(() => setSuccessMsg(null), 4000);
-  };
+  const showSuccess = (msg: string) => showToast({ title: "Update complete", message: msg });
 
   const fetchBookings = useCallback(async (): Promise<Booking[]> => {
     setError(null);
@@ -408,12 +406,6 @@ export default function MyBookingsPage() {
       </div>
 
       <div className="max-w-container mx-auto px-4 sm:px-6 py-8">
-        {successMsg && (
-          <div className="mb-6 bg-green-50 border border-green-200 rounded-lg px-4 py-3 text-green-800 text-sm inline-flex items-center gap-2">
-            <Icon name="checkCircle" className="w-4 h-4" />
-            {successMsg}
-          </div>
-        )}
         {error && (
           <div className="mb-6 bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-red-800 text-sm flex items-center justify-between">
             <span className="inline-flex items-center gap-2">

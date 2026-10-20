@@ -4,6 +4,7 @@ import "./globals.css";
 import AppChrome from "@/app/components/AppChrome";
 import LocalBusinessJsonLd from "@/app/components/LocalBusinessJsonLd";
 import { DEFAULT_SEO, SITE_NAME, getSiteUrl } from "@/lib/seo/site";
+import ToastProvider from "@/app/components/ToastProvider";
 
 const siteUrl = getSiteUrl();
 
@@ -53,10 +54,12 @@ export default function RootLayout({
   return (
     <html lang="en-IN">
       <body className="bg-[color:var(--color-paper)] text-[color:var(--color-ink)] antialiased">
-        <LocalBusinessJsonLd />
-        <Suspense fallback={null}>
-          <AppChrome>{children}</AppChrome>
-        </Suspense>
+        <ToastProvider>
+          <LocalBusinessJsonLd />
+          <Suspense fallback={null}>
+            <AppChrome>{children}</AppChrome>
+          </Suspense>
+        </ToastProvider>
       </body>
     </html>
   );

@@ -29,6 +29,7 @@ import {
 import { COMPANY } from "@/lib/legal/company";
 import type { Booking, KycStatus, User } from "@/lib/types/domain";
 import BookingRequirementsPanel from "@/components/BookingRequirementsPanel";
+import { useToast } from "@/app/components/ToastProvider";
 import {
 	readAccountPayload,
 	readBookingsPayload,
@@ -66,6 +67,7 @@ function accountInitial(user: User | null) {
 }
 
 export default function ProfilePage() {
+	const showToast = useToast();
 	const { data: session, isPending: sessionPending } = authClient.useSession();
 	const [account, setAccount] = useState<AccountResponse | null>(null);
 	const [bookings, setBookings] = useState<Booking[]>([]);
@@ -77,7 +79,6 @@ export default function ProfilePage() {
 	const [editingProfile, setEditingProfile] = useState(false);
 	const [savingProfile, setSavingProfile] = useState(false);
 	const [profileForm, setProfileForm] = useState({ name: "", phone: "" });
-	const [profileSuccess, setProfileSuccess] = useState("");
 	const [bookingsError, setBookingsError] = useState("");
 	const [kyc, setKyc] = useState<{
 		status: KycStatus;
@@ -267,7 +268,6 @@ export default function ProfilePage() {
 		if (!user || savingProfile) return;
 		setSavingProfile(true);
 		setError("");
-		setProfileSuccess("");
 
 		try {
 			const response = await fetch("/api/account/me", {
@@ -287,8 +287,7 @@ export default function ProfilePage() {
 			}
 			setAccount({ authenticated: true, user: json.data.user as User });
 			setEditingProfile(false);
-			setProfileSuccess("Profile updated.");
-			setTimeout(() => setProfileSuccess(""), 3000);
+			showToast({ title: "Profile updated", message: "Your profile changes have been saved." });
 		} catch (saveError) {
 			setError(
 				saveError instanceof Error
@@ -523,11 +522,6 @@ export default function ProfilePage() {
 						) : null}
 					</div>
 
-					{profileSuccess ? (
-						<p className="mt-3 rounded-[var(--radius-md)] border border-green-200 bg-green-50 px-3 py-2 text-sm font-semibold text-green-800">
-							{profileSuccess}
-						</p>
-					) : null}
 
 					{editingProfile ? (
 						<form

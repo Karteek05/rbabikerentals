@@ -6,6 +6,7 @@ import StatusPill from "@/app/components/partner/StatusPill";
 import Icon from "@/app/components/Icon";
 import { getVehicleDisplayName, resolveVehicleThumbnail } from "@/lib/fleet/display";
 import type { PartnerVehicleRow } from "@/lib/partner/service";
+import { useToast } from "@/app/components/ToastProvider";
 
 type VehicleBlockWindow = {
   id: string;
@@ -24,13 +25,13 @@ function localDateTime(value: string) {
 
 
 export default function PartnerVehiclesPage() {
+  const showToast = useToast();
   const [vehicles, setVehicles] = useState<PartnerVehicleRow[]>([]);
   const [blocks, setBlocks] = useState<VehicleBlockWindow[]>([]);
   const [blockStart, setBlockStart] = useState("");
   const [blockEnd, setBlockEnd] = useState("");
   const [blockReason, setBlockReason] = useState("");
   const [blockError, setBlockError] = useState("");
-  const [blockMessage, setBlockMessage] = useState("");
   const [blockBusy, setBlockBusy] = useState(false);
   const [blocksLoading, setBlocksLoading] = useState(false);
   const [removingBlockId, setRemovingBlockId] = useState<string | null>(null);
@@ -81,7 +82,6 @@ export default function PartnerVehiclesPage() {
   async function createBlock(event: React.FormEvent<HTMLFormElement>, vehicleId: string) {
     event.preventDefault();
     setBlockError("");
-    setBlockMessage("");
     const startsAt = new Date(blockStart);
     const endsAt = new Date(blockEnd);
     if (!blockStart || !blockEnd || Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime())) {
@@ -109,7 +109,7 @@ export default function PartnerVehiclesPage() {
       setBlockStart("");
       setBlockEnd("");
       setBlockReason("");
-      setBlockMessage("Maintenance window created.");
+      showToast({ title: "Maintenance block created", message: "The vehicle will be unavailable during the selected period." });
       await loadBlocks();
     } catch (createError) {
       setBlockError(createError instanceof Error ? createError.message : "Unable to create maintenance window");
@@ -122,7 +122,6 @@ export default function PartnerVehiclesPage() {
     if (!window.confirm("Remove this maintenance block? The vehicle will become available again during this period.")) return;
     setRemovingBlockId(block.id);
     setBlockError("");
-    setBlockMessage("");
     try {
       const response = await fetch(`/api/vehicles/${block.vehicle_id}/block-windows/${block.id}`, {
         method: "DELETE",
@@ -131,7 +130,7 @@ export default function PartnerVehiclesPage() {
       const json = await response.json();
       if (!response.ok || !json.ok) throw new Error(json?.error?.message ?? "Unable to remove maintenance window");
       setBlocks((current) => current.filter((item) => item.id !== block.id));
-      setBlockMessage("Maintenance window removed; the vehicle is available again during that period.");
+      showToast({ title: "Maintenance block removed", message: "The vehicle is available again during that period." });
     } catch (removeError) {
       setBlockError(removeError instanceof Error ? removeError.message : "Unable to remove maintenance window");
     } finally {
@@ -384,7 +383,6 @@ export default function PartnerVehiclesPage() {
                                 </button>
                               </form>
                               {blockError ? <p className="text-sm text-danger" role="status" aria-live="polite">{blockError}</p> : null}
-                              {blockMessage ? <p className="text-sm text-muted" role="status" aria-live="polite">{blockMessage}</p> : null}
                               {blocksLoading ? <p className="text-sm text-muted" role="status" aria-live="polite">Loading maintenance windows…</p> : null}
                               {!blocksLoading && blocks.filter((block) => block.vehicle_id === vehicle.id).length === 0 ? (
                                 <p className="text-sm text-muted">No maintenance windows scheduled.</p>

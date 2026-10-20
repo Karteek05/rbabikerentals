@@ -15,6 +15,7 @@ import { getKycAdminBadge } from "@/lib/kyc/admin-labels";
 import type { BookingStatus, KycStatus, PricingQuote } from "@/lib/types/domain";
 import { formatBookingStatus } from "@/lib/bookings/status-labels";
 import { StatCardsSkeleton, Skeleton } from "@/components/ui/Skeleton";
+import { useToast } from "@/app/components/ToastProvider";
 
 type Booking = {
   id: string;
@@ -182,10 +183,10 @@ function mapVehicleToForm(vehicle: VehicleItem): VehicleForm {
 }
 
 export default function AdminDashboardPage() {
+  const showToast = useToast();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [vehicles, setVehicles] = useState<VehicleItem[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState<string | null>(null);
   const [bookingFilter, setBookingFilter] = useState("all");
   const [editingVehicleId, setEditingVehicleId] = useState<string | null>(null);
@@ -215,10 +216,7 @@ export default function AdminDashboardPage() {
     []
   );
 
-  const showSuccess = (msg: string) => {
-    setSuccessMsg(msg);
-    setTimeout(() => setSuccessMsg(null), 4000);
-  };
+  const showSuccess = (msg: string) => showToast({ title: "Update complete", message: msg });
 
   const selectedVehicle = useMemo(
     () => vehicles.find((vehicle) => vehicle.id === editingVehicleId) ?? null,
@@ -734,12 +732,6 @@ export default function AdminDashboardPage() {
           <div className="error-banner inline-flex items-center gap-2">
             <Icon name="warning" className="w-4 h-4" />
             {error}
-          </div>
-        )}
-        {successMsg && (
-          <div className="success-banner inline-flex items-center gap-2">
-            <Icon name="checkCircle" className="w-4 h-4" />
-            {successMsg}
           </div>
         )}
 

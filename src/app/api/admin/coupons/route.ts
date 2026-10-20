@@ -1,5 +1,5 @@
 import { requireActor } from "@/lib/auth/context";
-import { listCoupons, saveCoupon } from "@/lib/data/repository";
+import { deleteCoupon, listCoupons, saveCoupon } from "@/lib/data/repository";
 import { recordAudit } from "@/lib/audit/service";
 import { ApiException } from "@/lib/utils/errors";
 import { fromError, ok, parseJson } from "@/lib/utils/http";
@@ -19,4 +19,28 @@ export async function POST(request: Request) {
     await recordAudit({ actorId: actor.userId, actorRole: "admin", action: "admin.coupon_upsert", resourceType: "coupon", resourceId: code, metadata: { coupon } });
     return ok({ coupon });
   } catch (error) { return fromError(error); }
+}
+export async function DELETE(request: Request) {
+  try {
+    const actor = await requireActor(request, ["admin"]);
+    const body = await parseJson<{ code?: string }>(request);
+    const code = body.code?.trim().toUpperCase();
+    if (!code || !/^[A-Z0-9_-]{2,40}$/.test(code)) {
+      throw new ApiException(400, "invalid_coupon", "Choose a valid promotion code.");
+    }
+    if (!(await deleteCoupon(code))) {
+      throw new ApiException(404, "coupon_not_found", "Promotion not found.");
+    }
+    await recordAudit({
+      actorId: actor.userId,
+      actorRole: "admin",
+      action: "admin.coupon_delete",
+      resourceType: "coupon",
+      resourceId: code,
+      metadata: { code }
+    });
+    return ok({ code });
+  } catch (error) {
+    return fromError(error);
+  }
 }

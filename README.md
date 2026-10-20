@@ -100,6 +100,8 @@ Never enable `ALLOW_DEV_HEADERS=true` in staging or production.
 - Run document expiry reminders and retry orphaned vehicle-document cleanup: `npm run job:documents`
 - The matching `POST /api/internal/jobs/document-expiry` endpoint requires `x-job-secret: $JOB_SECRET`; schedule it regularly. Failed cleanup entries are retried after one hour and are never deleted while a document record still references the file.
 - Run incident escalation job: `npm run job:incidents`
+- `.github/workflows/supabase-keepalive.yml` calls `https://www.rbabikerentals.com/api/fleet/catalog` three times daily at `17 0,8,16 * * *` UTC; it needs no database secret. GitHub scheduled workflows on public repositories can be delayed and are disabled after 60 days without repository activity.
+- For a scheduler independent of repository activity, use the free [cron-job.org](https://cron-job.org/en/) service with the same URL, method `GET`, and schedule. In Supabase mode the endpoint reads fleet records from the database; Supabase says a few database requests per day typically prevent inactivity pausing, but this is best-effort. [Pro projects are not auto-paused](https://supabase.com/docs/guides/platform/free-project-pausing).
 
 Security-sensitive environment variables to configure before staging/production:
 - `BETTER_AUTH_SECRET`

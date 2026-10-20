@@ -1658,6 +1658,24 @@ export async function listCoupons(): Promise<Coupon[]> {
   if (error) throw new ApiException(500, "db_error", "Could not load promotions.");
   return (data ?? []) as Coupon[];
 }
+export async function deleteCoupon(code: string): Promise<boolean> {
+  const normalized = code.trim().toUpperCase();
+  if (getDataMode() === "memory") {
+    const index = store.coupons.findIndex((coupon) => coupon.code === normalized);
+    if (index < 0) return false;
+    store.coupons.splice(index, 1);
+    return true;
+  }
+  const { data, error } = await getSupabaseServiceClient()
+    .from("coupons")
+    .delete()
+    .eq("code", normalized)
+    .select("code")
+    .maybeSingle();
+  if (error) throw new ApiException(500, "db_error", "Could not delete promotion.");
+  return Boolean(data);
+}
+
 
 export async function saveCoupon(coupon: Coupon, actorId: string): Promise<Coupon> {
   if (getDataMode() === "memory") {

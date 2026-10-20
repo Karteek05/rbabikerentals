@@ -6,6 +6,7 @@ import { ADMIN_NAV_ITEMS } from "@/app/components/admin/admin-nav";
 import Icon from "@/app/components/Icon";
 import type { Vehicle, VehicleDocument } from "@/lib/types/domain";
 import { vehicleDocumentDownloadPath, vehicleDocumentViewPath } from "@/lib/vehicles/documents";
+import { useToast } from "@/app/components/ToastProvider";
 
 type AdminVehicle = Vehicle & { owner_name: string };
 
@@ -58,6 +59,7 @@ function expiryLabel(document: VehicleDocument) {
 }
 
 export default function AdminDocumentsPage() {
+  const showToast = useToast();
   const [vehicles, setVehicles] = useState<AdminVehicle[]>([]);
   const [rows, setRows] = useState<DocumentRow[]>([]);
   const [filter, setFilter] = useState<DocumentFilter>("all");
@@ -73,7 +75,6 @@ export default function AdminDocumentsPage() {
   const [loading, setLoading] = useState(true);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
 
   const loadLibrary = useCallback(async () => {
     setLoading(true);
@@ -149,7 +150,6 @@ export default function AdminDocumentsPage() {
       return;
     }
     setError(null);
-    setSuccess(null);
     setBusyAction("upload");
     try {
       const formData = new FormData();
@@ -168,7 +168,7 @@ export default function AdminDocumentsPage() {
       setFile(null);
       setFileInputKey((current) => current + 1);
       setExpiresAt("");
-      setSuccess(`${documentLabel(documentType)} ${replacementRecord ? "replaced" : "added"}.`);
+      showToast({ title: "Document uploaded", message: `${documentLabel(documentType)} ${replacementRecord ? "replaced" : "added"}.` });
       await loadLibrary();
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : "Document upload failed.");
@@ -180,7 +180,6 @@ export default function AdminDocumentsPage() {
   async function saveExpiry(row: DocumentRow) {
     const { document, vehicle } = row;
     setError(null);
-    setSuccess(null);
     setBusyAction(`save-${document.id}`);
     try {
       const response = await fetch(`/api/admin/vehicles/${vehicle.id}/documents`, {
@@ -199,7 +198,7 @@ export default function AdminDocumentsPage() {
       setRows((current) => current.map((item) =>
         item.document.id === document.id ? { ...item, document: json.data.document } : item
       ));
-      setSuccess(`${documentLabel(document.doc_type)} expiry updated.`);
+      showToast({ title: "Expiry updated", message: `${documentLabel(document.doc_type)} expiry updated.` });
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Could not update the expiry date.");
     } finally {
@@ -211,7 +210,6 @@ export default function AdminDocumentsPage() {
     const { document, vehicle } = row;
     if (!window.confirm(`Remove the ${documentLabel(document.doc_type)} for ${vehicle.brand} ${vehicle.model}?`)) return;
     setError(null);
-    setSuccess(null);
     setBusyAction(`delete-${document.id}`);
     try {
       const response = await fetch(`/api/admin/vehicles/${vehicle.id}/documents`, {
@@ -230,7 +228,7 @@ export default function AdminDocumentsPage() {
         delete next[document.id];
         return next;
       });
-      setSuccess(`${documentLabel(document.doc_type)} removed.`);
+      showToast({ title: "Document removed", message: `${documentLabel(document.doc_type)} removed.` });
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : "Could not remove this document.");
     } finally {
@@ -271,11 +269,7 @@ export default function AdminDocumentsPage() {
           </article>
         </section>
 
-        {(error || success) && (
-          <div className={`admin-document-alert ${error ? "is-error" : "is-success"}`} role={error ? "alert" : "status"}>
-            {error ?? success}
-          </div>
-        )}
+        {error ? <div className="admin-document-alert is-error" role="alert">{error}</div> : null}
 
         <section className="admin-document-workspace" aria-label="Manage fleet documents">
           <div className="admin-document-library">
