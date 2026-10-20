@@ -1,7 +1,9 @@
-import { getVehicleOrThrow } from "@/lib/data/repository";
+import { getCouponDiscountRate, getOperationalPolicy, getVehicleOrThrow } from "@/lib/data/repository";
 import type { PricingQuote, Vehicle } from "@/lib/types/domain";
 import type { QuoteRequest } from "@/lib/types/contracts";
 import { ApiException } from "@/lib/utils/errors";
+import type { MileagePricingDefaults } from "@/lib/pricing/defaults";
+import { getDefaultMileagePricing } from "@/lib/pricing/defaults";
 
 const GST_RATE = 0.18;
 const HOUR_MS = 60 * 60 * 1000;
@@ -15,11 +17,6 @@ const HELMET_RATE = {
   month: 50
 } as const;
 
-const couponRules: Record<string, number> = {
-  WELCOME5: 0.05,
-  BENGALURU10: 0.1,
-  WEEKEND15: 0.15
-};
 
 export function resolveDurationValueFromWindow(params: {
   duration_bucket: QuoteRequest["duration_bucket"];
@@ -104,10 +101,8 @@ function splitInclusiveGst(taxAmount: number) {
 
 export function buildPricingQuoteFromVehicle(
   vehicle: Vehicle,
-  input: Pick<
-    QuoteRequest,
-    "duration_bucket" | "duration_value" | "extra_helmet_count" | "coupon_code"
-  >
+  input: Pick<QuoteRequest, "duration_bucket" | "duration_value" | "extra_helmet_count" | "coupon_code">,
+  configuredCouponRate?: number
 ): PricingQuote {
   const bucket = input.duration_bucket;
   const count = input.duration_value;
@@ -134,8 +129,7 @@ export function buildPricingQuoteFromVehicle(
   const durationAmount = 0;
   const addonAmount =
     (input.extra_helmet_count ?? 0) * HELMET_RATE[bucket] * count;
-  const normalizedCouponCode = input.coupon_code?.trim().toUpperCase();
-  const discountRate = normalizedCouponCode ? couponRules[normalizedCouponCode] ?? 0 : 0;
+  const discountRate = configuredCouponRate ?? 0;
   const couponDiscount = Math.round((baseAmount + addonAmount) * discountRate);
   const depositAmount = vehicle.deposit_amount;
   const taxableInclusive = Math.max(0, baseAmount + durationAmount + addonAmount - couponDiscount);
@@ -147,8 +141,14 @@ export function buildPricingQuoteFromVehicle(
     resolveListDailyRate(vehicle) * durationDays(bucket, count)
   );
   const planDiscount = Math.max(0, vehicleRentalCost - baseAmount);
-  const kmIncluded = estimateKmIncluded(bucket, count);
-  const excessKmRate = excessKmRateByCategory(vehicle.category);
+  const mileageDefaults = getDefaultMileagePricing(vehicle.category);
+  const kmIncluded = estimateKmIncluded(
+    vehicle,
+    bucket,
+    count,
+    mileageDefaults
+  );
+  const excessKmRate = vehicle.excess_km_rate ?? mileageDefaults.excess_km_rate;
 
   return {
     vehicle_rental_cost: vehicleRentalCost,
@@ -170,23 +170,33 @@ export function buildPricingQuoteFromVehicle(
 
 export async function computePricingQuote(input: QuoteRequest): Promise<PricingQuote> {
   const vehicle = await getVehicleOrThrow(input.vehicle_id);
-  return buildPricingQuoteFromVehicle(vehicle, input);
+  const discount = input.coupon_code ? await getCouponDiscountRate(input.coupon_code) : 0;
+  return buildPricingQuoteFromVehicle(vehicle, input, discount);
+}
+export async function computeCancellationBreakup(params: { totalPayable: number; pickupAt: string }) {
+  const policy = await getOperationalPolicy();
+  const hoursToPickup = (new Date(params.pickupAt).getTime() - Date.now()) / (1000 * 60 * 60);
+  const chargeRate = (hoursToPickup >= 24 ? policy.cancellation_over_24h_percent : policy.cancellation_under_24h_percent) / 100;
+  const cancellationCharge = Math.round(params.totalPayable * chargeRate);
+  const refundAmount = Math.max(0, params.totalPayable - cancellationCharge);
+  return { charge_rate: chargeRate, cancellation_charge: cancellationCharge, refund_amount: refundAmount };
 }
 
 function estimateKmIncluded(
+  vehicle: Vehicle,
   bucket: "hour" | "day" | "week" | "month",
-  count: number
+  count: number,
+  defaults: MileagePricingDefaults
 ) {
-  if (bucket === "hour") return 10 * count;
-  if (bucket === "day") return 120 * count;
-  if (bucket === "week") return 900 * count;
-  return 3000 * count;
-}
-
-function excessKmRateByCategory(category: "scooter" | "bike" | "ev_bike") {
-  if (category === "scooter") return 5;
-  if (category === "bike") return 7;
-  return 6;
+  const perRental =
+    bucket === "hour"
+      ? vehicle.included_km_per_hour ?? defaults.included_km_per_hour
+      : bucket === "day"
+        ? vehicle.included_km_per_day ?? defaults.included_km_per_day
+        : bucket === "week"
+          ? vehicle.included_km_per_week ?? defaults.included_km_per_week
+          : vehicle.included_km_per_month ?? defaults.included_km_per_month;
+  return perRental * count;
 }
 
 export function mergePricingQuotes(left: PricingQuote, right: PricingQuote): PricingQuote {
@@ -209,20 +219,3 @@ export function mergePricingQuotes(left: PricingQuote, right: PricingQuote): Pri
   };
 }
 
-export function computeCancellationBreakup(params: {
-  totalPayable: number;
-  pickupAt: string;
-}) {
-  const now = Date.now();
-  const pickup = new Date(params.pickupAt).getTime();
-  const hoursToPickup = (pickup - now) / (1000 * 60 * 60);
-  const chargeRate = hoursToPickup >= 24 ? 0.1 : 0.3;
-  const cancellationCharge = Math.round(params.totalPayable * chargeRate);
-  const refundAmount = Math.max(0, params.totalPayable - cancellationCharge);
-
-  return {
-    charge_rate: chargeRate,
-    cancellation_charge: cancellationCharge,
-    refund_amount: refundAmount
-  };
-}

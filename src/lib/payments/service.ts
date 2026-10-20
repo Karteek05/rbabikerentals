@@ -1,3 +1,4 @@
+import { recordAudit } from "@/lib/audit/service";
 import crypto from "node:crypto";
 import { assertCanTransition } from "@/lib/bookings/state-machine";
 import {
@@ -863,11 +864,20 @@ export async function refundPaymentForBooking(params: {
 	const alreadyRefunded = paymentOrder.refunded_amount ?? 0;
 	const amountInPaise = params.amount ?? paymentOrder.amount - alreadyRefunded;
 
-	return issueBookingRefund({
+	const result = await issueBookingRefund({
 		bookingId: params.bookingId,
 		amountInPaise,
 		reason: params.reason,
 	});
+	await recordAudit({
+		actorId: params.actor.userId,
+		actorRole: params.actor.role,
+		action: "admin.payment_refund",
+		resourceType: "booking",
+		resourceId: params.bookingId,
+		metadata: { amount_paise: amountInPaise, reason: params.reason ?? null, provider_refund_id: result.refund.refund_id }
+	});
+	return result;
 }
 
 export function verifyClientPaymentSignature(input: {

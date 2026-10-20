@@ -149,6 +149,11 @@ create table if not exists vehicles (
   rate_per_day integer not null,
   rate_per_week integer not null,
   rate_per_month integer not null,
+  included_km_per_hour integer not null default 10,
+  included_km_per_day integer not null default 120,
+  included_km_per_week integer not null default 900,
+  included_km_per_month integer not null default 3000,
+  excess_km_rate integer not null default 5,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint vehicles_city_check check (city = 'bengaluru')
@@ -157,6 +162,32 @@ alter table if exists vehicles add column if not exists image_urls text[] not nu
 alter table if exists vehicles add column if not exists registration_number text;
 alter table if exists vehicles add column if not exists chassis_number text;
 alter table if exists vehicles add column if not exists catalog_vehicle_id text references vehicles(id);
+alter table if exists vehicles add column if not exists included_km_per_hour integer;
+alter table if exists vehicles add column if not exists included_km_per_day integer;
+alter table if exists vehicles add column if not exists included_km_per_week integer;
+alter table if exists vehicles add column if not exists included_km_per_month integer;
+alter table if exists vehicles add column if not exists excess_km_rate integer;
+update vehicles set
+  included_km_per_hour = coalesce(included_km_per_hour, 10),
+  included_km_per_day = coalesce(included_km_per_day, 120),
+  included_km_per_week = coalesce(included_km_per_week, 900),
+  included_km_per_month = coalesce(included_km_per_month, 3000),
+  excess_km_rate = coalesce(excess_km_rate, case when category = 'bike' then 7 when category = 'ev_bike' then 6 else 5 end)
+where included_km_per_hour is null
+   or included_km_per_day is null
+   or included_km_per_week is null
+   or included_km_per_month is null
+   or excess_km_rate is null;
+alter table vehicles alter column included_km_per_hour set default 10;
+alter table vehicles alter column included_km_per_hour set not null;
+alter table vehicles alter column included_km_per_day set default 120;
+alter table vehicles alter column included_km_per_day set not null;
+alter table vehicles alter column included_km_per_week set default 900;
+alter table vehicles alter column included_km_per_week set not null;
+alter table vehicles alter column included_km_per_month set default 3000;
+alter table vehicles alter column included_km_per_month set not null;
+alter table vehicles alter column excess_km_rate set default 5;
+alter table vehicles alter column excess_km_rate set not null;
 create index if not exists idx_vehicles_owner_id on vehicles(owner_id);
 
 create table if not exists bookings (
@@ -268,6 +299,74 @@ create table if not exists vehicle_documents (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+-- Admin-managed Bengaluru pickup points; Sarjapur Road is the sole initial hub.
+create table if not exists pickup_locations (
+  id text primary key,
+  name text not null unique,
+  active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+insert into pickup_locations(id, name, active)
+values ('loc_sarjapur_road', 'Sarjapur Road', true)
+on conflict (id) do nothing;
+create index if not exists idx_pickup_locations_active_name
+  on pickup_locations(active, name);
+
+-- Runtime policy knobs. Defaults preserve the existing customer contract.
+create table if not exists operational_policies (
+  id text primary key default 'default',
+  gst_percent numeric(5,2) not null default 18 check (gst_percent between 0 and 100),
+  cancellation_over_24h_percent numeric(5,2) not null default 10 check (cancellation_over_24h_percent between 0 and 100),
+  cancellation_under_24h_percent numeric(5,2) not null default 30 check (cancellation_under_24h_percent between 0 and 100),
+  updated_by text references app_users(id),
+  updated_at timestamptz not null default now(),
+  constraint operational_policies_singleton check (id = 'default')
+);
+insert into operational_policies(id) values ('default') on conflict (id) do nothing;
+
+create table if not exists coupons (
+  code text primary key,
+  discount_percent numeric(5,2) not null check (discount_percent between 0 and 100),
+  active boolean not null default true,
+  starts_at timestamptz,
+  ends_at timestamptz,
+  updated_by text references app_users(id),
+  updated_at timestamptz not null default now(),
+  constraint coupons_valid_window check (ends_at is null or starts_at is null or starts_at < ends_at)
+);
+insert into coupons(code, discount_percent, active)
+values ('WELCOME5', 5, true), ('BENGALURU10', 10, true), ('WEEKEND15', 15, true)
+on conflict (code) do nothing;
+
+alter table if exists damage_incidents add column if not exists status text not null default 'open';
+alter table if exists damage_incidents add column if not exists admin_notes text;
+alter table if exists damage_incidents add column if not exists reviewed_by text references app_users(id);
+alter table if exists damage_incidents add column if not exists reviewed_at timestamptz;
+do $$ begin
+  alter table damage_incidents add constraint damage_incidents_status_check
+    check (status in ('open', 'investigating', 'resolved', 'dismissed'));
+exception when duplicate_object then null;
+end $$;
+create index if not exists idx_damage_incidents_status_created on damage_incidents(status, created_at desc);
+
+-- Actual manual transfers only; amounts are paid, never computed entitlements.
+create table if not exists partner_settlements (
+  id text primary key,
+  partner_id text not null references app_users(id),
+  period_start date not null,
+  period_end date not null,
+  amount_paise bigint not null check (amount_paise > 0),
+  status text not null default 'paid' check (status in ('paid', 'recorded')),
+  reference text not null,
+  paid_at timestamptz not null,
+  notes text,
+  created_by text not null references app_users(id),
+  created_at timestamptz not null default now(),
+  constraint partner_settlements_period_check check (period_start <= period_end)
+);
+create index if not exists idx_partner_settlements_partner_paid on partner_settlements(partner_id, paid_at desc);
+
 alter table if exists vehicle_documents alter column expires_at drop not null;
 
 create index if not exists idx_vehicle_documents_expiry on vehicle_documents(expires_at);
@@ -402,6 +501,10 @@ alter table payment_orders enable row level security;
 alter table payment_events enable row level security;
 alter table notification_jobs enable row level security;
 alter table audit_events enable row level security;
+alter table pickup_locations enable row level security;
+alter table operational_policies enable row level security;
+alter table coupons enable row level security;
+alter table partner_settlements enable row level security;
 
 create or replace function app_current_user_id()
 returns text
@@ -519,5 +622,21 @@ drop policy if exists audit_admin_only_select on audit_events;
 create policy audit_admin_only_select on audit_events
 for select to authenticated
 using (app_current_user_role() = 'admin');
+
+drop policy if exists pickup_locations_active_select on pickup_locations;
+create policy pickup_locations_active_select on pickup_locations
+for select to authenticated using (active or app_current_user_role() = 'admin');
+
+drop policy if exists operational_policy_admin_select on operational_policies;
+create policy operational_policy_admin_select on operational_policies
+for select to authenticated using (app_current_user_role() = 'admin');
+
+drop policy if exists coupons_admin_select on coupons;
+create policy coupons_admin_select on coupons
+for select to authenticated using (app_current_user_role() = 'admin');
+
+drop policy if exists settlements_partner_admin_select on partner_settlements;
+create policy settlements_partner_admin_select on partner_settlements
+for select to authenticated using (app_current_user_role() = 'admin' or partner_id = app_current_user_id());
 
 -- Writes for domain tables are server-only in Phase 1 (service role).

@@ -38,6 +38,7 @@ Last updated: April 19, 2026
    - customer reads own bookings only
    - partner reads only owned-vehicle bookings
    - admin has full operational visibility
+4. Create and deactivate a pickup location in admin; confirm only active locations appear in homepage, browse, and booking, and an inactive location is rejected by booking APIs.
 
 ## 3) Payment Validation
 1. Create booking and confirm it reaches `admin_review` after KYC is verified.
@@ -49,6 +50,8 @@ Last updated: April 19, 2026
 7. Confirm booking moves to `confirmed` on `payment.captured`.
 8. Confirm admin refund creation via `/api/payments/refund` after captured payment reconciliation.
 9. Verify payment is not marked paid when Razorpay is unavailable; no manual UPI/third-party QR path is offered.
+10. On `/admin/payments`, verify Razorpay mode is `test`, `live`, `unconfigured`, or `unknown` without exposing credentials; production must use a matching `rzp_live_` key ID and secret.
+11. After a refund request, verify customer My Bookings shows the initiated/partial/refunded state accurately; “initiated” means provider accepted, not bank settlement.
 
 ## 4) KYC Validation
 1. Start KYC: `/api/kyc/digilocker/start`.
@@ -101,9 +104,20 @@ Last updated: April 19, 2026
 3. Admin dashboard:
    - Fleet ops: add/edit/deactivate/delete vehicles.
    - Fleet ops: upload/remove vehicle images.
+   - Fleet ops: edit hourly, daily, weekly, and monthly rates, deposit, included mileage by duration, and extra-kilometre fee for scooter, bike, and EV-bike catalogues; verify public browse cards and booking quotes use saved values.
+   - Confirm tax, package discount, and payment balance remain system-calculated rather than manually editable.
    - View bookings -> reject booking.
    - View KYC queue -> approve/reject entries.
    - Monitor live fleet locations.
+
+4. Payments & refunds: inspect payment mode and request a valid full/partial refund; confirm failure messages remain visible.
+5. Incident triage: update status and notes; confirm the record leaves the open queue after resolution.
+6. Policies & promotions: change cancellation percentages, create/edit/deactivate a coupon, and verify customer booking disclosure and server-generated quote behavior.
+7. Pickup locations: add/deactivate a location and verify active-only customer selectors plus server validation.
+8. Partner settlements: record an actual transfer; confirm only the selected partner sees its recorded amount and no payout entitlement is calculated.
+9. Partner vehicles: create and remove a maintenance window; verify confirmation before removal, availability changes, and ownership isolation.
+10. Partner dashboard: verify document expiry alerts and settlement history contain only the partner’s own vehicles/transfers.
+11. Customer site: verify rates/categories come from the public catalog, pickup points match active configuration, and no internal operations jargon is shown.
 
 ## 8) Release Sign-Off
 1. `npm run typecheck` passes.

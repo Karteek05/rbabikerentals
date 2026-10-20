@@ -12,7 +12,7 @@ This document tracks requested features, missing items, and next steps for the R
 | Setu DigiLocker Test Flow | Pending | Jagadeep / Karteek | Waiting on Setu sandbox keys |
 | Google Sign-In | Pending | Karteek / AI | Code added; waiting on Google Client ID/Secret |
 | Mobile OTP Sign-In | Pending | Karteek / AI | UI and Better Auth plugin added; production SMS/WhatsApp sender still required |
-| Real Offers / Promo Engine | Backlog | TBD | Requires admin UI to create coupons and API validation |
+| Real Offers / Promo Engine | Done | Karteek / AI | Admin can create, edit, and deactivate configured coupons; server-generated quotes validate active codes. |
 | Subscription Productization | Backlog | TBD | Requires subscription entity and autopay mandates |
 
 ## P1: High-Impact Next Items

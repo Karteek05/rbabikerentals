@@ -76,6 +76,11 @@ export interface Vehicle {
   rate_per_day: number;
   rate_per_week: number;
   rate_per_month: number;
+  included_km_per_hour?: number;
+  included_km_per_day?: number;
+  included_km_per_week?: number;
+  included_km_per_month?: number;
+  excess_km_rate?: number;
 }
 
 export interface VehicleLiveLocation {
@@ -135,6 +140,10 @@ export interface DamageIncident {
   reported_by: string;
   description: string;
   photo_urls: string[];
+  status?: "open" | "investigating" | "resolved" | "dismissed";
+  admin_notes?: string | null;
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
   created_at: string;
 }
 
@@ -216,4 +225,38 @@ export interface NotificationJob {
   payload: Record<string, unknown>;
   status: "queued" | "sent" | "failed";
   created_at: string;
+}
+
+export interface PickupLocation {
+  id: string;
+  name: string;
+  active: boolean;
+}
+
+export interface OperationalPolicy {
+  gst_percent: number;
+  cancellation_over_24h_percent: number;
+  cancellation_under_24h_percent: number;
+}
+
+export interface PartnerSettlement {
+  id: string;
+  partner_id: string;
+  period_start: string;
+  period_end: string;
+  amount_paise: number;
+  status: "paid" | "recorded";
+  reference: string;
+  paid_at: string;
+  notes?: string | null;
+  created_by: string;
+  created_at: string;
+}
+
+export interface Coupon {
+  code: string;
+  discount_percent: number;
+  active: boolean;
+  starts_at?: string | null;
+  ends_at?: string | null;
 }

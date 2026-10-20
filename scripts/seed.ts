@@ -58,7 +58,12 @@ async function run() {
       rate_per_hour: vehicle.rate_per_hour,
       rate_per_day: vehicle.rate_per_day,
       rate_per_week: vehicle.rate_per_week,
-      rate_per_month: vehicle.rate_per_month
+      rate_per_month: vehicle.rate_per_month,
+      included_km_per_hour: vehicle.included_km_per_hour,
+      included_km_per_day: vehicle.included_km_per_day,
+      included_km_per_week: vehicle.included_km_per_week,
+      included_km_per_month: vehicle.included_km_per_month,
+      excess_km_rate: vehicle.excess_km_rate
     });
   }
 

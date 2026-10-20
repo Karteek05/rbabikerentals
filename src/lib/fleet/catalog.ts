@@ -2,7 +2,7 @@ export type PublicFleetVehicle = {
   id: string;
   brand: string;
   model: string;
-  category: "scooter" | "bike";
+  category: "scooter" | "bike" | "ev_bike";
   icon: "scooter" | "bike";
   stockApprox: number;
   engine: string;
@@ -15,6 +15,11 @@ export type PublicFleetVehicle = {
   rate_per_day: number;
   rate_per_week: number;
   rate_per_month: number;
+  included_km_per_hour: number;
+  included_km_per_day: number;
+  included_km_per_week: number;
+  included_km_per_month: number;
+  excess_km_rate: number;
   city: "bengaluru";
   is_active: boolean;
   spec: string;
@@ -40,6 +45,11 @@ export const PUBLIC_FLEET: PublicFleetVehicle[] = [
     rate_per_day: 3200,
     rate_per_week: 1600,
     rate_per_month: 6000,
+    included_km_per_hour: 10,
+    included_km_per_day: 120,
+    included_km_per_week: 900,
+    included_km_per_month: 3000,
+    excess_km_rate: 5,
     city: "bengaluru",
     is_active: true,
     spec: "110 cc petrol scooter"
@@ -61,6 +71,11 @@ export const PUBLIC_FLEET: PublicFleetVehicle[] = [
     rate_per_day: 3200,
     rate_per_week: 1600,
     rate_per_month: 6000,
+    included_km_per_hour: 10,
+    included_km_per_day: 120,
+    included_km_per_week: 900,
+    included_km_per_month: 3000,
+    excess_km_rate: 5,
     city: "bengaluru",
     is_active: true,
     spec: "110 cc petrol scooter"
@@ -82,6 +97,11 @@ export const PUBLIC_FLEET: PublicFleetVehicle[] = [
     rate_per_day: 3250,
     rate_per_week: 1625,
     rate_per_month: 6500,
+    included_km_per_hour: 10,
+    included_km_per_day: 120,
+    included_km_per_week: 900,
+    included_km_per_month: 3000,
+    excess_km_rate: 5,
     city: "bengaluru",
     is_active: true,
     spec: "125 cc petrol scooter"
@@ -103,15 +123,22 @@ export const PUBLIC_FLEET: PublicFleetVehicle[] = [
     rate_per_day: 3500,
     rate_per_week: 1750,
     rate_per_month: 7000,
+    included_km_per_hour: 10,
+    included_km_per_day: 120,
+    included_km_per_week: 900,
+    included_km_per_month: 3000,
+    excess_km_rate: 7,
     city: "bengaluru",
     is_active: false,
     spec: "125 cc petrol bike"
   }
 ];
-
-export const PUBLIC_FLEET_BY_ID = Object.fromEntries(
-  PUBLIC_FLEET.map((vehicle) => [vehicle.id, vehicle])
-) as Record<string, PublicFleetVehicle>;
+export const PUBLIC_FLEET_BY_ID: Record<string, PublicFleetVehicle> = {
+  veh_001: PUBLIC_FLEET[0],
+  veh_002: PUBLIC_FLEET[1],
+  veh_003: PUBLIC_FLEET[2],
+  veh_004: PUBLIC_FLEET[3]
+};
 
 export const PACKAGE_PLANS = [
   { key: "week", label: "1 week", unit: "week", rateKey: "rate_per_week" },

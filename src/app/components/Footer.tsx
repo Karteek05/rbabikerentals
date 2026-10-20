@@ -29,7 +29,7 @@ export default function Footer() {
           <div className="col-span-2 md:col-span-1">
             <div className="text-2xl font-black mb-4">RBA<span className="text-[color:var(--color-accent)]">.</span></div>
             <p className="text-white/60 text-sm leading-relaxed mb-5">
-              Bengaluru scooter rentals with GST-inclusive weekly, 15-day, and monthly packages.
+              Scooter and bike rentals in Bengaluru with GST-inclusive weekly, 15-day, and monthly packages.
             </p>
             <div className="flex flex-col gap-2 text-xs">
               <Link href="/contact" className="nav-focus text-white/65 hover:text-white transition-colors inline-flex items-center gap-2">

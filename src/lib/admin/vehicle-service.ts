@@ -15,6 +15,7 @@ import type { Role, Vehicle } from "@/lib/types/domain";
 import { inferCatalogVehicleId } from "@/lib/fleet/catalog";
 import { ApiException } from "@/lib/utils/errors";
 import { newId } from "@/lib/utils/ids";
+import { getDefaultMileagePricing } from "@/lib/pricing/defaults";
 
 function assertAdmin(actor: { userId: string; role: Role }) {
   if (actor.role !== "admin") {
@@ -96,6 +97,11 @@ export async function createVehicleByAdmin(
   assertNonNegativeNumber(input.rate_per_day, "rate_per_day");
   assertNonNegativeNumber(input.rate_per_week, "rate_per_week");
   assertNonNegativeNumber(input.rate_per_month, "rate_per_month");
+  assertNonNegativeNumber(input.included_km_per_hour, "included_km_per_hour");
+  assertNonNegativeNumber(input.included_km_per_day, "included_km_per_day");
+  assertNonNegativeNumber(input.included_km_per_week, "included_km_per_week");
+  assertNonNegativeNumber(input.included_km_per_month, "included_km_per_month");
+  assertNonNegativeNumber(input.excess_km_rate, "excess_km_rate");
 
   const vehicle: Vehicle = {
     id: newId("veh"),
@@ -113,7 +119,12 @@ export async function createVehicleByAdmin(
     rate_per_hour: Math.round(input.rate_per_hour),
     rate_per_day: Math.round(input.rate_per_day),
     rate_per_week: Math.round(input.rate_per_week),
-    rate_per_month: Math.round(input.rate_per_month)
+    rate_per_month: Math.round(input.rate_per_month),
+    included_km_per_hour: Math.round(input.included_km_per_hour),
+    included_km_per_day: Math.round(input.included_km_per_day),
+    included_km_per_week: Math.round(input.included_km_per_week),
+    included_km_per_month: Math.round(input.included_km_per_month),
+    excess_km_rate: Math.round(input.excess_km_rate)
   };
 
   const created = await upsertVehicle(vehicle);
@@ -139,6 +150,7 @@ export async function updateVehicleByAdmin(
   if (!current) {
     throw new ApiException(404, "vehicle_not_found", "Vehicle does not exist.");
   }
+  const mileageDefaults = getDefaultMileagePricing(input.category ?? current.category);
 
   if (input.city) assertBengaluruCity(input.city);
   if (input.owner_id) await assertPartnerOwner(input.owner_id);
@@ -158,6 +170,21 @@ export async function updateVehicleByAdmin(
   }
   if (input.rate_per_month !== undefined) {
     assertNonNegativeNumber(input.rate_per_month, "rate_per_month");
+  }
+  if (input.included_km_per_hour !== undefined) {
+    assertNonNegativeNumber(input.included_km_per_hour, "included_km_per_hour");
+  }
+  if (input.included_km_per_day !== undefined) {
+    assertNonNegativeNumber(input.included_km_per_day, "included_km_per_day");
+  }
+  if (input.included_km_per_week !== undefined) {
+    assertNonNegativeNumber(input.included_km_per_week, "included_km_per_week");
+  }
+  if (input.included_km_per_month !== undefined) {
+    assertNonNegativeNumber(input.included_km_per_month, "included_km_per_month");
+  }
+  if (input.excess_km_rate !== undefined) {
+    assertNonNegativeNumber(input.excess_km_rate, "excess_km_rate");
   }
 
   const updated: Vehicle = {
@@ -197,7 +224,27 @@ export async function updateVehicleByAdmin(
     rate_per_month:
       input.rate_per_month !== undefined
         ? Math.round(input.rate_per_month)
-        : current.rate_per_month
+        : current.rate_per_month,
+    included_km_per_hour:
+      input.included_km_per_hour !== undefined
+        ? Math.round(input.included_km_per_hour)
+        : current.included_km_per_hour ?? mileageDefaults.included_km_per_hour,
+    included_km_per_day:
+      input.included_km_per_day !== undefined
+        ? Math.round(input.included_km_per_day)
+        : current.included_km_per_day ?? mileageDefaults.included_km_per_day,
+    included_km_per_week:
+      input.included_km_per_week !== undefined
+        ? Math.round(input.included_km_per_week)
+        : current.included_km_per_week ?? mileageDefaults.included_km_per_week,
+    included_km_per_month:
+      input.included_km_per_month !== undefined
+        ? Math.round(input.included_km_per_month)
+        : current.included_km_per_month ?? mileageDefaults.included_km_per_month,
+    excess_km_rate:
+      input.excess_km_rate !== undefined
+        ? Math.round(input.excess_km_rate)
+        : current.excess_km_rate ?? mileageDefaults.excess_km_rate
   };
 
   const saved = await upsertVehicle(updated);

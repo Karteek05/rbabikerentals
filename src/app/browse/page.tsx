@@ -2,14 +2,13 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Icon from "../components/Icon";
 import Select from "@/components/ui/Select";
 import { VehicleGridSkeleton } from "@/components/ui/Skeleton";
 import {
   GST_INCLUSIVE_COPY,
   PACKAGE_PLANS,
-  PUBLIC_FLEET,
   getPackageRate,
   type PackageRateKey,
   type PublicFleetVehicle
@@ -19,11 +18,13 @@ import {
   durationParamToPackageKey
 } from "@/lib/bookings/schedule";
 
+import { usePublicFleet } from "@/lib/fleet/use-public-fleet";
 
-const CATEGORIES = [
-  { key: "all", label: "All" },
-  { key: "scooter", label: "Scooters" }
-];
+const CATEGORY_LABEL: Record<string, string> = {
+  scooter: "Scooters",
+  bike: "Bikes",
+  ev_bike: "EV bikes"
+};
 
 const DURATIONS = [
   { key: "weekly", label: "1 week", rateKey: "rate_per_week" as const },
@@ -109,17 +110,31 @@ function VehicleCard({
 
 function BrowsePageContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const initialDuration = durationParamToPackageKey(searchParams.get("duration"));
+  const publicFleet = usePublicFleet();
   const [category, setCategory] = useState("all");
   const [duration, setDuration] = useState<PackageRateKey>(initialDuration);
-  const [maxPrice, setMaxPrice] = useState(7000);
+  const [maxPrice, setMaxPrice] = useState<number | null>(null);
   const [query, setQuery] = useState("");
   const [sortBy, setSortBy] = useState<"price_asc" | "price_desc" | "model">("price_asc");
   const [availabilityMap, setAvailabilityMap] = useState<
     Record<string, { available_units: number; total_units: number; is_available: boolean }>
   >({});
   const [availabilityLoading, setAvailabilityLoading] = useState(true);
-
+  const [availabilityError, setAvailabilityError] = useState<string | null>(null);
+  const [locations, setLocations] = useState<Array<{ id: string; name: string; active: boolean }>>([]);
+  const [locationsLoading, setLocationsLoading] = useState(true);
+  const [locationsError, setLocationsError] = useState<string | null>(null);
+  const selectedLocation = searchParams.get("pickup_location") ?? "";
+  const categories = useMemo(
+    () => [
+      { key: "all", label: "All" },
+      ...Array.from(new Set(publicFleet.map((vehicle) => vehicle.category)))
+        .map((key) => ({ key, label: CATEGORY_LABEL[key] ?? key }))
+    ],
+    [publicFleet]
+  );
   const sortOptions = useMemo(
     () => [
       { value: "price_asc", label: "Price: Low to High" },
@@ -128,6 +143,30 @@ function BrowsePageContent() {
     ],
     []
   );
+  useEffect(() => {
+    let active = true;
+    fetch("/api/locations", { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((json) => {
+        if (!active) return;
+        if (!json?.ok || !Array.isArray(json.data?.items)) {
+          setLocationsError("Pickup locations are unavailable right now.");
+          return;
+        }
+        const next = json.data.items.filter((item: { active: boolean }) => item.active);
+        setLocations(next);
+        const current = searchParams.get("pickup_location");
+        if (!current || !next.some((item: { name: string }) => item.name === current)) {
+          const params = new URLSearchParams(searchParams.toString());
+          if (next[0]?.name) params.set("pickup_location", next[0].name);
+          else params.delete("pickup_location");
+          router.replace(`/browse${params.size ? `?${params.toString()}` : ""}`, { scroll: false });
+        }
+      })
+      .catch(() => { if (active) setLocationsError("Could not load pickup locations. Please try again."); })
+      .finally(() => { if (active) setLocationsLoading(false); });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     setDuration(durationParamToPackageKey(searchParams.get("duration")));
@@ -136,10 +175,14 @@ function BrowsePageContent() {
   useEffect(() => {
     const query = searchParams.toString();
     setAvailabilityLoading(true);
+    setAvailabilityError(null);
     fetch(`/api/fleet/availability?${query}`, { credentials: "include" })
       .then((res) => res.json())
       .then((json) => {
-        if (!json?.ok || !Array.isArray(json.data?.items)) return;
+        if (!json?.ok || !Array.isArray(json.data?.items)) {
+          setAvailabilityError("Availability could not be loaded. Prices and catalog details are still available.");
+          return;
+        }
         const next: Record<string, { available_units: number; total_units: number; is_available: boolean }> = {};
         for (const item of json.data.items) {
           next[item.vehicle_id] = {
@@ -150,19 +193,23 @@ function BrowsePageContent() {
         }
         setAvailabilityMap(next);
       })
-      .catch(() => setAvailabilityMap({}))
+      .catch(() => {
+        setAvailabilityMap({});
+        setAvailabilityError("Availability could not be loaded. Prices and catalog details are still available.");
+      })
       .finally(() => setAvailabilityLoading(false));
   }, [searchParams]);
 
   const currentDurUnit = PACKAGE_PLANS.find((d) => d.rateKey === duration)?.unit ?? "week";
+  const maxAvailablePrice = Math.max(100, ...publicFleet.map((vehicle) => getPackageRate(vehicle, duration)));
 
   const filtered = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
 
-    const list = PUBLIC_FLEET.filter((vehicle) => {
+    const list = publicFleet.filter((vehicle) => {
       const matchCat = category === "all" || vehicle.category === category;
       const rate = getPackageRate(vehicle, duration);
-      const matchPrice = rate <= maxPrice;
+      const matchPrice = maxPrice === null || rate <= maxPrice;
       const matchQuery =
         !normalizedQuery || `${vehicle.brand} ${vehicle.model}`.toLowerCase().includes(normalizedQuery);
       return matchCat && matchPrice && matchQuery;
@@ -176,7 +223,7 @@ function BrowsePageContent() {
       const bRate = getPackageRate(b, duration);
       return sortBy === "price_asc" ? aRate - bRate : bRate - aRate;
     });
-  }, [category, duration, maxPrice, query, sortBy]);
+  }, [category, duration, maxPrice, query, sortBy, publicFleet]);
 
   return (
     <div className="min-h-screen bg-[color:var(--color-paper)]">
@@ -184,15 +231,15 @@ function BrowsePageContent() {
         <div className="section-shell">
           <div className="grid gap-8 md:grid-cols-[1fr_340px] md:items-end">
             <div>
-              <p className="mb-3 text-sm font-semibold text-[color:var(--color-accent)]">Browse bikes</p>
+              <p className="mb-3 text-sm font-semibold text-[color:var(--color-accent)]">Bengaluru vehicle rentals</p>
               <h1 className="max-w-3xl text-[clamp(2.75rem,7vw,6.25rem)] font-black leading-none text-white">
-                Choose the bike around your day.
+                Find the right ride for your day.
               </h1>
             </div>
             <div className="rounded-lg border border-white/10 bg-white/5 p-5">
               <div className="text-3xl font-black text-white">{filtered.length}</div>
               <p className="mt-1 text-sm leading-relaxed text-white/62">
-                scooter package(s) currently matching your filters in Bengaluru.
+                {filtered.length} catalog model{filtered.length === 1 ? "" : "s"} match your filters.
               </p>
             </div>
           </div>
@@ -203,10 +250,11 @@ function BrowsePageContent() {
         <div className="section-shell py-4">
           <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-center">
             <div className="flex flex-wrap gap-2">
-              {CATEGORIES.map((item) => (
+              {categories.map((item) => (
                 <button
                   key={item.key}
                   onClick={() => setCategory(item.key)}
+                  aria-pressed={category === item.key}
                   className={`chip ${category === item.key ? "chip-active" : ""}`}
                 >
                   {item.label}
@@ -215,7 +263,13 @@ function BrowsePageContent() {
               {DURATIONS.map((item) => (
                 <button
                   key={item.key}
-                  onClick={() => setDuration(item.rateKey)}
+                  onClick={() => {
+                    setDuration(item.rateKey);
+                    const params = new URLSearchParams(searchParams.toString());
+                    params.set("duration", item.key);
+                    router.replace(`/browse?${params.toString()}`, { scroll: false });
+                  }}
+                  aria-pressed={duration === item.rateKey}
                   className={`chip ${duration === item.rateKey ? "chip-active" : ""}`}
                 >
                   {item.label}
@@ -223,10 +277,28 @@ function BrowsePageContent() {
               ))}
             </div>
 
+            <label className="sr-only" htmlFor="browse-pickup-location">Pickup location</label>
+            <select
+              id="browse-pickup-location"
+              value={selectedLocation}
+              disabled={locationsLoading || locations.length === 0}
+              onChange={(event) => {
+                const params = new URLSearchParams(searchParams.toString());
+                params.set("pickup_location", event.target.value);
+                router.push(`/browse?${params.toString()}`, { scroll: false });
+              }}
+              className="field-control"
+            >
+              {locationsLoading && <option value="">Loading pickup locations…</option>}
+              {!locationsLoading && locations.length === 0 && <option value="">No pickup locations available</option>}
+              {locations.map((location) => <option key={location.id} value={location.name}>{location.name}</option>)}
+            </select>
+            {locationsError && <p role="alert" className="text-xs text-red-700">{locationsError}</p>}
             <div className="grid gap-3 sm:grid-cols-[220px_190px] lg:grid-cols-[220px_190px]">
               <div className="relative">
                 <Icon name="search" className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[color:var(--color-muted)]" />
                 <input
+                  aria-label="Search vehicle models"
                   type="text"
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
@@ -244,15 +316,16 @@ function BrowsePageContent() {
           </div>
 
           <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
-            <label className="text-sm font-semibold text-[color:var(--color-copy)]">
-              Max Rs. {maxPrice.toLocaleString()}/{currentDurUnit}
+            <label htmlFor="browse-max-price" className="text-sm font-semibold text-[color:var(--color-copy)]">
+              Max Rs. {(maxPrice ?? maxAvailablePrice).toLocaleString("en-IN")}/{currentDurUnit}
             </label>
             <input
+              id="browse-max-price"
               type="range"
-              min={120}
-              max={30000}
+              min={Math.min(120, maxAvailablePrice)}
+              max={maxAvailablePrice}
               step={100}
-              value={maxPrice}
+              value={Math.min(maxPrice ?? maxAvailablePrice, maxAvailablePrice)}
               onChange={(event) => setMaxPrice(Number(event.target.value))}
               className="w-full accent-[color:var(--color-ink)] sm:w-72"
             />
@@ -261,6 +334,11 @@ function BrowsePageContent() {
       </section>
 
       <section className="section-shell py-10 sm:py-12">
+        {availabilityError && (
+          <p className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950" role="alert">
+            {availabilityError}
+          </p>
+        )}
         {filtered.length === 0 ? (
           <div className="mx-auto max-w-lg rounded-lg border border-dashed border-[color:var(--color-line)] bg-white p-10 text-center">
             <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[color:var(--color-paper-2)]">
@@ -270,8 +348,8 @@ function BrowsePageContent() {
             <p className="mb-6 text-sm text-[color:var(--color-copy)]">Try adjusting category, price, or model search.</p>
             <button
               onClick={() => {
-              setCategory("all");
-                setMaxPrice(7000);
+                setCategory("all");
+                setMaxPrice(null);
                 setQuery("");
                 setSortBy("price_asc");
               }}

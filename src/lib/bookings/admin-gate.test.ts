@@ -20,7 +20,7 @@ describe("direct payment booking flow", () => {
         city: "bengaluru",
         pickup_at: start,
         drop_at: end,
-        pickup_zone: "Indiranagar",
+        pickup_zone: "Sarjapur Road",
         duration_bucket: "day",
         duration_value: 1,
         km_limit_bucket: "day",
@@ -45,6 +45,37 @@ describe("direct payment booking flow", () => {
     );
 
   });
+  it("rejects pickup locations that are not active", async () => {
+    const start = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString();
+    const end = new Date(Date.now() + 11 * 24 * 60 * 60 * 1000).toISOString();
+
+    await expect(
+      createBooking(
+        {
+          user_id: "cust_001",
+          vehicle_id: "veh_003",
+          city: "bengaluru",
+          pickup_at: start,
+          drop_at: end,
+          pickup_zone: "Indiranagar",
+          duration_bucket: "day",
+          duration_value: 1,
+          km_limit_bucket: "day",
+          km_limit_value: 120,
+          customer_profile: {
+            legal_name: "Rahul Customer",
+            email: "rahul@example.com",
+            mobile: "+919876543210",
+            pan_number: "ABCDE1234F",
+            date_of_birth: "1996-01-15",
+            cibil_consent: true
+          }
+        },
+        { userId: "cust_001", role: "customer" }
+      )
+    ).rejects.toMatchObject({ code: "invalid_pickup_location" });
+  });
+
 
   it("allows admin to approve a booking that is still pending KYC", async () => {
     const bookingId = `booking_pending_kyc_${Date.now()}`;
@@ -58,7 +89,7 @@ describe("direct payment booking flow", () => {
       status: "pending_kyc",
       pickup_at: new Date(baseTime + 12 * 24 * 60 * 60 * 1000).toISOString(),
       drop_at: new Date(baseTime + 13 * 24 * 60 * 60 * 1000).toISOString(),
-      pickup_zone: "Indiranagar",
+      pickup_zone: "Sarjapur Road",
       pickup_address: null,
       pickup_latitude: null,
       pickup_longitude: null,

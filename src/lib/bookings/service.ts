@@ -9,8 +9,9 @@ import { insertBookingWithCapacityGuard } from "@/lib/bookings/inventory-guard";
 import {
   assertBengaluruCity,
   getBookingOrThrow,
-  getLatestPaymentOrderForBooking,
   getUserOrThrow,
+  assertActivePickupLocation,
+  getLatestPaidPaymentOrderForBooking,
   getVehicleOrThrow,
   insertDamageIncident,
   insertPaymentOrder,
@@ -55,6 +56,7 @@ export async function createBooking(
 
   const user = await getUserOrThrow(input.user_id);
   const vehicle = await getVehicleOrThrow(input.vehicle_id);
+  if (input.pickup_zone) await assertActivePickupLocation(input.pickup_zone);
   const pickupTs = new Date(input.pickup_at).getTime();
   const dropTs = new Date(input.drop_at).getTime();
 
@@ -453,10 +455,20 @@ export async function cancelBooking(
   }
 
   assertCanTransition(booking.status, "cancelled", "booking.cancel");
-  const breakup = computeCancellationBreakup({
+  const breakup = await computeCancellationBreakup({
     totalPayable: booking.quote.total_payable,
     pickupAt: booking.pickup_at
   });
+
+  let refundIssued = false;
+  if (breakup.refund_amount > 0 && await getLatestPaidPaymentOrderForBooking(booking.id)) {
+    await refundBookingAmount({
+      bookingId: booking.id,
+      amountInPaise: breakup.refund_amount * 100,
+      reason: input.reason
+    });
+    refundIssued = true;
+  }
 
   const updated = await updateBooking(booking.id, {
     status: "cancelled",
@@ -464,20 +476,6 @@ export async function cancelBooking(
     requested_drop_at: null,
     updated_at: new Date().toISOString()
   });
-
-  let refundIssued = false;
-  if (breakup.refund_amount > 0) {
-    try {
-      await refundBookingAmount({
-        bookingId: booking.id,
-        amountInPaise: breakup.refund_amount * 100,
-        reason: input.reason
-      });
-      refundIssued = true;
-    } catch (error) {
-      console.error("Failed to issue cancellation refund:", error);
-    }
-  }
 
   await recordAudit({
     actorId: actor.userId,

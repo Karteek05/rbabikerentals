@@ -142,28 +142,24 @@ export async function rejectBooking(
   }
 
   assertCanTransition(booking.status, "cancelled", "admin.reject_booking");
-  const breakup = computeCancellationBreakup({
+  const breakup = await computeCancellationBreakup({
     totalPayable: booking.quote.total_payable,
     pickupAt: booking.pickup_at
   });
+
+  if (breakup.refund_amount > 0) {
+    await refundBookingAmount({
+      bookingId: booking.id,
+      amountInPaise: breakup.refund_amount * 100,
+      reason: input.reason
+    });
+  }
 
   const updated = await updateBooking(booking.id, {
     status: "cancelled",
     cancel_reason: input.reason,
     updated_at: new Date().toISOString()
   });
-
-  if (breakup.refund_amount > 0) {
-    try {
-      await refundBookingAmount({
-        bookingId: booking.id,
-        amountInPaise: breakup.refund_amount * 100,
-        reason: input.reason
-      });
-    } catch (error) {
-      console.error("Failed to issue rejection refund:", error);
-    }
-  }
 
   await recordAudit({
     actorId: actor.userId,

@@ -7,8 +7,33 @@ import Icon from "@/app/components/Icon";
 import { getVehicleDisplayName, resolveVehicleThumbnail } from "@/lib/fleet/display";
 import type { PartnerVehicleRow } from "@/lib/partner/service";
 
+type VehicleBlockWindow = {
+  id: string;
+  vehicle_id: string;
+  starts_at: string;
+  ends_at: string;
+  reason: string;
+};
+
+function localDateTime(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? value
+    : date.toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" });
+}
+
+
 export default function PartnerVehiclesPage() {
   const [vehicles, setVehicles] = useState<PartnerVehicleRow[]>([]);
+  const [blocks, setBlocks] = useState<VehicleBlockWindow[]>([]);
+  const [blockStart, setBlockStart] = useState("");
+  const [blockEnd, setBlockEnd] = useState("");
+  const [blockReason, setBlockReason] = useState("");
+  const [blockError, setBlockError] = useState("");
+  const [blockMessage, setBlockMessage] = useState("");
+  const [blockBusy, setBlockBusy] = useState(false);
+  const [blocksLoading, setBlocksLoading] = useState(false);
+  const [removingBlockId, setRemovingBlockId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -35,6 +60,84 @@ export default function PartnerVehiclesPage() {
       setLoading(false);
     }
   }, []);
+  const loadBlocks = useCallback(async () => {
+    setBlocksLoading(true);
+    try {
+      const response = await fetch("/api/partner/vehicle-blocks", { credentials: "include" });
+      const json = await response.json();
+      if (!response.ok || !json.ok) throw new Error(json?.error?.message ?? "Failed to load maintenance windows");
+      setBlocks(json.data.items ?? []);
+    } catch (loadError) {
+      setBlockError(loadError instanceof Error ? loadError.message : "Failed to load maintenance windows");
+    } finally {
+      setBlocksLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadBlocks();
+  }, [loadBlocks]);
+
+  async function createBlock(event: React.FormEvent<HTMLFormElement>, vehicleId: string) {
+    event.preventDefault();
+    setBlockError("");
+    setBlockMessage("");
+    const startsAt = new Date(blockStart);
+    const endsAt = new Date(blockEnd);
+    if (!blockStart || !blockEnd || Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime())) {
+      setBlockError("Enter a valid start and end date.");
+      return;
+    }
+    if (endsAt <= startsAt) {
+      setBlockError("End date and time must be after the start.");
+      return;
+    }
+    if (!blockReason.trim()) {
+      setBlockError("Enter a reason for the maintenance block.");
+      return;
+    }
+    setBlockBusy(true);
+    try {
+      const response = await fetch(`/api/vehicles/${vehicleId}/block`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ starts_at: startsAt.toISOString(), ends_at: endsAt.toISOString(), reason: blockReason.trim() })
+      });
+      const json = await response.json();
+      if (!response.ok || !json.ok) throw new Error(json?.error?.message ?? "Unable to create maintenance window");
+      setBlockStart("");
+      setBlockEnd("");
+      setBlockReason("");
+      setBlockMessage("Maintenance window created.");
+      await loadBlocks();
+    } catch (createError) {
+      setBlockError(createError instanceof Error ? createError.message : "Unable to create maintenance window");
+    } finally {
+      setBlockBusy(false);
+    }
+  }
+
+  async function removeBlock(block: VehicleBlockWindow) {
+    if (!window.confirm("Remove this maintenance block? The vehicle will become available again during this period.")) return;
+    setRemovingBlockId(block.id);
+    setBlockError("");
+    setBlockMessage("");
+    try {
+      const response = await fetch(`/api/vehicles/${block.vehicle_id}/block-windows/${block.id}`, {
+        method: "DELETE",
+        credentials: "include"
+      });
+      const json = await response.json();
+      if (!response.ok || !json.ok) throw new Error(json?.error?.message ?? "Unable to remove maintenance window");
+      setBlocks((current) => current.filter((item) => item.id !== block.id));
+      setBlockMessage("Maintenance window removed; the vehicle is available again during that period.");
+    } catch (removeError) {
+      setBlockError(removeError instanceof Error ? removeError.message : "Unable to remove maintenance window");
+    } finally {
+      setRemovingBlockId(null);
+    }
+  }
 
   useEffect(() => {
     loadVehicles();
@@ -259,6 +362,46 @@ export default function PartnerVehiclesPage() {
                                 </ul>
                               )}
                                 </>
+                              )}
+                            </div>
+                            <div className="partner-expand-section">
+                              <h3 className="partner-expand-title">Maintenance availability</h3>
+                              <form className="grid gap-3 mb-4" onSubmit={(event) => createBlock(event, vehicle.id)}>
+                                <label className="text-sm" htmlFor={`maintenance-start-${vehicle.id}`}>
+                                  Starts
+                                  <input id={`maintenance-start-${vehicle.id}`} className="form-input mt-1" type="datetime-local" value={blockStart} onChange={(event) => setBlockStart(event.target.value)} required />
+                                </label>
+                                <label className="text-sm" htmlFor={`maintenance-end-${vehicle.id}`}>
+                                  Ends
+                                  <input id={`maintenance-end-${vehicle.id}`} className="form-input mt-1" type="datetime-local" value={blockEnd} onChange={(event) => setBlockEnd(event.target.value)} required />
+                                </label>
+                                <label className="text-sm" htmlFor={`maintenance-reason-${vehicle.id}`}>
+                                  Reason
+                                  <input id={`maintenance-reason-${vehicle.id}`} className="form-input mt-1" value={blockReason} onChange={(event) => setBlockReason(event.target.value)} maxLength={240} required />
+                                </label>
+                                <button className="btn btn-primary btn-sm" type="submit" disabled={blockBusy}>
+                                  {blockBusy ? "Saving…" : "Block vehicle"}
+                                </button>
+                              </form>
+                              {blockError ? <p className="text-sm text-danger" role="status" aria-live="polite">{blockError}</p> : null}
+                              {blockMessage ? <p className="text-sm text-muted" role="status" aria-live="polite">{blockMessage}</p> : null}
+                              {blocksLoading ? <p className="text-sm text-muted" role="status" aria-live="polite">Loading maintenance windows…</p> : null}
+                              {!blocksLoading && blocks.filter((block) => block.vehicle_id === vehicle.id).length === 0 ? (
+                                <p className="text-sm text-muted">No maintenance windows scheduled.</p>
+                              ) : (
+                                <ul className="partner-doc-list">
+                                  {blocks.filter((block) => block.vehicle_id === vehicle.id).map((block) => (
+                                    <li className="partner-doc-item" key={block.id}>
+                                      <div>
+                                        <div className="partner-doc-type">{block.reason}</div>
+                                        <div className="text-xs text-muted">{localDateTime(block.starts_at)} – {localDateTime(block.ends_at)}</div>
+                                      </div>
+                                      <button type="button" className="btn btn-secondary btn-sm" disabled={removingBlockId === block.id} onClick={() => removeBlock(block)}>
+                                        {removingBlockId === block.id ? "Removing…" : "Remove"}
+                                      </button>
+                                    </li>
+                                  ))}
+                                </ul>
                               )}
                             </div>
                           </div>

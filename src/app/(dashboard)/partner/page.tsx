@@ -42,6 +42,25 @@ type RevenueAnalytics = {
   }>;
   period_wise: { monthly: Array<{ month: string; revenue: number }> };
 };
+type PartnerDocumentAlert = {
+  vehicle_id: string;
+  vehicle_label: string;
+  doc_type: string;
+  expires_at: string | null;
+  days_until_expiry: number | null;
+};
+
+type PartnerSettlement = {
+  id: string;
+  period_start: string;
+  period_end: string;
+  amount_paise: number;
+  status: string;
+  reference: string | null;
+  paid_at: string | null;
+  notes: string | null;
+  created_at: string;
+};
 
 function formatCurrency(amount: number) {
   return `₹${amount.toLocaleString("en-IN")}`;
@@ -81,6 +100,28 @@ export default function PartnerDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [filterOpen, setFilterOpen] = useState(false);
 
+  const [documents, setDocuments] = useState<PartnerDocumentAlert[] | null>(null);
+  const [settlements, setSettlements] = useState<PartnerSettlement[] | null>(null);
+  const [recordsError, setRecordsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([
+      fetch("/api/partner/documents", { credentials: "include" }).then((response) => response.json()),
+      fetch("/api/partner/settlements", { credentials: "include" }).then((response) => response.json())
+    ]).then(([documentsJson, settlementsJson]) => {
+      if (cancelled) return;
+      if (!documentsJson.ok || !settlementsJson.ok) {
+        setRecordsError(documentsJson?.error?.message ?? settlementsJson?.error?.message ?? "Could not load partner records.");
+        return;
+      }
+      setDocuments(documentsJson.data.items ?? []);
+      setSettlements(settlementsJson.data.items ?? []);
+    }).catch(() => {
+      if (!cancelled) setRecordsError("Could not load partner records. Check your connection and retry.");
+    });
+    return () => { cancelled = true; };
+  }, []);
   const range = useMemo(() => getWeekRangeFromStart(weekStart), [weekStart]);
   const vehiclePerformance = useMemo(
     () => [...(revenue?.vehicle_wise ?? [])].sort((a, b) => b.revenue - a.revenue),
@@ -146,6 +187,74 @@ export default function PartnerDashboardPage() {
         subtitle={formatDateRangeLabel(range.from, range.to)}
         onFilterClick={() => setFilterOpen(true)}
       />
+      <div className="partner-analytics-grid partner-dashboard-top-grid">
+        <section className="card partner-panel" aria-labelledby="partner-doc-alerts">
+          <div className="partner-panel-head">
+            <div>
+              <h2 id="partner-doc-alerts" className="partner-panel-title">Document expiry alerts</h2>
+              <p className="partner-panel-subtitle">Documents recorded for your vehicles</p>
+            </div>
+            <Link className="partner-panel-link" href="/partner/vehicles">Manage vehicles</Link>
+          </div>
+          {recordsError ? <p className="partner-dashboard-empty" role="alert">{recordsError}</p> : documents === null ? (
+            <p className="partner-dashboard-empty" role="status">Loading document alerts…</p>
+          ) : documents.length === 0 ? (
+            <p className="partner-dashboard-empty">No documents with expiry dates are recorded.</p>
+          ) : (
+            <ul className="partner-doc-list">
+              {documents.map((document, index) => (
+                <li className="partner-doc-item" key={`${document.vehicle_id}-${document.doc_type}-${index}`}>
+                  <div>
+                    <strong>{document.vehicle_label} · {document.doc_type.toUpperCase()}</strong>
+                    <div className="text-xs text-muted">
+                      {document.expires_at ? `Expires ${new Date(document.expires_at).toLocaleDateString("en-IN")}` : "Expiry date not recorded"}
+                    </div>
+                  </div>
+                  {document.days_until_expiry !== null ? (
+                    <span className="badge badge-inactive">
+                      {document.days_until_expiry < 0 ? `Expired ${Math.abs(document.days_until_expiry)}d ago` : document.days_until_expiry === 0 ? "Expires today" : `${document.days_until_expiry}d left`}
+                    </span>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+        <section className="card partner-panel" aria-labelledby="partner-settlements">
+          <div className="partner-panel-head">
+            <div>
+              <h2 id="partner-settlements" className="partner-panel-title">Recorded settlements</h2>
+              <p className="partner-panel-subtitle">Payments manually recorded by RBA; these are not calculated amounts owed</p>
+            </div>
+          </div>
+          {recordsError ? <p className="partner-dashboard-empty" role="alert">{recordsError}</p> : settlements === null ? (
+            <p className="partner-dashboard-empty" role="status">Loading settlement history…</p>
+          ) : settlements.length === 0 ? (
+            <p className="partner-dashboard-empty">No settlements have been recorded.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="partner-performance-table">
+                <caption className="sr-only">Recorded manual settlements</caption>
+                <thead><tr><th scope="col">Period</th><th scope="col">Status / reference</th><th scope="col" className="text-right">Amount paid</th></tr></thead>
+                <tbody>
+                  {settlements.map((settlement) => (
+                    <tr key={settlement.id}>
+                      <td>{new Date(settlement.period_start).toLocaleDateString("en-IN")} – {new Date(settlement.period_end).toLocaleDateString("en-IN")}</td>
+                      <td>
+                        <strong>{settlement.status}</strong>
+                        {settlement.reference ? <span className="partner-vehicle-registration">{settlement.reference}</span> : null}
+                        {settlement.paid_at ? <span className="partner-vehicle-registration">Paid {new Date(settlement.paid_at).toLocaleDateString("en-IN")}</span> : null}
+                        {settlement.notes ? <span className="partner-vehicle-registration">{settlement.notes}</span> : null}
+                      </td>
+                      <td className="text-right">{formatCurrency(settlement.amount_paise / 100)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      </div>
 
       {error && summary ? (
         <div className="partner-error-banner" role="alert">

@@ -105,6 +105,45 @@ describe("pricing engine", () => {
     expect(quote.total_payable).toBe(3600);
     expect(quote.plan_discount).toBeGreaterThan(0);
   });
+  it("does not apply legacy promotions without a configured coupon rate", () => {
+    const input = { duration_bucket: "week" as const, duration_value: 1, coupon_code: "WELCOME5" };
+    expect(buildPricingQuoteFromVehicle(sampleVehicle, input).coupon_discount).toBe(0);
+    expect(buildPricingQuoteFromVehicle(sampleVehicle, input, 0.1).coupon_discount).toBe(160);
+  });
+
+  it.each([
+    ["hour", 2, 120, 20],
+    ["day", 1, 350, 130],
+    ["week", 1, 1400, 950],
+    ["day", 15, 350, 1950],
+    ["month", 1, 5100, 3100]
+  ] as const)("uses configured %s rental pricing and mileage", (bucket, count, expectedBase, expectedKm) => {
+    const quote = buildPricingQuoteFromVehicle(
+      {
+        ...sampleVehicle,
+        deposit_amount: 2600,
+        rate_per_hour: 60,
+        rate_per_day: 350,
+        rate_per_week: 1400,
+        rate_per_month: 5100,
+        included_km_per_hour: 10,
+        included_km_per_day: 130,
+        included_km_per_week: 950,
+        included_km_per_month: 3100,
+        excess_km_rate: 8
+      },
+      {
+        duration_bucket: bucket,
+        duration_value: count
+      }
+    );
+
+    expect(quote.base_amount).toBe(expectedBase);
+    expect(quote.deposit_amount).toBe(2600);
+    expect(quote.km_included).toBe(expectedKm);
+    expect(quote.excess_km_rate).toBe(8);
+    expect(quote.total_payable).toBeGreaterThan(2600);
+  });
 
   it("merges extension quotes without changing payable math", () => {
     const base = buildPricingQuoteFromVehicle(sampleVehicle, {
@@ -126,8 +165,8 @@ describe("pricing engine", () => {
     expect(merged.total_cost).toBe((base.total_cost ?? 0) + (extension.total_cost ?? 0));
   });
 
-  it("computes cancellation breakup with non-negative refund", () => {
-    const breakup = computeCancellationBreakup({
+  it("computes cancellation breakup with non-negative refund", async () => {
+    const breakup = await computeCancellationBreakup({
       totalPayable: 5000,
       pickupAt: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString()
     });

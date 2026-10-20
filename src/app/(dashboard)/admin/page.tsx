@@ -61,8 +61,13 @@ type VehicleItem = {
   rate_per_day: number;
   rate_per_week: number;
   rate_per_month: number;
-};
+  included_km_per_hour: number;
+  included_km_per_day: number;
+  included_km_per_week: number;
+  included_km_per_month: number;
+  excess_km_rate: number;
 
+};
 type VehicleForm = {
   owner_id: string;
   category: "scooter" | "bike" | "ev_bike";
@@ -77,8 +82,13 @@ type VehicleForm = {
   rate_per_day: number;
   rate_per_week: number;
   rate_per_month: number;
-};
+  included_km_per_hour: number;
+  included_km_per_day: number;
+  included_km_per_week: number;
+  included_km_per_month: number;
+  excess_km_rate: number;
 
+};
 type PartnerApplication = {
   id: string;
   name: string;
@@ -110,9 +120,14 @@ const emptyVehicleForm: VehicleForm = {
   rate_per_hour: 0,
   rate_per_day: 3200,
   rate_per_week: 1600,
-  rate_per_month: 6000
-};
+  rate_per_month: 6000,
+  included_km_per_hour: 10,
+  included_km_per_day: 120,
+  included_km_per_week: 900,
+  included_km_per_month: 3000,
+  excess_km_rate: 5
 
+};
 function StatusBadge({ status }: { status: string }) {
   return (
     <span className={`badge badge-${status.replace(/_/g, "_")}`}>
@@ -157,7 +172,12 @@ function mapVehicleToForm(vehicle: VehicleItem): VehicleForm {
     rate_per_hour: vehicle.rate_per_hour,
     rate_per_day: vehicle.rate_per_day,
     rate_per_week: vehicle.rate_per_week,
-    rate_per_month: vehicle.rate_per_month
+    rate_per_month: vehicle.rate_per_month,
+    included_km_per_hour: vehicle.included_km_per_hour ?? 10,
+    included_km_per_day: vehicle.included_km_per_day ?? 120,
+    included_km_per_week: vehicle.included_km_per_week ?? 900,
+    included_km_per_month: vehicle.included_km_per_month ?? 3000,
+    excess_km_rate: vehicle.excess_km_rate ?? (vehicle.category === "bike" ? 7 : vehicle.category === "ev_bike" ? 6 : 5)
   };
 }
 
@@ -1120,6 +1140,52 @@ export default function AdminDashboardPage() {
                     <option value="inactive">Inactive</option>
                   </select>
                 </div>
+              </div>
+              <div className="form-group mb-2">
+                <h3 style={{ margin: 0 }}>Included distance and extra-kilometre fee</h3>
+                <p className="text-muted" style={{ margin: "4px 0 12px" }}>
+                  Set the included kilometres for each rental duration. The extra-kilometre fee applies
+                  when a customer exceeds the included distance.
+                </p>
+              </div>
+              <div className="form-row mb-3" style={{ gridTemplateColumns: "1fr 1fr" }}>
+                <div className="form-group">
+                  <label className="form-label" htmlFor="included-km-hour">Included distance · Hour (km)</label>
+                  <input id="included-km-hour" type="number" min="0" step="1" className="form-input"
+                    value={vehicleForm.included_km_per_hour}
+                    onChange={(event) => setVehicleForm((prev) => ({ ...prev, included_km_per_hour: Number(event.target.value) }))} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label" htmlFor="included-km-day">Included distance · Day (km)</label>
+                  <input id="included-km-day" type="number" min="0" step="1" className="form-input"
+                    value={vehicleForm.included_km_per_day}
+                    onChange={(event) => setVehicleForm((prev) => ({ ...prev, included_km_per_day: Number(event.target.value) }))} />
+                </div>
+              </div>
+              <div className="form-row mb-3" style={{ gridTemplateColumns: "1fr 1fr" }}>
+                <div className="form-group">
+                  <label className="form-label" htmlFor="included-km-week">Included distance · Week (km)</label>
+                  <input id="included-km-week" type="number" min="0" step="1" className="form-input"
+                    value={vehicleForm.included_km_per_week}
+                    onChange={(event) => setVehicleForm((prev) => ({ ...prev, included_km_per_week: Number(event.target.value) }))} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label" htmlFor="included-km-month">Included distance · Month (km)</label>
+                  <input id="included-km-month" type="number" min="0" step="1" className="form-input"
+                    value={vehicleForm.included_km_per_month}
+                    onChange={(event) => setVehicleForm((prev) => ({ ...prev, included_km_per_month: Number(event.target.value) }))} />
+                </div>
+              </div>
+              <div className="form-row mb-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
+                <div className="form-group">
+                  <label className="form-label" htmlFor="excess-km-rate">Extra-kilometre fee (₹/km)</label>
+                  <input id="excess-km-rate" type="number" min="0" step="1" className="form-input"
+                    value={vehicleForm.excess_km_rate}
+                    onChange={(event) => setVehicleForm((prev) => ({ ...prev, excess_km_rate: Number(event.target.value) }))} />
+                </div>
+                <p className="text-muted" style={{ alignSelf: "center", margin: 0 }}>
+                  GST is calculated at the current tax rate. Discounts and payment balances are calculated by the system.
+                </p>
               </div>
 
               <button className="btn btn-primary w-full" onClick={saveVehicle} disabled={!!loading}>

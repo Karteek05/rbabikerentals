@@ -52,7 +52,19 @@ Never enable `ALLOW_DEV_HEADERS=true` in staging or production.
 - `GET /api/partner/dashboard`
 - `GET /api/partner/vehicles`
 - `POST /api/vehicles/[id]/block`
+- `DELETE /api/vehicles/[id]/block-windows/[blockId]`
+- `GET /api/locations`
+- `GET /api/policies`
+- `GET /api/partner/vehicle-blocks`
+- `GET /api/partner/documents`
+- `GET /api/partner/settlements`
 - `GET /api/admin/bookings`
+- `GET /api/admin/payments`
+- `GET/PATCH /api/admin/incidents`
+- `GET/PATCH /api/admin/policies`
+- `GET/POST /api/admin/coupons`
+- `GET/POST /api/admin/locations`
+- `GET/POST /api/admin/settlements`
 - `POST /api/admin/bookings/[id]/reject`
 - `GET /api/admin/vehicles`
 - `POST /api/admin/vehicles` (admin assigns each vehicle to an investor account)
@@ -83,6 +95,7 @@ Never enable `ALLOW_DEV_HEADERS=true` in staging or production.
 
 ## Database and Jobs
 - Run migration: `npm run migrate`
+- Migration source: `db/schema.sql`; `npm run migrate` applies it.
 - Seed data: `npm run seed`
 - Run document expiry reminders and retry orphaned vehicle-document cleanup: `npm run job:documents`
 - The matching `POST /api/internal/jobs/document-expiry` endpoint requires `x-job-secret: $JOB_SECRET`; schedule it regularly. Failed cleanup entries are retried after one hour and are never deleted while a document record still references the file.
@@ -94,11 +107,14 @@ Security-sensitive environment variables to configure before staging/production:
 - `GOOGLE_CLIENT_ID`
 - `GOOGLE_CLIENT_SECRET`
 - `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM`, `ADMIN_EMAIL`
+- `RAZORPAY_KEY_ID`
+- `RAZORPAY_KEY_SECRET`
 - `RAZORPAY_WEBHOOK_SECRET`
 - `SETU_WEBHOOK_SECRET`
 - `CIBIL_PROVIDER_MODE` (`mock` until provider contract keys are available)
 - `JOB_SECRET`
 - Supabase service credentials
+- Production uses a matching Razorpay live key pair (`rzp_live_` key ID); test keys (`rzp_test_`) select test mode. The application has no separate mode switch.
 
 Vehicle image storage:
 - If Supabase is configured, uploads go to `SUPABASE_VEHICLE_IMAGE_BUCKET` (default: `vehicle-images`).

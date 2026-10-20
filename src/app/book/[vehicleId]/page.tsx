@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useParams, useSearchParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Icon from "../../components/Icon";
 import BookingScheduleFields from "../../components/BookingScheduleFields";
 import LoginPromptModal from "../../components/LoginPromptModal";
@@ -16,6 +16,7 @@ import {
   getPackageRate,
   type PackageRateKey
 } from "@/lib/fleet/catalog";
+import { usePublicFleet } from "@/lib/fleet/use-public-fleet";
 import {
   durationParamToPackageKey,
   getPackageHours,
@@ -53,26 +54,6 @@ const PACKAGE_TO_VALUE: Record<PackageRateKey, number> = {
   rate_per_month: 1
 };
 
-const SPECS: Record<string, Array<{ label: string; value: string }>> = {
-  veh_001: [
-    { label: "Engine", value: "110 cc" },
-    { label: "Stock", value: "~15 units" },
-    { label: "Package", value: "From Rs. 1,600" },
-    { label: "Fuel", value: "Petrol" }
-  ],
-  veh_002: [
-    { label: "Engine", value: "110 cc" },
-    { label: "Stock", value: "~5 units" },
-    { label: "Package", value: "From Rs. 1,600" },
-    { label: "Fuel", value: "Petrol" }
-  ],
-  veh_003: [
-    { label: "Engine", value: "125 cc" },
-    { label: "Stock", value: "~5 units" },
-    { label: "Package", value: "From Rs. 1,625" },
-    { label: "Fuel", value: "Petrol" }
-  ]
-};
 
 function rupees(value: number) {
   return `Rs. ${value.toLocaleString("en-IN")}`;
@@ -94,10 +75,10 @@ function getBookingErrorMessage(
   error?: { code?: string; message?: string }
 ) {
   if (error?.code === "vehicle_unavailable") {
-    return "No units are left for this scooter in the selected dates. Please change dates or choose another scooter.";
+    return "No units are left for this vehicle in the selected dates. Please change dates or choose another vehicle.";
   }
   if (error?.code === "vehicle_blocked") {
-    return "This scooter is blocked for maintenance during the selected window. Please change dates or choose another scooter.";
+    return "This vehicle is blocked for maintenance during the selected window. Please change dates or choose another vehicle.";
   }
   if (error?.code === "auth_required") {
     return "Please sign in again before submitting the booking request.";
@@ -110,11 +91,13 @@ function getBookingErrorMessage(
 
 export default function BookPage() {
   const params = useParams();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const queryString = searchParams.toString();
   const { data: session } = authClient.useSession();
+  const publicFleet = usePublicFleet();
   const vehicleId = typeof params.vehicleId === "string" ? params.vehicleId : "";
-  const vehicle = PUBLIC_FLEET_BY_ID[vehicleId];
+  const vehicle = publicFleet.find((item) => item.id === vehicleId) ?? PUBLIC_FLEET_BY_ID[vehicleId];
   const initialPackageKey = durationParamToPackageKey(searchParams.get("duration"));
   const initialSchedule = resolveBookingScheduleFromParams(
     searchParams,
@@ -148,6 +131,14 @@ export default function BookPage() {
     bookingId?: string;
   } | null>(null);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
+  const [locations, setLocations] = useState<Array<{ id: string; name: string; active: boolean }>>([]);
+  const [locationsLoading, setLocationsLoading] = useState(true);
+  const [locationsError, setLocationsError] = useState<string | null>(null);
+  const [cancellationPolicy, setCancellationPolicy] = useState<{
+    cancellation_over_24h_percent: number;
+    cancellation_under_24h_percent: number;
+  } | null>(null);
+  const [policyLoading, setPolicyLoading] = useState(true);
   const dropManuallyEdited = useRef(false);
 
   const isSignedIn = Boolean(session?.user?.id);
@@ -174,16 +165,20 @@ export default function BookPage() {
         rate_per_hour: vehicle.rate_per_hour,
         rate_per_day: vehicle.rate_per_day,
         rate_per_week: vehicle.rate_per_week,
-        rate_per_month: vehicle.rate_per_month
+        rate_per_month: vehicle.rate_per_month,
+        included_km_per_hour: vehicle.included_km_per_hour,
+        included_km_per_day: vehicle.included_km_per_day,
+        included_km_per_week: vehicle.included_km_per_week,
+        included_km_per_month: vehicle.included_km_per_month,
+        excess_km_rate: vehicle.excess_km_rate
       },
       {
         duration_bucket: durationBucket,
         duration_value: durationValue,
-        extra_helmet_count: extraHelmet ? 1 : 0,
-        coupon_code: coupon || undefined
+        extra_helmet_count: extraHelmet ? 1 : 0
       }
     );
-  }, [vehicle, durationBucket, durationValue, extraHelmet, coupon]);
+  }, [vehicle, durationBucket, durationValue, extraHelmet]);
 
   const displayQuote = quote ?? (isSignedIn ? null : estimatedQuote);
 
@@ -205,6 +200,56 @@ export default function BookPage() {
     dropManuallyEdited.current = false;
     setBookingError(null);
   }, [queryString, searchParams]);
+  useEffect(() => {
+    let active = true;
+    fetch("/api/locations", { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((json) => {
+        if (!active) return;
+        if (!json?.ok || !Array.isArray(json.data?.items)) {
+          setLocationsError("Pickup locations are unavailable right now.");
+          return;
+        }
+        const next = json.data.items.filter((item: { active: boolean }) => item.active);
+        setLocations(next);
+        if (!next.some((item: { name: string }) => item.name === pickupZone)) {
+          const nextLocation = next[0]?.name ?? "";
+          setPickupZone(nextLocation);
+          const nextParams = new URLSearchParams(searchParams.toString());
+          if (nextLocation) nextParams.set("pickup_location", nextLocation);
+          else nextParams.delete("pickup_location");
+          router.replace(`/book/${vehicleId}${nextParams.size ? `?${nextParams.toString()}` : ""}`, { scroll: false });
+        }
+      })
+      .catch(() => { if (active) setLocationsError("Could not load pickup locations. Please try again."); })
+      .finally(() => { if (active) setLocationsLoading(false); });
+    return () => { active = false; };
+  }, []);
+  useEffect(() => {
+    let active = true;
+    fetch("/api/policies", { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((json) => {
+        const policy = json?.data;
+        const values = [
+          policy?.cancellation_over_24h_percent,
+          policy?.cancellation_under_24h_percent
+        ];
+        if (
+          active &&
+          json?.ok &&
+          values.every((value) => typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 100)
+        ) {
+          setCancellationPolicy({
+            cancellation_over_24h_percent: values[0],
+            cancellation_under_24h_percent: values[1]
+          });
+        }
+      })
+      .catch(() => undefined)
+      .finally(() => { if (active) setPolicyLoading(false); });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     if (dropManuallyEdited.current) return;
@@ -219,7 +264,8 @@ export default function BookPage() {
     const params = new URLSearchParams({
       duration: packageKey === "rate_per_month" ? "monthly" : packageKey === "rate_per_day" ? "fortnight" : "weekly",
       pickup_at: pickupAt,
-      drop_at: dropAt
+      drop_at: dropAt,
+      pickup_location: pickupZone
     });
     fetch(`/api/fleet/availability?${params.toString()}`, { credentials: "include" })
       .then((res) => res.json())
@@ -272,6 +318,11 @@ export default function BookPage() {
     if (!session?.user?.id) {
       setBookingError(null);
       setShowLoginPrompt(true);
+      return;
+    }
+
+    if (!pickupZone || !locations.some((location) => location.name === pickupZone)) {
+      setBookingError("Choose an active pickup location.");
       return;
     }
 
@@ -349,7 +400,7 @@ export default function BookPage() {
           <Icon name="search" className="h-8 w-8 text-black/60" />
         </div>
         <h1 className="mb-2 text-3xl font-bold">Vehicle not found</h1>
-        <p className="mb-6 text-uber-body-gray">This bike isn’t available for booking.</p>
+        <p className="mb-6 text-uber-body-gray">This vehicle isn’t available for booking.</p>
         <a href="/browse" className="btn-primary">
           Back to Browse
         </a>
@@ -357,7 +408,7 @@ export default function BookPage() {
     );
   }
 
-  const specs = SPECS[vehicleId] ?? [];
+  const vehicleType = vehicle.category === "scooter" ? "scooter" : vehicle.category === "ev_bike" ? "electric bike" : "bike";
 
   return (
     <div className="min-h-screen bg-white">
@@ -390,18 +441,8 @@ export default function BookPage() {
             <h1 className="mb-1 text-4xl font-bold">
               {vehicle.brand} {vehicle.model}
             </h1>
-            <p className="mb-6 text-uber-body-gray capitalize">Scooter - {vehicle.engine}</p>
+            <p className="mb-6 text-uber-body-gray capitalize">{vehicleType} - {vehicle.engine}</p>
 
-            {specs.length > 0 && (
-              <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                {specs.map((s) => (
-                  <div key={s.label} className="rounded-lg bg-uber-chip-gray px-4 py-3">
-                    <div className="mb-0.5 text-xs text-uber-body-gray">{s.label}</div>
-                    <div className="text-sm font-bold">{s.value}</div>
-                  </div>
-                ))}
-              </div>
-            )}
 
             <h2 className="mb-4 text-xl font-bold">Pricing</h2>
             <div className="card divide-y divide-black/5">
@@ -418,23 +459,38 @@ export default function BookPage() {
             </div>
 
             <div className="mt-8">
-              <h2 className="mb-3 text-xl font-bold">About this scooter</h2>
+              <h2 className="mb-3 text-xl font-bold">About this {vehicleType}</h2>
               <p className="text-sm leading-relaxed text-uber-body-gray">
-                Available to rent in Bengaluru. Package prices include GST, and we’ll confirm availability after you send your request.
+                Pickup coverage: {pickupZone || "select an active pickup location"}. Package prices include GST, and we’ll confirm availability after you send your request.
               </p>
+              <div className="mt-5 rounded-lg border border-black/10 bg-[#f7f7f7] p-4" aria-live="polite">
+                <h3 className="mb-1 text-sm font-bold">Cancellation policy</h3>
+                {policyLoading ? (
+                  <p className="text-sm text-uber-body-gray">Loading current cancellation terms…</p>
+                ) : cancellationPolicy ? (
+                  <p className="text-sm text-uber-body-gray">
+                    If pickup is at least 24 hours away, the cancellation charge is {cancellationPolicy.cancellation_over_24h_percent}%. If pickup is under 24 hours away, it is {cancellationPolicy.cancellation_under_24h_percent}%.
+                  </p>
+                ) : (
+                  <p className="text-sm text-uber-body-gray">
+                    Cancellation charges depend on the time remaining before pickup. Contact support if you need help understanding the applicable charge.
+                  </p>
+                )}
+              </div>
             </div>
           </div>
 
           <div className="h-fit lg:sticky lg:top-24">
             <div className="rounded-[24px] bg-white p-6 shadow-[rgba(0,0,0,0.12)_0px_4px_16px_0px]">
-              <h2 className="mb-5 text-xl font-bold">Reserve this scooter</h2>
+              <h2 className="mb-5 text-xl font-bold">Reserve this {vehicleType}</h2>
 
               <div className="mb-4">
                 <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-uber-body-gray">Package</label>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2" role="group" aria-label="Rental package">
                   {PACKAGE_PLANS.map((plan) => (
                     <button
                       key={plan.key}
+                      aria-pressed={packageKey === plan.rateKey}
                       type="button"
                       onClick={() => {
                         dropManuallyEdited.current = false;
@@ -468,17 +524,30 @@ export default function BookPage() {
               </div>
 
               <div className="mb-4 border-t border-black/5 pt-4">
-                <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-uber-body-gray">
-                  Pickup zone
+                <label htmlFor="booking-pickup-location" className="mb-2 block text-xs font-semibold uppercase tracking-wider text-uber-body-gray">
+                  Pickup location
                 </label>
                 <select
-                  className="mb-3 w-full rounded-lg border border-black px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-black"
+                  id="booking-pickup-location"
+                  className="mb-1 w-full rounded-lg border border-black px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-black"
                   value={pickupZone}
-                  onChange={(event) => setPickupZone(event.target.value)}
+                  disabled={locationsLoading || locations.length === 0}
+                  onChange={(event) => {
+                    const nextLocation = event.target.value;
+                    setPickupZone(nextLocation);
+                    const nextParams = new URLSearchParams(searchParams.toString());
+                    nextParams.set("pickup_location", nextLocation);
+                    router.replace(`/book/${vehicleId}?${nextParams.toString()}`, { scroll: false });
+                  }}
                 >
-                  <option value="Sarjapur Road">Sarjapur Road</option>
+                  {locationsLoading && <option value="">Loading pickup locations…</option>}
+                  {!locationsLoading && locations.length === 0 && <option value="">No pickup locations available</option>}
+                  {locations.map((location) => <option key={location.id} value={location.name}>{location.name}</option>)}
                 </select>
+                {locationsError && <p role="alert" className="mb-2 text-xs text-red-700">{locationsError}</p>}
+                <label htmlFor="booking-pickup-address" className="sr-only">Pickup address or note</label>
                 <input
+                  id="booking-pickup-address"
                   type="text"
                   placeholder="Apartment, landmark, or pickup note"
                   value={pickupAddress}
@@ -510,7 +579,7 @@ export default function BookPage() {
                   <p className={`mt-3 text-xs ${unitsAvailable > 0 ? "text-green-700" : "text-red-600"}`}>
                     {unitsAvailable > 0
                       ? `${unitsAvailable} unit${unitsAvailable === 1 ? "" : "s"} available for these dates.`
-                      : "No units available for these dates. Try different dates or another scooter."}
+                      : "No units available for these dates. Try different dates or another vehicle."}
                   </p>
                 )}
               </div>
@@ -558,7 +627,7 @@ export default function BookPage() {
                   <>
                     {!isSignedIn ? (
                       <p className="mb-2 text-xs text-uber-muted-gray">
-                        Estimated total — sign in for your exact quote.
+                        Estimated total — sign in for an exact server quote; any promotion eligibility is validated there.
                       </p>
                     ) : null}
                     <CostBreakdown quote={displayQuote} showDeposit />

@@ -14,6 +14,7 @@ import {
   getPackageRate,
   type PublicFleetVehicle
 } from "@/lib/fleet/catalog";
+import { usePublicFleet } from "@/lib/fleet/use-public-fleet";
 
 const HOW_STEPS: Array<{ icon: IconName; title: string; desc: string }> = [
   {
@@ -23,8 +24,8 @@ const HOW_STEPS: Array<{ icon: IconName; title: string; desc: string }> = [
   },
   {
     icon: "scooter",
-    title: "Pick the scooter",
-    desc: "Compare Activa 110, Dio 110, and Jupiter 125 availability."
+    title: "Choose a ride",
+    desc: "Compare the available vehicle models, prices, and dates."
   },
   {
     icon: "phone",
@@ -38,11 +39,17 @@ const HOW_STEPS: Array<{ icon: IconName; title: string; desc: string }> = [
   }
 ];
 
-const RENTAL_PLANS = [
-  { name: "1 week", detail: "Short stays and quick city use", value: "From Rs. 1,600" },
-  { name: "15 days", detail: "Half-month work or travel plans", value: "From Rs. 3,200" },
-  { name: "Monthly", detail: "Longer local commutes", value: "From Rs. 6,000" }
-];
+function rentalPlanValues(fleet: PublicFleetVehicle[]) {
+  return PACKAGE_PLANS.map((plan) => {
+    const rates = fleet.map((vehicle) => getPackageRate(vehicle, plan.rateKey));
+    const lowest = rates.length ? Math.min(...rates) : null;
+    return {
+      name: plan.label,
+      detail: plan.key === "week" ? "Short stays and quick city use" : plan.key === "fortnight" ? "Half-month work or travel plans" : "Longer local commutes",
+      value: lowest === null ? "No vehicles available" : `From Rs. ${lowest.toLocaleString("en-IN")}`
+    };
+  });
+}
 
 const TRUST_FACTS: Array<{ icon: IconName; title: string; detail: string }> = [
   {
@@ -53,12 +60,12 @@ const TRUST_FACTS: Array<{ icon: IconName; title: string; detail: string }> = [
   {
     icon: "shield",
     title: "Availability confirmed first",
-    detail: "We confirm your scooter and rental dates before you make a payment."
+    detail: "We confirm your selected vehicle and rental dates before you make a payment."
   },
   {
     icon: "scooter",
-    title: "Scooters for city rides",
-    detail: "Choose from Activa 110, Dio 110, and Jupiter 125 scooters."
+    title: "Bengaluru rides",
+    detail: "Browse the active public fleet and choose the ride that fits your plans."
   },
   {
     icon: "support",
@@ -67,9 +74,7 @@ const TRUST_FACTS: Array<{ icon: IconName; title: string; detail: string }> = [
   }
 ];
 
-const LOCATIONS = [
-  "Sarjapur Road"
-];
+type PublicLocation = { id: string; name: string; active: boolean };
 
 const FAQS = [
   {
@@ -86,7 +91,7 @@ const FAQS = [
   },
   {
     q: "How is pricing shown?",
-    a: "Package fares are shown upfront for each scooter model, including GST."
+    a: "Package fares are shown upfront for each available vehicle model, including GST."
   }
 ];
 
@@ -247,14 +252,17 @@ export default function HomePage() {
   const ringScale = useTransform(heroScrollProgress, [0, 1], [1, 1.15]);
   const mobileScooterY = useTransform(heroScrollProgress, [0, 1], ["0px", "-24px"]);
   const mobileScooterOpacity = useTransform(heroScrollProgress, [0, 0.9], [1, 0.82]);
+  const publicFleet = usePublicFleet();
+  const [locations, setLocations] = useState<PublicLocation[]>([]);
+  const [locationsLoading, setLocationsLoading] = useState(true);
+  const [locationsError, setLocationsError] = useState<string | null>(null);
   const initialSchedule = useMemo(() => buildInitialSchedule(), []);
   const [duration, setDuration] = useState<"weekly" | "fortnight" | "monthly">("weekly");
   const [pickupDate, setPickupDate] = useState(initialSchedule.pickupDate);
   const [pickupTime, setPickupTime] = useState(initialSchedule.pickupTime);
   const [dropDate, setDropDate] = useState(initialSchedule.dropDate);
   const [dropTime, setDropTime] = useState(initialSchedule.dropTime);
-  const [pickupLocation, setPickupLocation] = useState(LOCATIONS[0]);
-
+  const [pickupLocation, setPickupLocation] = useState("");
   useEffect(() => {
     const query = window.matchMedia("(min-width: 768px)");
     const update = () => {
@@ -264,6 +272,30 @@ export default function HomePage() {
     update();
     query.addEventListener("change", update);
     return () => query.removeEventListener("change", update);
+  }, []);
+  useEffect(() => {
+    let active = true;
+    fetch("/api/locations", { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((json) => {
+        if (!active) return;
+        if (!json?.ok || !Array.isArray(json.data?.items)) {
+          setLocationsError("Pickup locations are unavailable right now.");
+          return;
+        }
+        const next = json.data.items.filter((item: PublicLocation) => item.active);
+        setLocations(next);
+        setPickupLocation((current) =>
+          next.some((item: PublicLocation) => item.name === current) ? current : next[0]?.name ?? ""
+        );
+      })
+      .catch(() => {
+        if (active) setLocationsError("Could not load pickup locations. Please try again.");
+      })
+      .finally(() => {
+        if (active) setLocationsLoading(false);
+      });
+    return () => { active = false; };
   }, []);
 
   useEffect(() => {
@@ -286,7 +318,23 @@ export default function HomePage() {
   const pickupAtIso = toDateTimeIso(pickupDate, pickupTime);
   const dropAtIso = toDateTimeIso(dropDate, dropTime);
   const searchHref = `/browse?duration=${duration}&pickup_at=${encodeURIComponent(pickupAtIso)}&drop_at=${encodeURIComponent(dropAtIso)}&pickup_location=${encodeURIComponent(pickupLocation)}`;
-  const heroVehicle = PUBLIC_FLEET[0];
+  const heroVehicle = publicFleet[0] ?? PUBLIC_FLEET[0];
+  const totalFleetCount = publicFleet.reduce((total, vehicle) => total + (vehicle.stockApprox || 0), 0);
+  const hasActiveFleet = publicFleet.length > 0;
+  const rentalPlans = rentalPlanValues(publicFleet);
+  const categoryLabels: Record<PublicFleetVehicle["category"], string> = {
+    scooter: "scooters",
+    bike: "bikes",
+    ev_bike: "electric bikes"
+  };
+  const availableCategories = Array.from(new Set(publicFleet.map((vehicle) => vehicle.category)))
+    .map((category) => categoryLabels[category]);
+  const pickupLocationCopy = locations.length
+    ? `Pickup from ${locations.map((location) => location.name).join(", ")}.`
+    : "Check the booking form for active pickup points.";
+  const categoryCopy = availableCategories.length
+    ? `${availableCategories.join(", ")} for flexible weekly, 15-day, and monthly rentals in Bengaluru. ${pickupLocationCopy}`
+    : "No vehicles are currently available in Bengaluru.";
 
   return (
     <div className="bg-[color:var(--color-paper)]">
@@ -299,19 +347,19 @@ export default function HomePage() {
               transition={{ duration: 0.7, ease: "easeOut" }}
               className="min-w-0"
             >
-              <p className="mb-5 text-sm font-semibold text-[color:var(--color-accent)]">Bengaluru bike rentals</p>
+              <p className="mb-5 text-sm font-semibold text-[color:var(--color-accent)]">Bengaluru vehicle rentals</p>
               <h1 className="mb-6 max-w-[820px] text-[clamp(2.65rem,8vw,5.35rem)] font-black leading-[0.94] text-white">
                 <span className="block">City rides,</span>
                 <span className="block whitespace-nowrap text-[0.78em]">booked cleanly.</span>
               </h1>
               <p className="mb-8 max-w-xl text-lg leading-relaxed text-white/70">
-                Activa, Dio, and Jupiter scooters with simple weekly, 15-day, and monthly packages across Bengaluru.
+                {categoryCopy}
               </p>
 
               <div className="mb-8 flex flex-wrap gap-2">
                 {[
                   { icon: "money", text: "GST included" },
-                  { icon: "scooter", text: "25 scooters approx" },
+                  { icon: heroVehicle?.icon ?? "scooter", text: `${totalFleetCount} vehicles in fleet` },
                   { icon: "clock", text: "Weekly to monthly" }
                 ].map((t) => (
                   <span key={t.text} className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/10 px-3 py-2 text-xs font-semibold text-white">
@@ -400,27 +448,28 @@ export default function HomePage() {
                 >
                   <div className="mb-4 flex items-start justify-between gap-3">
                     <div>
-                      <div className="text-xs font-bold text-white/55">Featured scooter</div>
+                      <div className="text-xs font-bold text-white/55">{hasActiveFleet ? "Featured ride" : "Current catalog"}</div>
                       <div className="text-sm font-black text-white">
-                        {heroVehicle.brand} {heroVehicle.model}
+                        {hasActiveFleet ? `${heroVehicle.brand} ${heroVehicle.model}` : "No active vehicles"}
                       </div>
                     </div>
                     <span className="shrink-0 rounded-full border border-white/55 px-2.5 py-1 text-[11px] font-bold text-white/76">
-                      ~15 units
+                      {hasActiveFleet ? `${totalFleetCount} vehicles` : "Unavailable"}
                     </span>
                   </div>
 
                   <div className="divide-y divide-white/12 border-y border-white/12">
-                    {[
-                      { n: "Rs. 1,600", l: "1 week" },
-                      { n: "Rs. 3,200", l: "15 days" },
-                      { n: "Rs. 6,000", l: "Monthly" }
-                    ].map((s) => (
+                    {hasActiveFleet ? PACKAGE_PLANS.map((plan) => ({
+                      n: `Rs. ${getPackageRate(heroVehicle, plan.rateKey).toLocaleString()}`,
+                      l: plan.label
+                    })).map((s) => (
                       <div key={s.l} className="flex items-center justify-between gap-5 py-3">
                         <span className="text-xs font-semibold uppercase text-white/58">{s.l}</span>
                         <span className="text-sm font-black text-white">{s.n}</span>
                       </div>
-                    ))}
+                    )) : (
+                      <p className="py-3 text-sm text-white/70">Package pricing will appear when vehicles are available.</p>
+                    )}
                   </div>
 
                   <p className="mt-4 text-xs leading-relaxed text-white/72">
@@ -439,7 +488,7 @@ export default function HomePage() {
               transition={{ duration: 0.45, delay: 0.15, ease: "easeOut" }}
               className="rounded-lg border border-white/60 bg-[color:var(--color-paper)] p-5 text-[color:var(--color-ink)] shadow-[0_24px_70px_color-mix(in_oklch,var(--color-ink)_36%,transparent)] sm:p-6"
             >
-              <h2 className="mb-1 text-xl font-black text-[color:var(--color-ink)]">Find a bike</h2>
+              <h2 className="mb-1 text-xl font-black text-[color:var(--color-ink)]">Find a ride</h2>
               <p className="mb-5 text-sm text-[color:var(--color-copy)]">Select duration, dates, and pickup location.</p>
 
               <div className="mb-5 grid grid-cols-3 gap-2 rounded-lg bg-[color:var(--color-paper-2)] p-1">
@@ -450,6 +499,7 @@ export default function HomePage() {
                 ] as const).map(([d, label]) => (
                   <button
                     key={d}
+                    aria-pressed={duration === d}
                     onClick={() => setDuration(d)}
                     className={`rounded-md py-2 text-xs font-semibold capitalize transition-colors ${
                       duration === d
@@ -490,19 +540,27 @@ export default function HomePage() {
               </div>
 
               <div className="mb-5">
-                <label className="mb-1.5 block text-xs font-bold text-[color:var(--color-muted)]">Pickup location</label>
-                <div className="field-control flex items-center bg-[color:var(--color-paper-2)] text-[color:var(--color-copy)]">
-                  <Icon name="location" className="mr-2 h-4 w-4 text-[color:var(--color-muted)]" />
-                  {pickupLocation}
-                </div>
+                <label htmlFor="home-pickup-location" className="mb-1.5 block text-xs font-bold text-[color:var(--color-muted)]">Pickup location</label>
+                <select
+                  id="home-pickup-location"
+                  value={pickupLocation}
+                  onChange={(event) => setPickupLocation(event.target.value)}
+                  disabled={locationsLoading || locations.length === 0}
+                  className="field-control"
+                >
+                  {locationsLoading && <option value="">Loading locations…</option>}
+                  {!locationsLoading && locations.length === 0 && <option value="">No pickup locations available</option>}
+                  {locations.map((location) => <option key={location.id} value={location.name}>{location.name}</option>)}
+                </select>
+                {locationsError && <p className="mt-1 text-xs text-red-700" role="alert">{locationsError}</p>}
               </div>
 
               <p className="mb-3 text-xs text-[color:var(--color-copy)]">
                 {formatDateTimeLabel(pickupDate, pickupTime)} to {formatDateTimeLabel(dropDate, dropTime)}
               </p>
 
-              <Link href={searchHref} className="btn-primary w-full py-3.5 text-base">
-                Search Available Bikes
+              <Link href={searchHref} aria-disabled={!pickupLocation || locationsLoading} className={`btn-primary w-full py-3.5 text-base ${!pickupLocation || locationsLoading ? "pointer-events-none opacity-50" : ""}`}>
+                Search Available Vehicles
               </Link>
 
               <p className="mt-3 text-center text-[10px] font-semibold text-[color:var(--color-muted)]">
@@ -526,7 +584,7 @@ export default function HomePage() {
           </div>
 
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {PUBLIC_FLEET.map((vehicle) => (
+            {publicFleet.map((vehicle) => (
               <VehicleCard key={vehicle.id} v={vehicle} />
             ))}
           </div>
@@ -563,7 +621,7 @@ export default function HomePage() {
             <h2 className="section-title">Choose by duration, not by guesswork.</h2>
           </div>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            {RENTAL_PLANS.map((plan) => (
+            {rentalPlans.map((plan) => (
               <div key={plan.name} className="rounded-lg border border-[color:var(--color-line)] bg-white p-5">
                 <div className="mb-3 text-sm font-bold text-[color:var(--color-ink)]">{plan.name}</div>
                 <div className="mb-2 text-xl font-black text-[color:var(--color-ink)]">{plan.value}</div>
@@ -605,21 +663,27 @@ export default function HomePage() {
       <section className="bg-white py-16 sm:py-20 lg:py-24">
         <div className="section-shell">
           <div className="mb-10 grid gap-6 md:grid-cols-[0.9fr_1.1fr] md:items-end">
-            <h2 className="section-title">Our location in Bengaluru</h2>
+            <h2 className="section-title">Pickup locations in Bengaluru</h2>
             <p className="section-copy">
-              Pick up your scooter at our Sarjapur Road store after confirming availability.
+              Choose a listed pickup point when checking availability; bookings are confirmed before payment.
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 md:grid-cols-6">
-            {LOCATIONS.map((location) => (
-              <div key={location} className="chip justify-center gap-1.5 text-center text-xs">
-                <Icon name="location" className="h-3.5 w-3.5" />
-                {location}
-              </div>
-            ))}
+          {locations.length ? (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 md:grid-cols-6">
+              {locations.map((location) => (
+                <div key={location.id} className="chip justify-center gap-1.5 text-center text-xs">
+                  <Icon name="location" className="h-3.5 w-3.5" />
+                  {location.name}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-[color:var(--color-muted)]">
+              {locationsLoading ? "Loading pickup locations…" : "No active pickup locations are currently listed."}
+            </p>
+          )}
           </div>
-        </div>
       </section>
 
       <section className="border-y border-[color:var(--color-line)] bg-[color:var(--color-paper)] py-16 sm:py-20 lg:py-24">
@@ -652,7 +716,7 @@ export default function HomePage() {
           </p>
           <div className="flex flex-col justify-center gap-3 sm:flex-row">
             <Link href="/browse" className="btn-primary px-10 py-3.5 text-base">
-              Browse Bikes
+              Browse Fleet
             </Link>
             <Link href="/my-bookings" className="btn-secondary px-10 py-3.5 text-base">
               My Bookings

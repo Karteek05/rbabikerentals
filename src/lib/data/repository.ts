@@ -17,10 +17,15 @@ import type {
   VehicleLiveLocation,
   VehicleBlockWindow,
   VehicleDocument,
+  PartnerSettlement,
+  Coupon,
+  PickupLocation,
+  OperationalPolicy,
   VehicleDocumentCleanup
 } from "@/lib/types/domain";
 import { newId } from "@/lib/utils/ids";
 import { ApiException } from "@/lib/utils/errors";
+import { getDefaultMileagePricing } from "@/lib/pricing/defaults";
 
 type DataMode = "memory" | "supabase";
 
@@ -88,9 +93,15 @@ export function assertBengaluruCity(city: string) {
 }
 
 function withVehicleDefaults(vehicle: Vehicle): Vehicle {
+  const mileageDefaults = getDefaultMileagePricing(vehicle.category);
   return {
     ...vehicle,
-    image_urls: vehicle.image_urls ?? []
+    image_urls: vehicle.image_urls ?? [],
+    included_km_per_hour: vehicle.included_km_per_hour ?? mileageDefaults.included_km_per_hour,
+    included_km_per_day: vehicle.included_km_per_day ?? mileageDefaults.included_km_per_day,
+    included_km_per_week: vehicle.included_km_per_week ?? mileageDefaults.included_km_per_week,
+    included_km_per_month: vehicle.included_km_per_month ?? mileageDefaults.included_km_per_month,
+    excess_km_rate: vehicle.excess_km_rate ?? mileageDefaults.excess_km_rate
   };
 }
 
@@ -787,6 +798,7 @@ export async function updateBooking(
   bookingId: string,
   patch: Partial<Booking>
 ): Promise<Booking> {
+  if (patch.pickup_zone) await assertActivePickupLocation(patch.pickup_zone);
   if (getDataMode() === "memory") {
     const index = store.bookings.findIndex((item) => item.id === bookingId);
     if (index < 0) {
@@ -1162,6 +1174,19 @@ export async function listVehicleBlocksByVehicleIds(
   return (data ?? []) as VehicleBlockWindow[];
 }
 
+
+export async function deleteVehicleBlock(vehicleId: string, blockId: string): Promise<boolean> {
+  if (getDataMode() === "memory") {
+    const index = store.vehicleBlocks.findIndex((item) => item.id === blockId && item.vehicle_id === vehicleId);
+    if (index < 0) return false;
+    store.vehicleBlocks.splice(index, 1);
+    return true;
+  }
+  const { data, error } = await getSupabaseServiceClient().from("vehicle_block_windows")
+    .delete().eq("id", blockId).eq("vehicle_id", vehicleId).select("id").maybeSingle();
+  if (error) throw new ApiException(500, "db_error", "Could not remove maintenance window.");
+  return Boolean(data);
+}
 export async function insertAuditEvent(event: AuditEvent): Promise<void> {
   if (getDataMode() === "memory") {
     store.auditEvents.push(event);
@@ -1437,12 +1462,9 @@ export async function insertDamageIncident(incident: DamageIncident): Promise<Da
 }
 
 export async function listOpenDamageIncidents(): Promise<DamageIncident[]> {
-  if (getDataMode() === "memory") {
-    return store.damageIncidents;
-  }
-  const supabase = getSupabaseServiceClient();
-  const { data, error } = await supabase.from("damage_incidents").select("*");
-  if (error) throw new ApiException(500, "db_error", error.message);
+  if (getDataMode() === "memory") return store.damageIncidents.filter((item) => !item.status || item.status === "open" || item.status === "investigating");
+  const { data, error } = await getSupabaseServiceClient().from("damage_incidents").select("*").in("status", ["open", "investigating"]).order("created_at", { ascending: false });
+  if (error) throw new ApiException(500, "db_error", "Could not load incident queue.");
   return (data ?? []) as DamageIncident[];
 }
 
@@ -1543,4 +1565,131 @@ export async function hasNotificationJobForPayload(params: {
 
   if (error) throw new ApiException(500, "db_error", error.message);
   return (count ?? 0) > 0;
+}
+
+export async function listPickupLocations(activeOnly = false): Promise<PickupLocation[]> {
+  if (getDataMode() === "memory") {
+    const rows = [...store.pickupLocations];
+    return activeOnly ? rows.filter((item) => item.active) : rows;
+  }
+  let query = getSupabaseServiceClient().from("pickup_locations").select("id,name,active").order("name");
+  if (activeOnly) query = query.eq("active", true);
+  const { data, error } = await query;
+  if (error) throw new ApiException(500, "db_error", "Could not load pickup locations.");
+  return (data ?? []) as PickupLocation[];
+}
+
+export async function savePickupLocation(location: PickupLocation): Promise<PickupLocation> {
+  if (getDataMode() === "memory") {
+    const index = store.pickupLocations.findIndex((item) => item.id === location.id);
+    if (index < 0) store.pickupLocations.push(location);
+    else store.pickupLocations[index] = location;
+    return location;
+  }
+  const { data, error } = await getSupabaseServiceClient()
+    .from("pickup_locations").upsert({ ...location, updated_at: new Date().toISOString() }).select("id,name,active").single();
+  if (error || !data) throw new ApiException(500, "db_error", "Could not save pickup location.");
+  return data as PickupLocation;
+}
+
+export async function getOperationalPolicy(): Promise<OperationalPolicy> {
+  const defaults: OperationalPolicy = { gst_percent: 18, cancellation_over_24h_percent: 10, cancellation_under_24h_percent: 30 };
+  if (getDataMode() === "memory") return store.operationalPolicy ?? defaults;
+  const { data, error } = await getSupabaseServiceClient().from("operational_policies")
+    .select("gst_percent,cancellation_over_24h_percent,cancellation_under_24h_percent").eq("id", "default").maybeSingle();
+  if (error) throw new ApiException(500, "db_error", "Could not load operational policies.");
+  return (data as OperationalPolicy | null) ?? defaults;
+}
+
+export async function saveOperationalPolicy(policy: OperationalPolicy, actorId: string): Promise<OperationalPolicy> {
+  if (getDataMode() === "memory") {
+    store.operationalPolicy = policy;
+    return policy;
+  }
+  const { data, error } = await getSupabaseServiceClient().from("operational_policies")
+    .upsert({ id: "default", ...policy, updated_by: actorId, updated_at: new Date().toISOString() })
+    .select("gst_percent,cancellation_over_24h_percent,cancellation_under_24h_percent").single();
+  if (error || !data) throw new ApiException(500, "db_error", "Could not save operational policies.");
+  return data as OperationalPolicy;
+}
+
+export async function listAdminSettlements(): Promise<PartnerSettlement[]> {
+  if (getDataMode() === "memory") return [...store.partnerSettlements].sort((a, b) => b.paid_at.localeCompare(a.paid_at));
+  const { data, error } = await getSupabaseServiceClient().from("partner_settlements").select("*").order("paid_at", { ascending: false });
+  if (error) throw new ApiException(500, "db_error", "Could not load settlement records.");
+  return (data ?? []) as PartnerSettlement[];
+}
+
+export async function listPartnerSettlements(partnerId: string): Promise<PartnerSettlement[]> {
+  if (getDataMode() === "memory") return store.partnerSettlements.filter((item) => item.partner_id === partnerId).sort((a, b) => b.paid_at.localeCompare(a.paid_at));
+  const { data, error } = await getSupabaseServiceClient().from("partner_settlements")
+    .select("id,partner_id,period_start,period_end,amount_paise,status,reference,paid_at,notes,created_at")
+    .eq("partner_id", partnerId).order("paid_at", { ascending: false });
+  if (error) throw new ApiException(500, "db_error", "Could not load settlement records.");
+  return (data ?? []) as PartnerSettlement[];
+}
+
+export async function createPartnerSettlement(input: Omit<PartnerSettlement, "created_at">): Promise<PartnerSettlement> {
+  if (getDataMode() === "memory") {
+    const value = { ...input, created_at: new Date().toISOString() };
+    store.partnerSettlements.push(value);
+    return value;
+  }
+  const { data, error } = await getSupabaseServiceClient().from("partner_settlements").insert(input).select("*").single();
+  if (error || !data) throw new ApiException(500, "db_error", "Could not record settlement.");
+  return data as PartnerSettlement;
+}
+
+export async function updateDamageIncident(incidentId: string, patch: Pick<DamageIncident, "status" | "admin_notes" | "reviewed_by" | "reviewed_at">): Promise<DamageIncident> {
+  if (getDataMode() === "memory") {
+    const item = store.damageIncidents.find((incident) => incident.id === incidentId);
+    if (!item) throw new ApiException(404, "incident_not_found", "Incident not found.");
+    Object.assign(item, patch);
+    return item;
+  }
+  const { data, error } = await getSupabaseServiceClient().from("damage_incidents").update(patch).eq("id", incidentId).select("*").single();
+  if (error || !data) throw new ApiException(404, "incident_not_found", "Incident not found.");
+  return data as DamageIncident;
+}
+
+export async function listCoupons(): Promise<Coupon[]> {
+  if (getDataMode() === "memory") return [...store.coupons].sort((a, b) => a.code.localeCompare(b.code));
+  const { data, error } = await getSupabaseServiceClient().from("coupons").select("code,discount_percent,active,starts_at,ends_at").order("code");
+  if (error) throw new ApiException(500, "db_error", "Could not load promotions.");
+  return (data ?? []) as Coupon[];
+}
+
+export async function saveCoupon(coupon: Coupon, actorId: string): Promise<Coupon> {
+  if (getDataMode() === "memory") {
+    const index = store.coupons.findIndex((item) => item.code === coupon.code);
+    if (index < 0) store.coupons.push(coupon);
+    else store.coupons[index] = coupon;
+    return coupon;
+  }
+  const { data, error } = await getSupabaseServiceClient().from("coupons")
+    .upsert({ ...coupon, updated_by: actorId, updated_at: new Date().toISOString() })
+    .select("code,discount_percent,active,starts_at,ends_at").single();
+  if (error || !data) throw new ApiException(500, "db_error", "Could not save promotion.");
+  return data as Coupon;
+}
+
+export async function getCouponDiscountRate(code: string): Promise<number> {
+  const normalized = code.trim().toUpperCase();
+  if (!normalized) return 0;
+  if (getDataMode() === "memory") {
+    const coupon = store.coupons.find((item) => item.code === normalized && item.active);
+    if (!coupon || (coupon.starts_at && new Date(coupon.starts_at).getTime() > Date.now()) || (coupon.ends_at && new Date(coupon.ends_at).getTime() <= Date.now())) return 0;
+    return coupon.discount_percent / 100;
+  }
+  const { data, error } = await getSupabaseServiceClient().from("coupons")
+    .select("discount_percent,starts_at,ends_at").eq("code", normalized).eq("active", true).maybeSingle();
+  if (error) throw new ApiException(500, "db_error", "Could not validate promotion code.");
+  if (!data || (data.starts_at && new Date(data.starts_at).getTime() > Date.now()) || (data.ends_at && new Date(data.ends_at).getTime() <= Date.now())) return 0;
+  return Number(data.discount_percent) / 100;
+}
+export async function assertActivePickupLocation(name: string): Promise<void> {
+  const locations = await listPickupLocations(true);
+  if (!locations.some((location) => location.name === name)) {
+    throw new ApiException(400, "invalid_pickup_location", "Choose an active configured pickup location.");
+  }
 }

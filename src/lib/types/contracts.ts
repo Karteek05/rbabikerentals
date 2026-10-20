@@ -195,8 +195,12 @@ export interface AdminVehicleUpsertRequest {
   rate_per_day: number;
   rate_per_week: number;
   rate_per_month: number;
+  included_km_per_hour: number;
+  included_km_per_day: number;
+  included_km_per_week: number;
+  included_km_per_month: number;
+  excess_km_rate: number;
   image_urls?: string[];
-  catalog_vehicle_id?: string | null;
 }
 
 export interface AdminVehicleUpdateRequest {
@@ -213,10 +217,14 @@ export interface AdminVehicleUpdateRequest {
   rate_per_day?: number;
   rate_per_week?: number;
   rate_per_month?: number;
+  included_km_per_hour?: number;
+  included_km_per_day?: number;
+  included_km_per_week?: number;
+  included_km_per_month?: number;
+  excess_km_rate?: number;
   image_urls?: string[];
   catalog_vehicle_id?: string | null;
 }
-
 export interface AdminVehicleImageRequest {
   image_url: string;
 }

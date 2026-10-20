@@ -25,6 +25,8 @@ type Booking = {
   pickup_zone?: string | null;
   quote: PricingQuote;
   cancel_reason?: string;
+  refund_status?: "none" | "initiated" | "partial" | "refunded";
+  refunded_amount?: number;
 };
 
 type CustomerKyc = {
@@ -467,7 +469,7 @@ export default function MyBookingsPage() {
               {tab === "all" ? "Start by browsing available bikes." : "Try switching to a different tab."}
             </p>
             <a href="/browse" className="btn-primary">
-              Browse Bikes
+              Browse Fleet
             </a>
           </div>
         ) : (
@@ -478,9 +480,9 @@ export default function MyBookingsPage() {
               const actCancel = actionLoading === `cancel-${booking.id}`;
               const actExtend = actionLoading === `extend-${booking.id}`;
               const actPay = actionLoading === `pay-${booking.id}`;
-              const vIcon: IconName = "scooter";
               const vName = getVehicleDisplayName(booking.vehicle_id);
               const vehicle = PUBLIC_FLEET_BY_ID[booking.vehicle_id];
+              const vIcon: IconName = vehicle?.icon ?? "scooter";
               const isCompleted = booking.status === "completed";
               const hasInvoice = ["confirmed", "ongoing", "extended", "completed"].includes(
                 booking.status
@@ -539,6 +541,24 @@ export default function MyBookingsPage() {
                           Ref: {formatBookingReference(booking.id)}
                         </div>
                         {booking.cancel_reason && <p className="text-xs text-red-600 mt-1">Reason: {booking.cancel_reason}</p>}
+                        {booking.refund_status && booking.refund_status !== "none" && (
+                          <div className="mt-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-950" role="status">
+                            <span className="font-semibold">
+                              {booking.refund_status === "initiated"
+                                ? "Refund initiated"
+                                : booking.refund_status === "partial"
+                                  ? "Partial refund"
+                                  : "Refunded"}
+                            </span>
+                            <span className="ml-2">
+                              ₹{(booking.refunded_amount ?? 0).toLocaleString("en-IN")}{" "}
+                              {booking.refund_status === "initiated" ? "refund amount" : "refunded"}
+                            </span>
+                            {booking.refund_status === "initiated" && (
+                              <p className="mt-1 text-xs">The refund request was accepted by the payment provider; settlement is still pending.</p>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
 

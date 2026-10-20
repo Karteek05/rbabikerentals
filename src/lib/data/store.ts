@@ -11,7 +11,11 @@ import type {
   VehicleLiveLocation,
   VehicleDocument,
   VehicleDocumentCleanup,
-  VehicleBlockWindow
+  VehicleBlockWindow,
+  PickupLocation,
+  OperationalPolicy,
+  PartnerSettlement,
+  Coupon
 } from "@/lib/types/domain";
 
 const now = new Date().toISOString();
@@ -91,6 +95,10 @@ export const store: {
   vehicleDocuments: VehicleDocument[];
   vehicleDocumentCleanup: VehicleDocumentCleanup[];
   notificationJobs: NotificationJob[];
+  pickupLocations: PickupLocation[];
+  operationalPolicy: OperationalPolicy;
+  partnerSettlements: PartnerSettlement[];
+  coupons: Coupon[];
 } = {
   users: [
     {
@@ -189,5 +197,9 @@ export const store: {
   paymentEvents: [],
   vehicleDocuments: [],
   vehicleDocumentCleanup: [],
-  notificationJobs: []
+  notificationJobs: [],
+  pickupLocations: [{ id: "loc_sarjapur_road", name: "Sarjapur Road", active: true }],
+  operationalPolicy: { gst_percent: 18, cancellation_over_24h_percent: 10, cancellation_under_24h_percent: 30 },
+  partnerSettlements: [],
+  coupons: [{ code: "WELCOME5", discount_percent: 5, active: true }, { code: "BENGALURU10", discount_percent: 10, active: true }, { code: "WEEKEND15", discount_percent: 15, active: true }]
 };
